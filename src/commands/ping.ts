@@ -1,5 +1,5 @@
 import { Command } from "../types/command.js";
-import { EmbedBuilder, Message } from "discord.js";
+import { EmbedBuilder, Message, TextChannel } from "discord.js";
 import { CustomImageURLOptions } from "../types/embeds.js";
 
 
@@ -24,7 +24,9 @@ export const botPing: Command = {
                 .setColor(0x81d4fa)
                 .setFooter({ text: "Pong" });
 
-            await message.reply({ embeds: [embedPing] });
+            if (message.channel instanceof TextChannel) {
+                await message.reply({ embeds: [embedPing] });
+            }
         } catch (error) {
             console.error("Error al ejecutar el comando mostrarPing:", error);
             await message.reply(

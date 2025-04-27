@@ -8,34 +8,33 @@
     "build": "tsc",
     "start": "node ./dist/michi.js",
     "register": "npm run build && node ./dist/slashCommands/registerSlashCommands.js",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "dev": "npm run build && npm run start"
+    "dev": "nodemon --watch src/**/*.ts --exec \"node --loader ts-node/esm src/michi.ts\"",
+    "dev:build": "nodemon --watch src/**/*.ts --exec \"npm run build && npm run start\""
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@discordjs/voice": "^0.16.1",
-    "@google/generative-ai": "^0.11.5",
-    "axios": "^1.4.0",
-    "dayjs": "^1.11.11",
-    "discord.js": "^14.15.2",
-    "dotenv": "^16.3.1",
-    "firebase-admin": "^12.1.0",
-    "libsodium-wrappers": "^0.7.13",
-    "moment-timezone": "^0.5.43",
-    "openai": "^4.47.1",
-    "play-dl": "^1.9.7"
+    "@discordjs/voice": "^0.18.0",
+    "@google/generative-ai": "^0.2.1",
+    "axios": "^1.9.0",
+    "dayjs": "^1.11.13",
+    "discord.js": "^14.19.1",
+    "dotenv": "^16.5.0",
+    "firebase-admin": "^13.3.0",
+    "libsodium-wrappers": "^0.7.15",
+    "moment-timezone": "^0.5.48",
+    "openai": "^4.96.0",
+    "play-dl": "^1.9.7",
+    "ytdl-core": "^4.11.5"
   },
   "devDependencies": {
-    "@types/node": "^18.19.33",
-    "nodemon": "^3.1.7",
+    "@types/node": "^22.15.2",
+    "nodemon": "^3.1.10",
     "ts-node": "^10.9.2",
-    "typescript": "^5.4.5"
+    "typescript": "^5.8.3"
   },
   "engines": {
     "node": ">=18.16.1"
   }
 }
-
-

@@ -6,6 +6,10 @@ import {
     ButtonBuilder,
     ButtonStyle,
     Interaction,
+    ButtonInteraction,
+    ComponentType,
+    InteractionCollector,
+    TextChannel,
 } from "discord.js";
 import { getDynamicColor } from "./getDynamicColor.js";
 import {
@@ -80,11 +84,13 @@ export async function handleDirectInteraction(message: Message, user: GuildMembe
                 config.footer
             );
 
-            await message.channel.send({ embeds: [messageEmbed] });
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [messageEmbed] });
+            }
         }
     } catch (error) {
         console.error("Error en handleDirectInteraction:", error);
-        message.reply("Ocurrió un error al realizar la interacción directa.");
+        await message.reply("Ocurrió un error al realizar la interacción directa.");
     }
 }
 
@@ -131,60 +137,61 @@ export async function sendInteractionRequest(
                     .setStyle(ButtonStyle.Danger)
             );
 
-        const request = await message.channel.send({
-            embeds: [embedRequest],
-            components: [buttons]
-        });
+        if (message.channel instanceof TextChannel) {
+            const request = await message.channel.send({
+                embeds: [embedRequest],
+                components: [buttons]
+            });
 
-        addInteractionRequest(user.user.id, message.author.id, {
-            requestMessage: request,
-            requester: message.author.id,
-            type: config.name,
-        });
+            addInteractionRequest(user.user.id, message.author.id, {
+                requestMessage: request,
+                requester: message.author.id,
+                type: config.name,
+            });
 
-        const filter = (interaction: Interaction) =>
-            interaction.isButton() && ["accept", "deny"].includes(interaction.customId);
+            const filter = (interaction: Interaction) =>
+                interaction.isButton() && ["accept", "deny"].includes(interaction.customId);
 
-        const collector = request.createMessageComponentCollector({
-            filter,
-            time: 180000,
-        });
+            const collector = request.createMessageComponentCollector({
+                filter,
+                time: 180000,
+                componentType: ComponentType.Button,
+            }) as unknown as InteractionCollector<ButtonInteraction>;
 
-        collector.on('collect', async (interaction) => {
-            if (!interaction.isButton()) return;
+            collector.on('collect', async (interaction: ButtonInteraction) => {
+                if (interaction.user.id !== user.user.id) {
+                    await interaction.reply({
+                        content: "No puedes interactuar con esta solicitud.",
+                        ephemeral: true
+                    });
+                    return;
+                }
 
-            if (interaction.user.id !== user.user.id) {
-                await interaction.reply({
-                    content: "No puedes interactuar con esta solicitud.",
-                    ephemeral: true
-                });
-                return;
-            }
+                if (interaction.customId === 'accept') {
+                    removeInteractionRequest(user.user.id, message.author.id);
+                    await request.delete();
+                    await handleDirectInteraction(message, user, config);
+                } else if (interaction.customId === 'deny') {
+                    removeInteractionRequest(user.user.id, message.author.id);
+                    await request.edit({
+                        embeds: [embedRequest.setDescription(config.rejectResponse || "Solicitud rechazada.")],
+                        components: []
+                    });
+                }
+            });
 
-            if (interaction.customId === 'accept') {
-                removeInteractionRequest(user.user.id, message.author.id);
-                await request.delete();
-                await handleDirectInteraction(message, user, config);
-            } else if (interaction.customId === 'deny') {
+            collector.on('end', async (_, reason) => {
+                if (reason !== 'time') return;
+
                 removeInteractionRequest(user.user.id, message.author.id);
                 await request.edit({
-                    embeds: [embedRequest.setDescription(config.rejectResponse || "Solicitud rechazada.")],
+                    embeds: [embedRequest.setDescription(config.noResponse || "Solicitud no respondida.")],
                     components: []
                 });
-            }
-        });
-
-        collector.on('end', async (_, reason) => {
-            if (reason !== 'time') return;
-
-            removeInteractionRequest(user.user.id, message.author.id);
-            await request.edit({
-                embeds: [embedRequest.setDescription(config.noResponse || "Solicitud no respondida.")],
-                components: []
             });
-        });
+        }
     } catch (error) {
         console.error("Error en sendInteractionRequest:", error);
-        message.reply("Ocurrió un error al enviar la solicitud de interacción.");
+        await message.reply("Ocurrió un error al enviar la solicitud de interacción.");
     }
 }

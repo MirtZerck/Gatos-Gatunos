@@ -14,12 +14,19 @@ import {
     GuildMember,
     Message,
     VoiceChannel,
-    PermissionsBitField
+    PermissionsBitField,
+    TextChannel,
+    EmbedBuilder
 } from "discord.js";
 import { checkAndDisconnectIfAloneOrInactive } from "../../utils/voiceStateHandler.js";
 import { musicQueue } from "../../utils/musicQueue.js";
 import { getAudioPlayer, setAudioPlayer } from "../../utils/audioPlayers.js";
 import { Command } from "../../types/command.js";
+import { getDynamicColor } from "../../utils/getDynamicColor.js";
+import { CustomImageURLOptions } from "../../types/embeds.js";
+import ytdl from "ytdl-core";
+
+const YOUTUBE_API_KEY = process.env.YOUTUBE_API_KEY;
 
 // Función para buscar y obtener URL
 async function searchAndGetURL(query: string): Promise<{ url: string, title: string, isPlaylist: boolean } | null> {
@@ -214,94 +221,108 @@ function setupAudioPlayerEvents(
     });
 }
 
+async function verifyUserInVoiceChannel(message: Message): Promise<boolean> {
+    const member = message.member as GuildMember | null;
+    const voiceChannel = member?.voice.channel as VoiceChannel | null;
+
+    if (!voiceChannel) {
+        if (message.channel instanceof TextChannel) {
+            await message.channel.send("Debes estar en un canal de voz para usar este comando.");
+        }
+        return false;
+    }
+
+    return true;
+}
+
 // Comando para reproducir música
 export const playMusicCommand: Command = {
     name: "play",
-    alias: ["p", "reproducir"],
+    alias: ["p"],
 
     async execute(message: Message, args: string[]) {
         try {
-            const member = message.member as GuildMember;
-            const voiceChannel = member.voice.channel as VoiceChannel | null;
-            if (!voiceChannel) {
-                message.channel.send("Debes estar en un canal de voz para usar este comando.");
+            if (!await verifyUserInVoiceChannel(message)) {
                 return;
             }
 
+            if (!args.length) {
+                if (message.channel instanceof TextChannel) {
+                    await message.channel.send("Por favor, proporciona una URL de YouTube o un término de búsqueda.");
+                }
+                return;
+            }
+
+            const voiceChannel = message.member!.voice.channel as VoiceChannel;
+            const guildId = message.guild!.id;
             const query = args.join(" ");
-            if (!query) {
-                message.channel.send("No se proporcionó una consulta.");
+
+            // Verificar si es una URL de YouTube
+            if (!ytdl.validateURL(query)) {
+                if (message.channel instanceof TextChannel) {
+                    await message.channel.send("Por favor, proporciona una URL válida de YouTube.");
+                }
                 return;
             }
 
-            const { status, connection, message: connectionMessage } = await handleVoiceConnection(member, message);
-            if (status === "error") {
-                message.channel.send(connectionMessage || "Error de conexión desconocido.");
-                return;
+            // Obtener información del video
+            const videoInfo = await ytdl.getInfo(query);
+            const song = {
+                title: videoInfo.videoDetails.title,
+                url: query,
+                duration: videoInfo.videoDetails.lengthSeconds,
+                thumbnail: videoInfo.videoDetails.thumbnails[0].url
+            };
+
+            // Agregar a la cola
+            musicQueue.addSong(guildId, song);
+
+            // Crear embed de confirmación
+            const dynamicColor = getDynamicColor(message.member!);
+            const embed = new EmbedBuilder()
+                .setAuthor({
+                    name: message.member?.nickname ?? message.author.username,
+                    iconURL: message.author.displayAvatarURL({ dynamic: true } as CustomImageURLOptions),
+                })
+                .setTitle("Canción Agregada")
+                .setDescription(`**${song.title}**`)
+                .setThumbnail(song.thumbnail)
+                .setColor(dynamicColor)
+                .setTimestamp();
+
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embed] });
             }
 
+            // Verificar si ya hay una conexión
+            let connection = getVoiceConnection(guildId);
             if (!connection) {
-                message.channel.send("No se pudo establecer una conexión de voz.");
-                return;
-            }
+                connection = joinVoiceChannel({
+                    channelId: voiceChannel.id,
+                    guildId: guildId,
+                    adapterCreator: message.guild!.voiceAdapterCreator,
+                });
 
-            const guildId = member.guild.id;
+                const player = createAudioPlayer();
+                connection.subscribe(player);
 
-            if (connection.state.status !== VoiceConnectionStatus.Ready) {
-                message.channel.send("No se pudo conectar al canal de voz. Por favor, intenta nuevamente.");
-                return;
-            }
-
-            const result = await searchAndGetURL(query);
-
-            if (!result) {
-                message.channel.send("Por favor, proporciona un enlace o nombre válido, si usas una playlist asegúrate de que no sea privada.");
-                return;
-            }
-
-            let audioPlayer = getAudioPlayer(guildId);
-            if (!audioPlayer) {
-                audioPlayer = createAudioPlayer();
-                setAudioPlayer(guildId, audioPlayer);
-                setupAudioPlayerEvents(audioPlayer, message.channel, connection, voiceChannel, guildId);
-            }
-            connection.subscribe(audioPlayer);
-
-            const isPlaying = audioPlayer.state.status === AudioPlayerStatus.Playing;
-
-            if (result.isPlaylist) {
-                const playlistInfo = await play.playlist_info(result.url, { incomplete: true });
-
-                if (playlistInfo) {
-                    const videos = await playlistInfo.all_videos();
-
-                    if (videos.length > 0) {
-                        for (const video of videos) {
-                            musicQueue.addSong(guildId, { url: video.url, title: video.title || "Vídeo sin título" });
-                        }
-                        const queue = musicQueue.getQueue(guildId);
-                        message.channel.send(`Lista de reproducción añadida: ${playlistInfo.title || "Lista de reproducción sin título"}`);
+                player.on(AudioPlayerStatus.Idle, () => {
+                    const nextSong = musicQueue.getNextSong(guildId);
+                    if (nextSong) {
+                        const resource = createAudioResource(ytdl(nextSong.url));
+                        player.play(resource);
+                    } else {
+                        connection?.destroy();
                     }
-                }
+                });
 
-            } else {
-                musicQueue.addSong(guildId, result);
-                console.log(`Añadida canción a la cola: ${result.title}`);
-            }
-
-            if (!isPlaying) {
-                const nextSong = musicQueue.getNextSong(guildId);
-                if (nextSong) {
-                    await playSong(nextSong.url, audioPlayer, message.channel, guildId);
-                } else {
-                    message.channel.send("No hay más canciones en la cola.");
-                }
-            } else {
-                message.channel.send(`Canción añadida a la cola: ${result.title}`);
+                // Reproducir la primera canción
+                const resource = createAudioResource(ytdl(song.url));
+                player.play(resource);
             }
         } catch (error) {
-            console.error("Ocurrió un error inesperado:", error);
-            message.channel.send("Ocurrió un error inesperado. Por favor, intenta nuevamente más tarde.");
+            console.error("Error al ejecutar el comando playMusicCommand:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
         }
     },
 };

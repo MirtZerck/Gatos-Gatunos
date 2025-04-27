@@ -10,6 +10,10 @@ import {
   Message,
   GuildMember,
   ButtonInteraction,
+  ComponentType,
+  InteractionCollector,
+  StringSelectMenuInteraction,
+  TextChannel,
 } from "discord.js";
 import { ProposalService } from "../db_service/proposalsService.js";
 import { getMemberByFilter } from "../constants/get-user.js";
@@ -94,7 +98,8 @@ export const acceptProposalCommand: Command = {
 
       const collector = response.createMessageComponentCollector({
         time: 5 * 60 * 1000,
-      });
+        componentType: ComponentType.StringSelect,
+      }) as unknown as InteractionCollector<StringSelectMenuInteraction | ButtonInteraction>;
 
       collector.on("collect", async (componentMessage) => {
         if (componentMessage.user.id !== message.author.id) {
@@ -105,22 +110,21 @@ export const acceptProposalCommand: Command = {
           return;
         }
 
-        switch (componentMessage.customId) {
-          case "cerrar":
-            await componentMessage.deferUpdate();
-            collector.stop("cerrado");
-            break;
-          case "anterior":
-            await handleNavigation("previous");
-            break;
-          case "siguiente":
-            await handleNavigation("next");
-            break;
-          default:
-            if (componentMessage.isStringSelectMenu()) {
-              await handleProposalSelection(componentMessage);
-            }
-            break;
+        if (componentMessage.isButton()) {
+          switch (componentMessage.customId) {
+            case "cerrar":
+              await componentMessage.deferUpdate();
+              collector.stop("cerrado");
+              break;
+            case "anterior":
+              await handleNavigation("previous");
+              break;
+            case "siguiente":
+              await handleNavigation("next");
+              break;
+          }
+        } else if (componentMessage.isStringSelectMenu()) {
+          await handleProposalSelection(componentMessage);
         }
       });
 
@@ -343,9 +347,11 @@ export const acceptProposalCommand: Command = {
         await commandsDB.setUserReplyCommand(prop.category, prop.image);
       }
 
-      await componentMessage.channel?.send({
-        content: `La propuesta ha sido ${action}.`,
-      });
+      if (componentMessage.channel instanceof TextChannel) {
+        await componentMessage.channel.send({
+          content: `La propuesta ha sido ${action}.`,
+        });
+      }
     }
 
     function createButton(

@@ -1,66 +1,61 @@
 import { getMemberByFilter } from "../../constants/get-user.js";
-import { PermissionsBitField, Message, EmbedBuilder } from "discord.js";
+import { PermissionsBitField, Message, EmbedBuilder, TextChannel, GuildMember } from "discord.js";
 import { checkWarns, editWarns, updateWarnsCount } from "../../db_service/commands_service.js";
 import { getDynamicColor } from "../../utils/getDynamicColor.js";
 import { prefijo } from "../../constants/prefix.js";
 import { Command } from "../../types/command.js";
+import { CustomImageURLOptions } from "../../types/embeds.js";
 
-const warnUser: Command = {
+const warnUserCommand: Command = {
     name: "warn",
     alias: ["advertir"],
 
     async execute(message: Message, args: string[]) {
-        if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-            return message.reply("No tienes permisos para advertir miembros.");
-        }
-
-        const userMention = message.mentions.members?.first();
-        let filtro: string | undefined;
-
-        if (userMention) {
-            filtro = userMention.user.id;
-        } else if (args[0]) {
-            filtro = args[0];
-        }
-
-        if (!filtro || filtro.length < 3) {
-            return message.reply("El usuario a mencionar debe tener al menos 3 caracteres.");
-        }
-
-        const member = getMemberByFilter(message, filtro);
-
-        if (!member) return message.reply("Menciona a un usuario válido.");
-
-        if (message.author.id === member.user.id) {
-            return message.reply("No puedes advertirte a ti mismo.");
-        }
-
-        const reason = args.slice(1).join(" ") || "Sin razón proporcionada.";
-
-        const serverId = message.guild!.id;
-        const serverName = message.guild!.name;
-        const userId = member.user.id;
-
         try {
-            const warns = await updateWarnsCount(userId, serverId, serverName, reason);
-
-            let actionTaken = `Advertencia a **${member.displayName}**. Este es su aviso número ${warns}. Razón: ${reason}.`;
-
-            if (warns === 3) {
-                await member.timeout(4 * 60 * 60, "3 advertencias - 4 horas de timeout");
-                actionTaken += " Se aplicó un timeout de 4 horas.";
-            } else if (warns === 5) {
-                await member.timeout(8 * 60 * 60, "5 advertencias - 8 horas de timeout");
-                actionTaken += " Se aplicó un timeout de 8 horas.";
-            } else if (warns === 10) {
-                await member.ban({ reason: "10 advertencias - Baneado por 48 horas" });
-                actionTaken += " Se aplicó un baneo de 48 horas.";
+            if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+                await message.reply("No tienes permisos para advertir usuarios.");
+                return;
             }
 
-            message.channel.send(actionTaken);
+            const userMention = message.mentions.members?.first();
+            let user_id: string;
+
+            if (userMention) {
+                user_id = userMention.user.id;
+            } else if (args[0]) {
+                user_id = args[0];
+            } else {
+                await message.reply("Por favor, menciona a un usuario o proporciona su ID.");
+                return;
+            }
+
+            const member = getMemberByFilter(message, user_id);
+            if (!member) {
+                await message.reply("El usuario no existe o no está en el servidor.");
+                return;
+            }
+
+            const reason = args.slice(1).join(" ") || "No se proporcionó una razón.";
+            const dynamicColor = getDynamicColor(message.member!);
+
+            const embedWarn = new EmbedBuilder()
+                .setAuthor({
+                    name: message.member?.nickname ?? message.author.username,
+                    iconURL: message.author.displayAvatarURL({ dynamic: true } as CustomImageURLOptions),
+                })
+                .setTitle(`Usuario Advertido`)
+                .setDescription(`**Usuario:** ${member.user.tag}\n**Razón:** ${reason}`)
+                .setColor(dynamicColor)
+                .setTimestamp();
+
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embedWarn] });
+            }
+
+            // Aquí podrías agregar lógica para guardar las advertencias en una base de datos
         } catch (error) {
-            console.error(error);
-            message.channel.send("Hubo un error al intentar advertir al usuario. Por favor verifica los permisos y la configuración de Firebase.");
+            console.error("Error al ejecutar el comando warnUserCommand:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
         }
     },
 };
@@ -70,37 +65,34 @@ const checkUserWarns: Command = {
     alias: ["advertencias", "warns"],
 
     async execute(message: Message, args: string[]) {
-        if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-            return message.reply("No tienes permisos para revisar las advertencias.");
-        }
-
-        const userMention = message.mentions.members?.first();
-        let filtro: string | undefined;
-
-        if (userMention) {
-            filtro = userMention.user.id;
-        } else if (args[0]) {
-            filtro = args[0];
-        }
-
-        if (!filtro || filtro.length < 3) {
-            return message.reply("El usuario a mencionar debe tener al menos 3 caracteres.");
-        }
-
-        const member = getMemberByFilter(message, filtro);
-
-        if (!member) return message.reply("Menciona a un usuario válido.");
-
-        if (message.author.id === member.user.id) {
-            return message.reply("No puedes revisar tus advertencias.");
-        }
-
-        const serverId = message.guild!.id;
-        const userId = member.user.id;
-
         try {
-            const { count, reasons } = await checkWarns(userId, serverId);
+            if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+                await message.reply("No tienes permisos para revisar las advertencias.");
+                return;
+            }
 
+            const userMention = message.mentions.members?.first();
+            let user_id: string;
+
+            if (userMention) {
+                user_id = userMention.user.id;
+            } else if (args[0]) {
+                user_id = args[0];
+            } else {
+                await message.reply("Por favor, menciona a un usuario o proporciona su ID.");
+                return;
+            }
+
+            const member = getMemberByFilter(message, user_id);
+            if (!member) {
+                await message.reply("El usuario no existe o no está en el servidor.");
+                return;
+            }
+
+            const serverId = message.guild!.id;
+            const userId = member.user.id;
+
+            const { count, reasons } = await checkWarns(userId, serverId);
             const dynamicColor = getDynamicColor(message.member!);
 
             const embed = new EmbedBuilder()
@@ -124,10 +116,12 @@ const checkUserWarns: Command = {
                 embed.setDescription("Este usuario no tiene advertencias.");
             }
 
-            message.channel.send({ embeds: [embed] });
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embed] });
+            }
         } catch (error) {
-            console.error(error);
-            message.channel.send("Hubo un error al intentar revisar las advertencias del usuario.");
+            console.error("Error al ejecutar el comando checkUserWarns:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
         }
     },
 };
@@ -137,48 +131,49 @@ const deleteUserWarns: Command = {
     alias: ["eliminaradvertencia", "unwarn"],
 
     async execute(message: Message, args: string[]) {
-        if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-            return message.reply("No tienes permisos para editar las advertencias.");
-        }
-
-        const userMention = message.mentions.members?.first();
-        let filtro: string | undefined;
-
-        if (userMention) {
-            filtro = userMention.user.id;
-        } else if (args[0]) {
-            filtro = args[0];
-        }
-
-        if (!filtro || filtro.length < 3) {
-            return message.reply("El usuario a mencionar debe tener al menos 3 caracteres.");
-        }
-
-        const member = getMemberByFilter(message, filtro);
-
-        if (!member) return message.reply("Menciona a un usuario válido.");
-
-        if (message.author.id === member.user.id) {
-            return message.reply("No puedes revisar tus advertencias.");
-        }
-
-        const warnIndexToRemove = parseInt(args[1]) - 1;
-
-        if (isNaN(warnIndexToRemove)) {
-            return message.reply(`Escribe el número de advertencia que deseas eliminar, puedes revisar las advertencias existentes con el comando ${prefijo}warns.`);
-        }
-
-        const serverId = message.guild!.id;
-        const userId = member.user.id;
-
         try {
+            if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+                await message.reply("No tienes permisos para editar las advertencias.");
+                return;
+            }
+
+            const userMention = message.mentions.members?.first();
+            let user_id: string;
+
+            if (userMention) {
+                user_id = userMention.user.id;
+            } else if (args[0]) {
+                user_id = args[0];
+            } else {
+                await message.reply("Por favor, menciona a un usuario o proporciona su ID.");
+                return;
+            }
+
+            const member = getMemberByFilter(message, user_id);
+            if (!member) {
+                await message.reply("El usuario no existe o no está en el servidor.");
+                return;
+            }
+
+            const warnIndexToRemove = parseInt(args[1]) - 1;
+
+            if (isNaN(warnIndexToRemove)) {
+                await message.reply(`Escribe el número de advertencia que deseas eliminar, puedes revisar las advertencias existentes con el comando ${prefijo}warns.`);
+                return;
+            }
+
+            const serverId = message.guild!.id;
+            const userId = member.user.id;
+
             const newWarnsCount = await editWarns(userId, serverId, warnIndexToRemove);
-            message.channel.send(`La advertencia ha sido eliminada. Ahora el usuario tiene un total de ${newWarnsCount} advertencia(s).`);
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send(`La advertencia ha sido eliminada. Ahora el usuario tiene un total de ${newWarnsCount} advertencia(s).`);
+            }
         } catch (error) {
-            console.error(error);
-            message.channel.send("Hubo un error al intentar editar las advertencias del usuario.");
+            console.error("Error al ejecutar el comando deleteUserWarns:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
         }
     },
 };
 
-export const arrayWarnCommands: Command[] = [warnUser, checkUserWarns, deleteUserWarns];
+export const arrayWarnCommands: Command[] = [warnUserCommand, checkUserWarns, deleteUserWarns];

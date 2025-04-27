@@ -3,14 +3,14 @@ import {
   HarmBlockThreshold,
   HarmCategory,
 } from '@google/generative-ai';
-import { Client, EmbedBuilder } from 'discord.js';
+import { Client, EmbedBuilder, Message, TextChannel } from 'discord.js';
 import { GeminiChat } from '../db_service/gemini_service.js';
 import { CustomImageURLOptions } from '../types/embeds.js';
 import { prefijo } from '../constants/prefix.js';
 import { geminiAiKey } from '../constants/config.js';
 
 export const openAiChat = async (client: Client) => {
-  client.on('messageCreate', async (message) => {
+  client.on('messageCreate', async (message: Message) => {
     if (message.author.bot || !message.mentions.members?.size) return;
     const mention = message.mentions.members.first();
 
@@ -39,18 +39,20 @@ export const openAiChat = async (client: Client) => {
           .setColor(0x81d4fa)
           .setTimestamp();
 
-        return message.reply({ embeds: [embedPrefix] })
+        return message.reply({ embeds: [embedPrefix] });
       } else {
         try {
           const genAI = new GoogleGenerativeAI(geminiAiKey);
           const GeminiChatService = new GeminiChat();
           const [history, lastIndex] = await GeminiChatService.getConversationGemini();
 
-          const model = genAI.getGenerativeModel({ model: 'gemini-pro' });
-          const chat = model.startChat({
-            history,
+          const model = genAI.getGenerativeModel({ 
+            model: 'gemini-2.0-flash',
             generationConfig: {
-              maxOutputTokens: 60,
+              maxOutputTokens: 30,
+              temperature: 0.7,
+              topP: 0.8,
+              topK: 40,
             },
             safetySettings: [
               {
@@ -71,25 +73,35 @@ export const openAiChat = async (client: Client) => {
               },
             ],
           });
+
+          const chat = model.startChat({
+            history: history.map(msg => ({
+              role: msg.role,
+              parts: msg.parts
+            })),
+          });
+
           const user = message.author.username;
           const mentionBotString = `<@${client.user.id}>`;
-          const prompt = `${user}: ${message.content.replace(
-            mentionBotString,
-            ''
-          )}`;
-          await message.channel.sendTyping();
+          const prompt = `${user}: ${message.content.replace(mentionBotString, '')}`;
+          
+          if (message.channel instanceof TextChannel) {
+            await message.channel.sendTyping();
+          }
+          
           const result = await chat.sendMessage(prompt);
           const response = result.response;
           const text = response.text();
 
-          message.reply({ content: text });
-          GeminiChatService.setConversationGemini(
+          await message.reply({ content: text });
+          await GeminiChatService.setConversationGemini(
             prompt,
             text,
-            parseInt(lastIndex) + 1,
+            parseInt(lastIndex) + 1
           );
         } catch (error) {
-          console.log(error);
+          console.error('Error in Gemini chat:', error);
+          await message.reply('Lo siento, hubo un error al procesar tu mensaje. Por favor, intenta nuevamente.');
         }
       }
     }

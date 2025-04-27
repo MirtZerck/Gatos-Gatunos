@@ -1,5 +1,5 @@
 import { obtenerDatoCurioso } from "../utils/apiDatoCurioso.js";
-import { EmbedBuilder, Message } from "discord.js";
+import { EmbedBuilder, Message, TextChannel } from "discord.js";
 import { obtenerDataApi } from "../utils/apiServer.js";
 import { Api_Michi_URL } from "../constants/apisUrl.js";
 import { Command } from "../types/command.js";
@@ -33,12 +33,14 @@ export const curiosFactCommand: Command = {
                     .setColor(dynamicColor)
                     .setTimestamp();
 
-                message.channel.send({ embeds: [embedDato] }).catch((error) => {
-                    console.error("Error al enviar el mensaje embed:", error);
-                    message.reply(
-                        "No se pudo enviar el mensaje embed. Por favor, verifica mis permisos."
-                    );
-                });
+                if (message.channel instanceof TextChannel) {
+                    await message.channel.send({ embeds: [embedDato] }).catch((error: Error) => {
+                        console.error("Error al enviar el mensaje embed:", error);
+                        message.reply(
+                            "No se pudo enviar el mensaje embed. Por favor, verifica mis permisos."
+                        );
+                    });
+                }
             } else {
                 throw new Error("No se pudo obtener la imagen del gato.");
             }

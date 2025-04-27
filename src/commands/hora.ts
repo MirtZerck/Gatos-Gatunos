@@ -1,4 +1,4 @@
-import { EmbedBuilder, Message, PermissionsBitField } from "discord.js";
+import { EmbedBuilder, Message, PermissionsBitField, TextChannel } from "discord.js";
 import moment from "moment-timezone";
 import { Command } from "../types/command.js";
 import { CustomImageURLOptions } from "../types/embeds.js";
@@ -36,12 +36,16 @@ export const serverHour: Command = {
                 .setColor(dynamicColor)
                 .setFooter({ text: `(${timezone})` });
 
-            await message.channel.send({ embeds: [embedHora] });
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embedHora] });
+            }
         } catch (error) {
             console.error("Error al ejecutar el comando horaServer:", error);
-            message.channel.send(
-                "No se pudo enviar el mensaje embed. Por favor, verifica mis permisos."
-            );
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send(
+                    "No se pudo enviar el mensaje embed. Por favor, verifica mis permisos."
+                );
+            }
         }
     },
 };

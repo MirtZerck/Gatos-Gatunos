@@ -1,7 +1,7 @@
 import { Command } from "../types/command.js"
 import { CustomImageURLOptions } from "../types/embeds.js";
 import { obtenerMichiHablador } from "../utils/apiMichiSay.js";
-import { EmbedBuilder, Message } from "discord.js";
+import { EmbedBuilder, Message, TextChannel } from "discord.js";
 import { getDynamicColor } from "../utils/getDynamicColor.js";
 
 export const sendMichiTextCommand: Command = {
@@ -26,7 +26,9 @@ export const sendMichiTextCommand: Command = {
                 .setColor(dynamicColor)
                 .setTimestamp();
 
-            await message.channel.send({ embeds: [embedMichiHablador] });
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embedMichiHablador] });
+            }
         } catch (error) {
             console.error("Error al ejecutar el comando sendMichiTextCommand:", error);
             await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");

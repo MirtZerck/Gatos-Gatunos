@@ -1,98 +1,129 @@
 import { getMemberByFilter } from "../../constants/get-user.js";
-import { PermissionsBitField, Message } from "discord.js";
+import { PermissionsBitField, Message, TextChannel, EmbedBuilder, GuildMember } from "discord.js";
 import { Command } from "../../types/command.js";
+import { CustomImageURLOptions } from "../../types/embeds.js";
+import { getDynamicColor } from "../../utils/getDynamicColor.js";
 
 export const timeoutUser: Command = {
     name: "timeout",
-    alias: ["mute", "mutear", "silenciar", "aislar"],
+    alias: ["mute", "silenciar"],
 
     async execute(message: Message, args: string[]) {
-        if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-            return message.reply("No tienes permisos para aislar miembros.");
-        }
-
-        const userMention = message.mentions.members?.first();
-        let filtro: string | undefined;
-
-        if (userMention) {
-            filtro = userMention.user.id;
-        } else if (args[0]) {
-            filtro = args[0];
-        }
-
-        if (!filtro || filtro.length < 3) {
-            return message.reply("El usuario a mencionar debe tener al menos 3 caracteres.");
-        }
-
-        const member = getMemberByFilter(message, filtro);
-
-        if (!member) return message.reply("Menciona a un usuario válido.");
-
-        if (message.author.id === member.user.id) {
-            return message.reply(`No puedes aislarte a ti mismo.`);
-        }
-
-        const timeInMinutes = parseInt(args[1]);
-        const reason = args.slice(2).join(" ") || "Sin razón proporcionada.";
-
-        if (!timeInMinutes || isNaN(timeInMinutes)) {
-            return message.channel.send("Formato incorrecto. Asegúrate de mencionar al usuario y especificar un tiempo válido.");
-        }
-
-        if (timeInMinutes > 40320) {
-            return message.reply("El tiempo de timeout no puede exceder los 28 días.");
-        }
-
         try {
-            await member.timeout(timeInMinutes * 60 * 1000, reason);
-            message.channel.send(`Time Out aplicado a **${member.displayName}** por ${timeInMinutes} minutos. Razón: ${reason}.`);
+            if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+                await message.reply("No tienes permisos para silenciar usuarios.");
+                return;
+            }
+
+            const userMention = message.mentions.members?.first();
+            let user_id: string;
+
+            if (userMention) {
+                user_id = userMention.user.id;
+            } else if (args[0]) {
+                user_id = args[0];
+            } else {
+                await message.reply("Por favor, menciona a un usuario o proporciona su ID.");
+                return;
+            }
+
+            const member = getMemberByFilter(message, user_id);
+            if (!member) {
+                await message.reply("El usuario no existe o no está en el servidor.");
+                return;
+            }
+
+            if (!member.moderatable) {
+                await message.reply("No puedo silenciar a este usuario.");
+                return;
+            }
+
+            const duration = parseInt(args[1]);
+            if (isNaN(duration) || duration < 1 || duration > 40320) {
+                await message.reply("Por favor, proporciona una duración válida en minutos (1-40320).");
+                return;
+            }
+
+            const reason = args.slice(2).join(" ") || "No se proporcionó una razón.";
+            const dynamicColor = getDynamicColor(message.member!);
+
+            const embedTimeout = new EmbedBuilder()
+                .setAuthor({
+                    name: message.member?.nickname ?? message.author.username,
+                    iconURL: message.author.displayAvatarURL({ dynamic: true } as CustomImageURLOptions),
+                })
+                .setTitle(`Usuario Silenciado`)
+                .setDescription(`**Usuario:** ${member.user.tag}\n**Duración:** ${duration} minutos\n**Razón:** ${reason}`)
+                .setColor(dynamicColor)
+                .setTimestamp();
+
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embedTimeout] });
+            }
+
+            await member.timeout(duration * 60 * 1000, reason);
         } catch (error) {
-            console.error(error);
-            message.channel.send("Error al aplicar el Time Out. Verifica mi rol y permisos, y asegúrate de que el usuario no tenga un rol más alto que yo.");
+            console.error("Error al ejecutar el comando timeoutUser:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
         }
     },
 };
 
 export const removeTimeoutUser: Command = {
-    name: "removeTimeout",
-    alias: ["unmute", "desmutear", "dessilenciar", "desaislar"],
+    name: "untimeout",
+    alias: ["unmute", "desilenciar"],
 
     async execute(message: Message, args: string[]) {
-        if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
-            return message.reply("No tienes permisos para remover el aislamiento de miembros.");
-        }
-
-        const userMention = message.mentions.members?.first();
-        let filtro: string | undefined;
-
-        if (userMention) {
-            filtro = userMention.user.id;
-        } else if (args[0]) {
-            filtro = args[0];
-        }
-
-        if (!filtro || filtro.length < 3) {
-            return message.reply("El usuario a mencionar debe tener al menos 3 caracteres.");
-        }
-
-        const member = getMemberByFilter(message, filtro);
-
-        if (!member) return message.reply("No se pudo encontrar al usuario especificado.");
-
-        if (message.author.id === member.user.id) {
-            return message.reply(`No puedes remover tu propio aislamiento.`);
-        }
-
-        if (!member.isCommunicationDisabled()) {
-            return message.channel.send("Este usuario no está en timeout actualmente.");
-        }
-
         try {
-            await member.timeout(null);
-            message.channel.send(`Se ha eliminado el timeout de **${member.displayName}**.`);
+            if (!message.member?.permissions.has(PermissionsBitField.Flags.ModerateMembers)) {
+                await message.reply("No tienes permisos para quitar el silencio a usuarios.");
+                return;
+            }
+
+            const userMention = message.mentions.members?.first();
+            let user_id: string;
+
+            if (userMention) {
+                user_id = userMention.user.id;
+            } else if (args[0]) {
+                user_id = args[0];
+            } else {
+                await message.reply("Por favor, menciona a un usuario o proporciona su ID.");
+                return;
+            }
+
+            const member = getMemberByFilter(message, user_id);
+            if (!member) {
+                await message.reply("El usuario no existe o no está en el servidor.");
+                return;
+            }
+
+            if (!member.moderatable) {
+                await message.reply("No puedo quitar el silencio a este usuario.");
+                return;
+            }
+
+            const reason = args.slice(1).join(" ") || "No se proporcionó una razón.";
+            const dynamicColor = getDynamicColor(message.member!);
+
+            const embedRemoveTimeout = new EmbedBuilder()
+                .setAuthor({
+                    name: message.member?.nickname ?? message.author.username,
+                    iconURL: message.author.displayAvatarURL({ dynamic: true } as CustomImageURLOptions),
+                })
+                .setTitle(`Silencio Removido`)
+                .setDescription(`**Usuario:** ${member.user.tag}\n**Razón:** ${reason}`)
+                .setColor(dynamicColor)
+                .setTimestamp();
+
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embedRemoveTimeout] });
+            }
+
+            await member.timeout(null, reason);
         } catch (error) {
-            console.error(error);
-            message.channel.send("Error al intentar remover el timeout. Por favor, verifica mis permisos y la jerarquía de roles.");
+            console.error("Error al ejecutar el comando removeTimeoutUser:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
         }
     },
 };

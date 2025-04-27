@@ -5,147 +5,71 @@ import {
     Colors,
     EmbedBuilder,
     Message,
+    TextChannel,
+    GuildMember,
+    ButtonInteraction,
+    StringSelectMenuInteraction,
+    ComponentType,
+    InteractionCollector,
 } from "discord.js";
 import { ProposalService } from "../db_service/proposalsService.js";
 import { isImage } from "../utils/utilsFunctions.js";
 import { getDynamicColor } from "../utils/getDynamicColor.js";
 import { CustomImageURLOptions } from "../types/embeds.js";
+import { Command } from "../types/command.js";
+import { Proposal } from "../types/proposal.js";
 
-export const proposalCommand = {
-    name: "proposals",
-    alias: ["prop", "props", "propuesta"],
+export const proposalCommand: Command = {
+    name: "proposal",
+    alias: ["prop", "propuesta"],
 
     async execute(message: Message, args: string[]) {
-        const guildID = message.guild!.id;
-        const guildName = message.guild!.name;
-        const proposalsDB = new ProposalService(guildID);
-        const dynamicColor = getDynamicColor(message.member!)
-        const [category, imgUrl] = args;
-        const example = "Ejemplo: `+prop some https://example.com/image.png`";
-
-        if (!category) {
-            return message.reply(
-                `Debes especificar una **categoría** y una **imagen (url)**.\n${example}`
-            );
-        }
-
-        const attachment = message.attachments.first();
-        const attachImg = attachment?.url;
-        const attachExt = attachment?.contentType;
-
-        if (!imgUrl && !attachImg) {
-            return message.reply(
-                `Debes especificar una **categoría** y una **imagen (url)**.\n${example}`
-            );
-        }
-
-        const isImageValid = imgUrl ? await isImage(imgUrl) : attachExt?.includes("image");
-        if (!isImageValid) {
-            return message.reply("La url no es una imagen.");
-        }
-
-        const imgProp = attachImg ?? imgUrl;
-
-        const embedPrev = new EmbedBuilder()
-            .setAuthor({
-                name: message.member!.displayName,
-                iconURL: message.author.displayAvatarURL({ dynamic: true } as CustomImageURLOptions),
-            })
-            .setTitle("Propuesta")
-            .setDescription(`**Categoría:** ${category}\n**Imagen:** ${imgProp}`)
-            .setImage(imgProp)
-            .setColor(dynamicColor)
-            .setFooter({
-                text: "Confirma con los botones si quieres enviar la solicitud",
-            });
-
-        const cancelButton = new ButtonBuilder()
-            .setCustomId("cancelar")
-            .setLabel("Cancelar")
-            .setStyle(ButtonStyle.Danger);
-
-        const checkButton = new ButtonBuilder()
-            .setCustomId("aceptar")
-            .setLabel("Aceptar")
-            .setStyle(ButtonStyle.Success);
-
-        const buttonComponents = new ActionRowBuilder<ButtonBuilder>().addComponents(
-            cancelButton,
-            checkButton
-        );
-
-        const response = await message.channel.send({
-            embeds: [embedPrev],
-            components: [buttonComponents],
-            content: "Tu propuesta será la siguiente. ¿Deseas enviarla?",
-        });
-
-        const collector = response.createMessageComponentCollector({
-            time: 3 * 60 * 1000,
-        });
-
-        collector.on("collect", async (interaction) => {
-            if (interaction.user.id !== message.author.id) {
-                await interaction.reply({
-                    content: "No puedes interactuar con esta propuesta",
-                    ephemeral: true,
-                });
+        try {
+            if (args.length < 2) {
+                await message.reply("Por favor, proporciona una categoría y una imagen. Ejemplo: `!propuesta categoria url_imagen`");
                 return;
             }
 
-            if (interaction.customId === "cancelar") {
-                collector.stop("cancelado");
-            } else if (interaction.customId === "aceptar") {
-                try {
-                    await proposalsDB.setProposal({
-                        category,
-                        image: imgProp,
-                        user: message.author.id,
-                        date: new Date().toLocaleString(),
-                        serverName: guildName,
-                    });
+            const category = args[0];
+            const imageUrl = args[1];
 
-                    embedPrev.setFooter({
-                        text: "Deberás esperar a que se acepte tu solicitud",
-                    }).setColor(Colors.Green);
-
-                    await response.edit({
-                        content: "Tu propuesta ha sido enviada con éxito.",
-                        embeds: [embedPrev],
-                        components: [],
-                    });
-
-                    collector.stop("aceptada");
-                } catch (error) {
-                    collector.stop(error === "La propuesta ya existe!" ? "existente" : "error");
-                }
+            if (!imageUrl.startsWith("http")) {
+                await message.reply("Por favor, proporciona una URL de imagen válida.");
+                return;
             }
-        });
 
-        collector.on("end", async (_, reason) => {
-            if (reason === "aceptada") return;
+            const serverId = message.guild!.id;
+            const serverName = message.guild!.name;
+            const userId = message.author.id;
+            const date = new Date().toISOString();
 
-            const responseMessages: { [key: string]: string } = {
-                existente: "La propuesta ya existe! Por lo tanto no se ha enviado.",
-                cancelado: `Propuesta **${category}** cancelada.`,
-                error: "Ha ocurrido un error al enviar tu propuesta. Por favor, intenta de nuevo.",
+            const proposalService = new ProposalService(serverId);
+            const proposal: Proposal = {
+                category,
+                image: imageUrl,
+                user: userId,
+                date,
+                serverName
             };
-            const description = responseMessages[reason] ?? `Propuesta **${category}** cancelada por falta de tiempo.`;
+            await proposalService.setProposal(proposal);
 
-            const embedOver = new EmbedBuilder()
+            const dynamicColor = getDynamicColor(message.member!);
+            const embedProposal = new EmbedBuilder()
                 .setAuthor({
-                    name: message.member!.displayName,
+                    name: message.member?.nickname ?? message.author.username,
                     iconURL: message.author.displayAvatarURL({ dynamic: true } as CustomImageURLOptions),
                 })
-                .setDescription(description)
-                .setColor(Colors.DarkRed)
+                .setTitle(`Propuesta Enviada`)
+                .setDescription(`**Categoría:** ${category}\n**Imagen:** ${imageUrl}`)
+                .setColor(dynamicColor)
                 .setTimestamp();
 
-            await response.edit({
-                embeds: [embedOver],
-                components: [],
-                content: "",
-            });
-        });
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [embedProposal] });
+            }
+        } catch (error) {
+            console.error("Error al ejecutar el comando proposalCommand:", error);
+            await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");
+        }
     },
 };

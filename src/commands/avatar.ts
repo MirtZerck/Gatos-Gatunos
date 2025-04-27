@@ -1,5 +1,5 @@
 import { Command } from "../types/command.js";
-import { EmbedBuilder, Message } from "discord.js";
+import { EmbedBuilder, Message, TextChannel } from "discord.js";
 import { getMemberByFilter } from "../constants/get-user.js"; 
 import { CustomImageURLOptions } from "../types/embeds.js";
 import { getDynamicColor } from "../utils/getDynamicColor.js";
@@ -37,12 +37,14 @@ export const userAvatarCommand: Command = {
                 .setFooter({ text: `ID ${user_id}` })
                 .setTimestamp();
 
-            message.channel.send({ embeds: [messageEmbed] }).catch((error) => {
-                console.error("Error al enviar el mensaje embed:", error);
-                message.reply(
-                    "No se pudo enviar el mensaje embed. Por favor, verifica mis permisos."
-                );
-            });
+            if (message.channel instanceof TextChannel) {
+                await message.channel.send({ embeds: [messageEmbed] }).catch((error: Error) => {
+                    console.error("Error al enviar el mensaje embed:", error);
+                    message.reply(
+                        "No se pudo enviar el mensaje embed. Por favor, verifica mis permisos."
+                    );
+                });
+            }
         } catch (error) {
             console.error("Error al ejecutar el comando avatar:", error);
             message.reply(

@@ -2,7 +2,7 @@ import { Command } from "../types/command.js";
 import { arrayCommands } from "./index.js";
 import { prefijo } from "../constants/prefix.js";
 import { getRandomNumber } from "../utils/utilsFunctions.js";
-import { EmbedBuilder, Events, Client, Message } from "discord.js";
+import { EmbedBuilder, Events, Client, Message, MessageType, ChannelType } from "discord.js";
 import { CommandsService } from "../db_service/commandsService.js";
 import { CustomImageURLOptions } from "../types/embeds.js";
 import { getDynamicColor } from "../utils/getDynamicColor.js";
@@ -11,7 +11,7 @@ export const onMessageCreate = async (client: Client): Promise<void> => {
     const prefix = prefijo;
 
     client.on(Events.MessageCreate, async (message: Message) => {
-        if (message.author.bot) return;
+        if (message.author.bot || message.type !== MessageType.Default || message.channel.type !== ChannelType.GuildText) return;
 
         if (!message.content.startsWith(prefix)) return;
 

@@ -1,5 +1,5 @@
 import { Command } from "../types/command.js";
-import { EmbedBuilder, Message } from "discord.js";
+import { EmbedBuilder, Message, TextChannel } from "discord.js";
 import { convertDateToString } from "../utils/formatDate.js";
 import { getMemberByFilter } from "../constants/get-user.js";
 import { getDynamicColor } from "../utils/getDynamicColor.js";
@@ -63,7 +63,9 @@ export const userInfoCommand: Command = {
                 .setFooter({ text: `ID ${id}` })
                 .setTimestamp();
 
-            await channel.send({ embeds: [messageEmbed] });
+            if (channel instanceof TextChannel) {
+                await channel.send({ embeds: [messageEmbed] });
+            }
         } catch (error) {
             console.error("Error al ejecutar el comando userInfoCommand:", error);
             await message.reply("Ocurrió un error al ejecutar el comando. Por favor, intenta nuevamente más tarde.");

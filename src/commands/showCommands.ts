@@ -9,6 +9,8 @@ import {
     Message,
     StringSelectMenuInteraction,
     ButtonInteraction,
+    ComponentType,
+    InteractionCollector,
 } from "discord.js";
 import { getDynamicColor } from "../utils/getDynamicColor.js";
 import { CommandsService } from "../db_service/commandsService.js";
@@ -69,7 +71,8 @@ export const customCommandsList: Command = {
 
             const collector = response.createMessageComponentCollector({
                 time: 5 * 60 * 1000,
-            });
+                componentType: ComponentType.StringSelect,
+            }) as unknown as InteractionCollector<StringSelectMenuInteraction | ButtonInteraction>;
 
             collector.on("collect", async (componentMessage) => {
                 if (componentMessage.user.id !== message.author.id) {
@@ -142,7 +145,8 @@ export const customCommandsList: Command = {
 
                 const categoryCollector = response.createMessageComponentCollector({
                     time: 5 * 60 * 1000,
-                });
+                    componentType: ComponentType.Button,
+                }) as unknown as InteractionCollector<ButtonInteraction>;
 
                 categoryCollector.on("collect", async (componentMessage2) => {
                     if (componentMessage2.user.id !== message.author.id) {

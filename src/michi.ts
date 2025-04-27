@@ -55,47 +55,12 @@ async function startBot() {
       activities: [
         {
           name: `Mi prefijo es ${prefijo} `,
-          type: ActivityType.Custom,
+          type: ActivityType.Playing,
         },
       ],
       status: PresenceUpdateStatus.DoNotDisturb,
     });
 
-    /* const canal_general_uno = client.channels.cache.get("");
-
-    const canal_general_dos = client.channels.cache.get("");
-
-    const embedEcendido = new EmbedBuilder()
-      .setAuthor({
-        name: "Hikari Koizumi",
-        iconURL:
-          "https://w0.peakpx.com/wallpaper/961/897/HD-wallpaper-bunny-cute-rabbit-animal.jpg",
-      })
-      .setTitle(`Hola, he sido actualizado y ya desperté`)
-      .setImage("https://media.tenor.com/n1d_M_lXA1kAAAAd/molestar-gatos.gif")
-      .setDescription("Soy un michito grr :3")
-      .setColor(0x81d4fa)
-      .setFooter({
-        text: `Tengo hambre`,
-      })
-      .setTimestamp();
-
-    if (canal_general_uno) {
-      (canal_general_uno as TextChannel).send({ embeds: [embedEcendido] });
-    }
-
-    if (canal_general_dos) {
-      (canal_general_dos as TextChannel).send({ embeds: [embedEcendido] });
-    }
-
-    const canal_gatos_gatunos = client.channels.cache.get(gatosGatunosXpellit);
-
-    if (canal_gatos_gatunos) {
-      enviarGatoALas(7, canal_gatos_gatunos as TextChannel);
-    }
-    if (canal_general_dos) {
-      enviarGatoALas(7, canal_general_uno as TextChannel);
-    } */
   });
 
   await openAiChat(client);
