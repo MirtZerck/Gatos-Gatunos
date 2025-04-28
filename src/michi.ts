@@ -4,14 +4,14 @@ import {
   Events,
   GatewayIntentBits,
   PresenceUpdateStatus,
-  EmbedBuilder,
 } from "discord.js";
 import dotenv from "dotenv";
 import firebase from "firebase-admin";
 import { prefijo } from "./constants/prefix.js";
-import { onMessageCreate } from "./commands/answers.js";
-import { onInteractionCreate } from "./slashCommands/interactionCreate.js";
-import { openAiChat } from "./commands/on-chatbot.js";
+import { CommandManager } from "./events/commandHandler.js";
+import { registerCommands } from "./commands/prefixCommands/register.js";
+import { registerSlashCommands } from "./commands/slashCommands/registerSlashCommands.js";
+import { onInteractionCreate } from "./commands/slashCommands/interactionCreate.js";
 
 dotenv.config();
 
@@ -45,29 +45,34 @@ export const client = new Client({
 });
 
 async function startBot() {
+  // Inicializar el manejador de comandos
+  const commandManager = new CommandManager();
+  
+  // Registrar todos los comandos
+  await registerCommands(commandManager);
+
+  // Registrar el manejador de interacciones
+  await onInteractionCreate(client);
+
   // Logear el bot
   await client.login(token);
 
   client.once(Events.ClientReady, async () => {
     console.log("El bot se ha iniciado como", client.user?.username);
 
+    // Registrar comandos slash después de que el bot esté listo
+    await registerSlashCommands();
+
     client.user?.setPresence({
       activities: [
         {
-          name: `Mi prefijo es ${prefijo} `,
+          name: `Mi prefijo es ${prefijo}`,
           type: ActivityType.Playing,
         },
       ],
       status: PresenceUpdateStatus.DoNotDisturb,
     });
-
   });
-
-  await openAiChat(client);
-  await onInteractionCreate(client);
-  /*await rankXpellitControl(client);
-  await handleSpecialCommands(client, mirtZerckID); */
-  await onMessageCreate(client);
 }
 
 startBot();

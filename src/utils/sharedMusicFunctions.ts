@@ -2,7 +2,7 @@ import { AudioPlayerStatus, getVoiceConnection, VoiceConnectionStatus, joinVoice
 import { GuildMember, VoiceChannel, CommandInteraction, Message, PermissionsBitField } from "discord.js";
 import { musicQueue } from "./musicQueue.js";
 import { getAudioPlayer } from "./audioPlayers.js";
-import { playSong } from "../commands/voice/playMusic.js";
+import { playSong } from "../commands/prefixCommands/voice/playMusic.js";
 import { checkAndDisconnectIfAloneOrInactive } from "./voiceStateHandler.js";
 
 export function pause(guildId: string): string {
