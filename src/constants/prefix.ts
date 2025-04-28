@@ -1,4 +1,4 @@
-export const prefijo: string = "+";
+export const prefijo: string = "-";
 
 export const specialPrefix: string = "```javascript";
 

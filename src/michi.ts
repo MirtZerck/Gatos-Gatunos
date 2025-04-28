@@ -12,11 +12,13 @@ import { CommandManager } from "./events/commandHandler.js";
 import { registerCommands } from "./commands/prefixCommands/register.js";
 import { registerSlashCommands } from "./commands/slashCommands/registerSlashCommands.js";
 import { onInteractionCreate } from "./commands/slashCommands/interactionCreate.js";
+import { aiChatHandler } from "./events/chatbotHandler.js";
+import { GeminiChat } from "./db_service/gemini_service.js";
 
 dotenv.config();
 
-export const token = process.env.TOKEN!;
-export const APPLICATION_ID = process.env.APPLICATION_ID!;
+export const token = process.env.TOKEN2!;
+export const APPLICATION_ID = process.env.APPLICATION_ID2!;
 
 const firebaseConfig = JSON.parse(process.env.FIREBASE_ADMIN_SDK!);
 
@@ -28,6 +30,7 @@ firebase.initializeApp({
 firebase.auth();
 
 export const db = firebase.database().ref("/");
+export const geminiChat = new GeminiChat();
 
 export const client = new Client({
   intents: [
@@ -44,6 +47,19 @@ export const client = new Client({
   ],
 });
 
+// Manejar el cierre del bot
+process.on('SIGINT', async () => {
+  console.log('Guardando caché antes de apagar...');
+  await geminiChat.saveCache();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('Guardando caché antes de apagar...');
+  await geminiChat.saveCache();
+  process.exit(0);
+});
+
 async function startBot() {
   // Inicializar el manejador de comandos
   const commandManager = new CommandManager();
@@ -53,6 +69,9 @@ async function startBot() {
 
   // Registrar el manejador de interacciones
   await onInteractionCreate(client);
+
+  // Registrar el manejador del chatbot
+  await aiChatHandler(client);
 
   // Logear el bot
   await client.login(token);
