@@ -14,6 +14,7 @@ import { registerSlashCommands } from "./commands/slashCommands/registerSlashCom
 import { onInteractionCreate } from "./commands/slashCommands/interactionCreate.js";
 import { aiChatHandler } from "./events/chatbotHandler.js";
 import { GeminiChat } from "./db_service/gemini_service.js";
+import { onMessageCreate } from "./commands/prefixCommands/answers.js";
 
 dotenv.config();
 
@@ -75,6 +76,8 @@ async function startBot() {
 
   // Registrar el manejador del chatbot
   await aiChatHandler(client);
+
+  await onMessageCreate(client);
 
   // Logear el bot
   await client.login(token);
