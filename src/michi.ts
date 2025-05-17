@@ -62,42 +62,42 @@ process.on('SIGTERM', async () => {
 });
 
 async function startBot() {
-  // Inicializar el manejador de comandos
-  const commandManager = new CommandManager();
-  
-  // Registrar todos los comandos
-  await registerCommands(commandManager);
+  try {
+    // Inicializar el manejador de comandos por prefijo
+    const commandManager = new CommandManager();
+    await registerCommands(commandManager);
+    await commandManager.initialize(client);
 
-  // Inicializar el manejador de comandos con el cliente
-  await commandManager.initialize(client);
+    // Registrar el manejador de comandos slash
+    await onInteractionCreate(client);
 
-  // Registrar el manejador de interacciones
-  await onInteractionCreate(client);
+    // Registrar el manejador del chatbot
+    await aiChatHandler(client);
+    await onMessageCreate(client);
 
-  // Registrar el manejador del chatbot
-  await aiChatHandler(client);
+    // Logear el bot
+    await client.login(token);
 
-  await onMessageCreate(client);
+    client.once(Events.ClientReady, async () => {
+      console.log("El bot se ha iniciado como", client.user?.username);
 
-  // Logear el bot
-  await client.login(token);
+      // Registrar comandos slash después de que el bot esté listo
+      await registerSlashCommands();
 
-  client.once(Events.ClientReady, async () => {
-    console.log("El bot se ha iniciado como", client.user?.username);
-
-    // Registrar comandos slash después de que el bot esté listo
-    await registerSlashCommands();
-
-    client.user?.setPresence({
-      activities: [
-        {
-          name: `Mi prefijo es ${prefijo}`,
-          type: ActivityType.Playing,
-        },
-      ],
-      status: PresenceUpdateStatus.DoNotDisturb,
+      client.user?.setPresence({
+        activities: [
+          {
+            name: `Mi prefijo es ${prefijo}`,
+            type: ActivityType.Playing,
+          },
+        ],
+        status: PresenceUpdateStatus.DoNotDisturb,
+      });
     });
-  });
+  } catch (error) {
+    console.error("Error al iniciar el bot:", error);
+    process.exit(1);
+  }
 }
 
 startBot();

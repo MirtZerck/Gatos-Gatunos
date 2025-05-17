@@ -4,6 +4,7 @@ import { musicCommand } from "./voice/slashMusicControls.js";
 import { arraySlashMusicListControls } from "./voice/slashMusicList.js";
 import { slashActionCommand } from "./social/slashActionCommands.js";
 import { slashReactCommand } from "./social/slashReactionCommands.js";
+import { slashAvatarCommand } from "./slashAvatar.js";
 /*import { helpSlashCommands } from "./slashHelp";*/
 
 export const arraySlashCommands = [
@@ -12,6 +13,7 @@ export const arraySlashCommands = [
   musicCommand,
   ...arraySlashMusicListControls,
   slashActionCommand,
-  slashReactCommand
+  slashReactCommand,
+  slashAvatarCommand
   /* helpSlashCommands, */
 ];

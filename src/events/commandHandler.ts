@@ -1,15 +1,13 @@
 import { Client, Message, CommandInteraction, Events, ChannelType } from "discord.js";
-import { CommandHandler, PrefixCommand, SlashCommand, DMCommand } from "../types/command.js";
+import { CommandHandler, PrefixCommand, DMCommand } from "../types/command.js";
 import { prefijo } from "../constants/prefix.js";
 
 export class CommandManager implements CommandHandler {
     prefixCommands: Map<string, PrefixCommand>;
-    slashCommands: Map<string, SlashCommand>;
     dmCommands: Map<string, DMCommand>;
 
     constructor() {
         this.prefixCommands = new Map();
-        this.slashCommands = new Map();
         this.dmCommands = new Map();
     }
 
@@ -29,12 +27,6 @@ export class CommandManager implements CommandHandler {
                 await this.handlePrefixCommand(message);
             }
         });
-
-        // Manejar comandos slash
-        client.on(Events.InteractionCreate, async (interaction) => {
-            if (!interaction.isCommand()) return;
-            await this.handleSlashCommand(interaction);
-        });
     }
 
     private async handlePrefixCommand(message: Message): Promise<void> {
@@ -45,7 +37,7 @@ export class CommandManager implements CommandHandler {
 
         const command = this.prefixCommands.get(commandName) || 
                        Array.from(this.prefixCommands.values()).find(cmd => 
-                           cmd.alias?.includes(commandName)
+                           cmd.alias && cmd.alias.includes(commandName)
                        );
 
         if (!command) return;
@@ -54,53 +46,24 @@ export class CommandManager implements CommandHandler {
             await command.execute(message, args);
         } catch (error) {
             console.error(`Error executing prefix command ${commandName}:`, error);
-            await message.reply("Hubo un error al ejecutar el comando.");
-        }
-    }
-
-    private async handleSlashCommand(interaction: CommandInteraction): Promise<void> {
-        const command = this.slashCommands.get(interaction.commandName);
-
-        if (!command) {
-            await interaction.reply({ content: "Comando no encontrado", ephemeral: true });
-            return;
-        }
-
-        try {
-            await command.execute(interaction);
-        } catch (error) {
-            console.error(`Error executing slash command ${interaction.commandName}:`, error);
-            await interaction.reply({ 
-                content: "Hubo un error al ejecutar el comando.", 
-                ephemeral: true 
-            });
+            await message.reply("Hubo un error al ejecutar el comando.").catch(console.error);
         }
     }
 
     private async handleDMCommand(message: Message): Promise<void> {
-        const args = message.content.trim().split(/ +/);
-        const commandName = args.shift()?.toLowerCase();
-
-        if (!commandName) return;
-
-        const command = this.dmCommands.get(commandName);
-
+        const command = this.dmCommands.get("dm");
         if (!command) return;
 
         try {
-            await command.execute(message, args);
+            await command.execute(message);
         } catch (error) {
-            console.error(`Error executing DM command ${commandName}:`, error);
-            await message.reply("Hubo un error al ejecutar el comando.");
+            console.error("Error executing DM command:", error);
+            await message.reply("Hubo un error al procesar tu mensaje.").catch(console.error);
         }
     }
 
     registerPrefixCommand(command: PrefixCommand): void {
         this.prefixCommands.set(command.name, command);
-    }
-
-    registerSlashCommand(command: SlashCommand): void {
-        this.slashCommands.set(command.name, command);
     }
 
     registerDMCommand(command: DMCommand): void {

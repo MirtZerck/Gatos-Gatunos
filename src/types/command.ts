@@ -1,10 +1,18 @@
 import { Message, CommandInteraction, Client, ChannelType } from "discord.js";
 
+export enum CommandCategory {
+    UTILITY = "utility",
+    SOCIAL = "social",
+    MODERATION = "moderation",
+    MUSIC = "music",
+    FUN = "fun",
+    PROPOSALS = "proposals"
+}
+
 export interface BaseCommand {
     name: string;
     description: string;
     category: CommandCategory;
-    cooldown?: number;
 }
 
 export interface PrefixCommand extends BaseCommand {
@@ -18,24 +26,11 @@ export interface SlashCommand extends BaseCommand {
 }
 
 export interface DMCommand extends BaseCommand {
-    execute: (message: Message, args: string[]) => Promise<void>;
-}
-
-export enum CommandCategory {
-    GENERAL = "general",
-    MODERATION = "moderation",
-    FUN = "fun",
-    MUSIC = "music",
-    SOCIAL = "social",
-    UTILITY = "utility",
-    ADMIN = "admin",
-    VOICE = "voice",
-    PROPOSALS = "proposals"
+    execute: (message: Message) => Promise<void>;
 }
 
 export interface CommandHandler {
     prefixCommands: Map<string, PrefixCommand>;
-    slashCommands: Map<string, SlashCommand>;
     dmCommands: Map<string, DMCommand>;
     initialize: (client: Client) => Promise<void>;
 }
