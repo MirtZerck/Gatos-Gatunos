@@ -21,7 +21,7 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 
 1. Clona el repositorio:
 ```bash
-git clone https://github.com/tu-usuario/Hikari-Koizumi-2.0.git
+git clone https://github.com/MirtZerck/Hikari-Koizumi-2.0.git
 cd Hikari-Koizumi-2.0
 ```
 
