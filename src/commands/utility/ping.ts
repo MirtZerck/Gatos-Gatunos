@@ -1,8 +1,9 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
-import { Command } from '../../types/Command.js'
+import { UnifiedCommand } from '../../types/Command.js'
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from "../../utils/constants.js";
 
-export const ping: Command = {
+export const ping: UnifiedCommand = {
+    type: 'unified',
     name: 'ping',
     description: 'Responde con un Pong!',
     category: CATEGORIES.UTILITY,

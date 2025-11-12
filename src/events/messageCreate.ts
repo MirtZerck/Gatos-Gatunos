@@ -17,23 +17,28 @@ export default {
         if (!commandName) return;
 
         const command = client.commands.get(commandName) ||
-            client.commands.find(cmd =>
-                cmd.aliases?.includes(commandName)
-            );
+            client.commands.find(cmd => {
+                if (cmd.type === 'slash-only') return false;
+                return 'aliases' in cmd && cmd.aliases?.includes(commandName)
+            });
 
         if (!command) return;
+
+        if (command.type === 'slash-only') {
+            await message.reply('❌ Este comando solo funciona como slash command (`/`).')
+            return
+        }
 
         try {
             console.log(` ${message.author.displayName} usó ${config.prefix}${commandName}`);
 
-            if (command.executePrefix) {
-                await command.executePrefix(message, args);
-            } else if (command.execute) {
+            if (command.type === 'prefix-only') {
+                await command.execute(message, args)
+            } else if (command.type === 'unified') {
                 await command.execute(message, args);
-            } else {
-                await message.reply('Este comando solo funciona como slash commands.');
+            } else if (command.type === 'hybrid') {
+                await command.executePrefix(message, args);
             }
-
         } catch (error) {
             console.error(`Error ejecutando ${commandName}:`, error);
             await message.reply('Hubo un error al ejecutar este comando.')

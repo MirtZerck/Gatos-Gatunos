@@ -3,6 +3,7 @@ import { Command } from '../../types/Command.js';
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from "../../utils/constants.js";
 
 export const saludar: Command = {
+    type: 'unified',
     name: 'saludar',
     description: 'El bot de saluda.',
     category: CATEGORIES.UTILITY,

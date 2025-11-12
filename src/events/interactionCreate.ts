@@ -13,20 +13,23 @@ export default {
             console.error(`Comando ${interaction.commandName} no encontrado.`);
             return;
         }
+
+        if (command.type === 'prefix-only') {
+            await interaction.reply({
+                content: '❌ Este comando solo funciona con prefijo.',
+                ephemeral: true
+            });
+            return;
+        }
+
         try {
             console.log(`${interaction.user.displayName} usó /${interaction.commandName}`);
 
-            if (command.executeSlash) {
-                await command.executeSlash(interaction);
-            } else if (command.execute) {
+            if (command.type === 'slash-only' || command.type === 'unified') {
                 await command.execute(interaction);
-            } else {
-                await interaction.reply({
-                    content: 'Este comando solo funciona con prefijo.',
-                    ephemeral: true
-                });
+            } else if (command.type === 'hybrid') {
+                await command.executeSlash(interaction);
             }
-
         } catch (error) {
             console.log(`Error ejecutando ${interaction.commandName}`, error);
 

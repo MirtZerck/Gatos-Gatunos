@@ -1,8 +1,9 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
-import { Command } from '../../types/Command.js';
+import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 
-export const avatar: Command = {
+export const avatar: HybridCommand = {
+    type: 'hybrid',
     name: 'avatar',
     description: 'Muestra el avatar de un usuario',
     category: CATEGORIES.UTILITY,
@@ -11,14 +12,13 @@ export const avatar: Command = {
     data: new SlashCommandBuilder()
         .setName('avatar')
         .setDescription('Muestra el avatar de un usuario')
-        .setContexts(CONTEXTS.ALL)
-        .setIntegrationTypes(INTEGRATION_TYPES.ALL)
         .addUserOption(option =>
             option
                 .setName('usuario')
                 .setDescription('El usuario del que quieres ver el avatar')
                 .setRequired(false)
-        ),
+        ).setContexts(CONTEXTS.ALL)
+        .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
 

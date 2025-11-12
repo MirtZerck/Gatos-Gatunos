@@ -4,7 +4,7 @@ import {
     Message,
     EmbedBuilder
 } from 'discord.js';
-import { Command } from '../../types/Command.js';
+import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 import { getRandomGif } from '../../utils/tenor.js';
 
@@ -21,7 +21,19 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-export const interact: Command = {
+const ACTION_MESSAGES: Record<ActionType, (author: string, target: string) => string> = {
+    hug: (author, target) => `**${author}** abraza a **${target}** 🤗`,
+    kiss: (author, target) => `**${author}** besa a **${target}** 😘`,
+    pat: (author, target) => `**${author}** acaricia la cabeza de **${target}** 😊`,
+    slap: (author, target) => `**${author}** abofetea a **${target}** 🖐️`,
+    poke: (author, target) => `**${author}** molesta a **${target}** 👉`,
+    cuddle: (author, target) => `**${author}** se acurruca con **${target}** 🥰`,
+    bite: (author, target) => `**${author}** muerde a **${target}** 😬`,
+    tickle: (author, target) => `**${author}** le hace cosquillas a **${target}** 🤭`,
+};
+
+export const interact: HybridCommand = {
+    type: 'hybrid',
     name: 'interact',
     description: 'Comandos de interacción con otros usuarios',
     category: CATEGORIES.INTERACTION,
@@ -142,35 +154,23 @@ export const interact: Command = {
             return
         }
 
-        const messages: Record<ActionType, string> = {
-            hug: `**${author.displayName}** abraza a **${target.displayName}** 🤗`,
-            kiss: `**${author.displayName}** besa a **${target.displayName}** 😘`,
-            pat: `**${author.displayName}** acaricia la cabeza de **${target.displayName}** 😊`,
-            slap: `**${author.displayName}** abofetea a **${target.displayName}** 🖐️`,
-            poke: `**${author.displayName}** molesta a **${target.displayName}** 👉`,
-            cuddle: `**${author.displayName}** se acurruca con **${target.displayName}** 🥰`,
-            bite: `**${author.displayName}** muerde a **${target.displayName}** 😬`,
-            tickle: `**${author.displayName}** le hace cosquillas a **${target.displayName}** 🤭`
-        };
-
         await interaction.deferReply();
 
         try {
             const gifURL = await getRandomGif(ACTION_QUERIES[subcommand]);
+            const message = ACTION_MESSAGES[subcommand](author.displayName, target.displayName)
 
             const embed = new EmbedBuilder()
-                .setDescription('\u200b') // Zero-width space para cumplir con el requisito de Discord
+                .setDescription(message) // Zero-width space para cumplir con el requisito de Discord
                 .setImage(gifURL)
                 .setColor(0xFF69B4);
 
-            await interaction.editReply({
-                content: messages[subcommand],
-                embeds: [embed]
-            });
+            await interaction.editReply({ embeds: [embed] });
         } catch (error) {
             console.error('Error obteniendo GIF:', error);;
+            const message = ACTION_MESSAGES[subcommand](author.displayName, target.displayName);
             await interaction.editReply({
-                content: `${messages[subcommand]}\n\n_(No se pudo cargar el GIF)_`
+                content: `${message}\n\n_(No se pudo cargar el GIF)_`
             });
 
         }
@@ -182,7 +182,8 @@ export const interact: Command = {
 
         if (!subcommand || !validSubcommands.includes(subcommand)) {
             await message.reply(
-                `❌ Uso: \`${message.content.split(' ')[0]} <${validSubcommands.join('|')}> @usuario\``
+                `❌ **Uso:** \`!interact <acción> @usuario\`\n\n` +
+                `**Acciones disponibles:**\n${validSubcommands.map(cmd => `• \`${cmd}\``).join('\n')}`
             );
             return;
         }
@@ -204,35 +205,26 @@ export const interact: Command = {
             return;
         }
 
-        const messages: Record<ActionType, string> = {
-            hug: `**${message.author.displayName}** abraza a **${target.displayName}** 🤗`,
-            kiss: `**${message.author.displayName}** besa a **${target.displayName}** 😘`,
-            pat: `**${message.author.displayName}** acaricia la cabeza de **${target.displayName}** 😊`,
-            slap: `**${message.author.displayName}** abofetea a **${target.displayName}** 🖐️`,
-            poke: `**${message.author.displayName}** molesta a **${target.displayName}** 👉`,
-            cuddle: `**${message.author.displayName}** se acurruca con **${target.displayName}** 🥰`,
-            bite: `**${message.author.displayName}** muerde a **${target.displayName}** 😬`,
-            tickle: `**${message.author.displayName}** le hace cosquillas a **${target.displayName}** 🤭`,
-        };
-
         const loadingMsg = await message.reply('🔄 Cargando GIF...');
+        const messageText = ACTION_MESSAGES[subcommand](message.author.displayName, target.displayName)
 
         try {
             const gifUrl = await getRandomGif(ACTION_QUERIES[subcommand]);
 
             const embed = new EmbedBuilder()
-                .setDescription('\u200b') // Zero-width space para cumplir con el requisito de Discord
+                .setDescription(messageText) // Zero-width space para cumplir con el requisito de Discord
                 .setImage(gifUrl)
                 .setColor(0xFF69B4);
 
             await loadingMsg.edit({
-                content: messages[subcommand],
+                content: null,
                 embeds: [embed]
             });
         } catch (error) {
             console.error('Error obteniendo GIF:', error);
+            const messageText = ACTION_MESSAGES[subcommand](message.author.displayName, target.displayName)
             await loadingMsg.edit({
-                content: `${messages[subcommand]}\n\n_(No se pudo cargar el GIF)_`
+                content: `${messageText}\n\n_(No se pudo cargar el GIF)_`
             });
         }
     },

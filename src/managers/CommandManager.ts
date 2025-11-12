@@ -1,5 +1,5 @@
 import { Collection, REST, Routes } from "discord.js";
-import { Command } from "../types/Command.js";
+import { Command, PrefixOnlyCommand } from "../types/Command.js";
 import { readdirSync, statSync } from "fs";
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from "url";
@@ -18,9 +18,11 @@ export class CommandManager {
 
     async loadCommands(): Promise<void> {
         const commandPath = join(__dirname, '../commands');
+
         await this.loadCommandsFromDirectory(commandPath);
 
         const categories = new Map<string, string[]>();
+
         for (const [name, command] of this.commands) {
             const category = command.category || 'Sin categoría';
             if (!categories.has(category)) {
@@ -31,11 +33,24 @@ export class CommandManager {
 
         console.log(`${this.commands.size} comandos cargados.`);
 
-        for (const [category, commands] of categories) {
+        for (const [category, commandNames] of categories) {
             console.log(`📁 ${category}:`);
-            for (const cmd of commands) {
-                const command = this.commands.get(cmd)!;
-                console.log(`  ├─ ${cmd}${command.aliases ? ` (${command.aliases.join(', ')})` : ''}`);
+
+            for (const cmdName of commandNames) {
+                const command = this.commands.get(cmdName)!;
+
+                const aliases = (command.type !== 'slash-only' && 'aliases' in command && command.aliases)
+                    ? ` (${command.aliases.join(', ')})`
+                    : '';
+
+                const typeIcon = {
+                    'slash-only': '⚡',
+                    'prefix-only': '💬',
+                    'hybrid': '🔀',
+                    'unified': '🔗'
+                }[command.type];
+
+                console.log(`  ├─ ${typeIcon} ${cmdName}${aliases}`);
 
             }
 
@@ -53,8 +68,10 @@ export class CommandManager {
             const stat = statSync(filePath);
 
             if (stat.isDirectory()) {
+                // Si es carpeta, cargar recursivamente
                 await this.loadCommandsFromDirectory(filePath);
             } else if (file.endsWith('.ts') || file.endsWith('js')) {
+                // Si es archivo .ts/.js, cargar como comando
                 await this.loadCommandFile(filePath);
             }
         }
@@ -68,28 +85,57 @@ export class CommandManager {
             const commandModule = await import(fileURL);
             const command = Object.values(commandModule)[0] as Command;
 
-            if (command?.name && (command.execute || command.executeSlash || command.executePrefix)) {
+            const isValid =
+                command?.name &&
+                command?.type &&
+                command?.category &&
+                (
+                    (command.type === 'slash-only' && command.data) ||
+                    (command.type === 'prefix-only') ||
+                    (command.type === 'hybrid' && command.data) ||
+                    (command.type === 'unified' && command.data)
+                );
+
+            if (isValid) {
                 this.commands.set(command.name, command);
-                console.log(`  ├─ ${command.name}${command.aliases ? `(${command.aliases.join(', ')})` : ''}`);
+            } else {
+                console.log(`  ├─ ⚠️ ${filePath}: Comando inválido`);
             }
         } catch (error) {
-            console.log(`  ├─ ❌ Error cargando ${filePath}:`, error);
-
+            console.error(`  ├─ ❌ Error cargando ${filePath}:`, error);
         }
     }
 
     /* Obtiene un comando por nombre o alias */
 
     getCommand(name: string): Command | undefined {
-        return this.commands.get(name) ||
-            this.commands.find(cmd => cmd.aliases?.includes(name));
-    }
-    async deployCommands(token: string, clientId: string): Promise<void> {
-        const commandsData = Array.from(this.commands.values())
-            .filter(cmd => cmd.data)
-            .map(cmd => cmd.data!.toJSON());
+        // Buscar por nombre exacto
+        const command = this.commands.get(name);
+        if (command) return command;
 
-        console.log(`Se han registrado ${commandsData.length} comandos en Discord...`);
+        // Buscar por alias (solo en comandos que soporten prefijo)
+        return this.commands.find(cmd => {
+            if (cmd.type === 'slash-only') return false;
+            return 'aliases' in cmd && cmd.aliases?.includes(name);
+        });
+    }
+
+    /* Registra todos los comandos slash en Discord */
+    async deployCommands(token: string, clientId: string): Promise<void> {
+        // Filtrar solo comandos con data (excluir prefix-only)
+        const slashCommands = Array.from(this.commands.values()).filter(
+            (cmd): cmd is Exclude<Command, PrefixOnlyCommand> =>
+                cmd.type !== 'prefix-only' && 'data' in cmd
+        );
+
+        const commandsData = slashCommands.map(cmd => cmd.data.toJSON());
+
+        if (commandsData.length === 0) {
+            console.log('⚠️ No hay comandos slash para registrar');
+            return;
+        }
+
+        console.log(`\n🚀 Registrando ${commandsData.length} comandos slash en Discord...`);
 
         const rest = new REST().setToken(token)
 
@@ -98,7 +144,15 @@ export class CommandManager {
             { body: commandsData }
         );
 
-        console.log('Comandos registrados exitosamente.');
+        console.log('✅ Comandos slash registrados exitosamente.');
+
+        const prefixOnlyCount = Array.from(this.commands.values())
+            .filter(cmd => cmd.type == 'prefix-only').length;
+
+        if (prefixOnlyCount > 0) {
+            console.log(`ℹ️ ${prefixOnlyCount} comandos solo con prefijo no se registran en Discord`);
+
+        }
     }
 
     /* Lista todos los comandos por categoría */
@@ -106,32 +160,59 @@ export class CommandManager {
     listCommands(): void {
         const categories = new Map<string, Command[]>();
 
-        /* Agrupar comandos por categoría (primera parte del nombre del archivo) */
+        /* Agrupar comandos por categoría */
 
         for (const command of this.commands.values()) {
-            const category = this.getCategoryFromCommand(command);
+            const category = command.category;
+
             if (!categories.has(category)) {
                 categories.set(category, []);
             }
             categories.get(category)!.push(command);
         }
-        console.log('\n Comandos disponibles: ');
+        console.log('\n📋 Comandos disponibles:\n');
+
         for (const [category, cmds] of categories) {
-            console.log(`\n${category}:`);
+            console.log(`\n📁 ${category}:`);
             for (const cmd of cmds) {
-                const aliasesStr = cmd.aliases ? ` (${cmd.aliases.join(', ')})` : '';
-                console.log(`  - /${cmd.name}${aliasesStr}: ${cmd.description}`);
+                const aliasesStr = (cmd.type !== 'slash-only' && 'aliases' in cmd && cmd.aliases)
+                    ? ` (${cmd.aliases.join(', ')})`
+                    : '';
+
+                const typeIndicator = cmd.type === 'slash-only' ? '/' :
+                    cmd.type === 'prefix-only' ? '!' : '/!';
+
+                console.log(`  ├─ ${typeIndicator}${cmd.name}${aliasesStr}: ${cmd.description}`);
 
             }
         }
     }
 
-    /* Obtiene la categoría de un comando (para organización) */
+    /* Obtiene estadísticas de los comandos cargados */
+    getStats(): {
+        total: number;
+        byType: Record<Command['type'], number>;
+        byCategory: Record<string, number>;
+    } {
+        const stats = {
+            total: this.commands.size,
+            byType: {
+                'slash-only': 0,
+                'prefix-only': 0,
+                'hybrid': 0,
+                'unified': 0
+            } as Record<Command['type'], number>,
+            byCategory: {} as Record<string, number>
+        };
 
-    private getCategoryFromCommand(command: Command): string {
-        /* Se personaliza según la estructura */
-        /* Pendiente */
+        for (const command of this.commands.values()) {
+            stats.byType[command.type]++;
 
-        return 'General';
+            if (!stats.byCategory[command.category]) {
+                stats.byCategory[command.category] = 0;
+            }
+            stats.byCategory[command.category]++;
+        }
+        return stats;
     }
 }
