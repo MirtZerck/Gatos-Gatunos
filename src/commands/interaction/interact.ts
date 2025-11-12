@@ -5,8 +5,10 @@ import {
     EmbedBuilder
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
-import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
+import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 import { getRandomGif } from '../../utils/tenor.js';
+import { Validators } from '../../utils/validators.js';
+import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 
 const ACTION_QUERIES = {
     hug: 'anime hug',
@@ -134,98 +136,81 @@ export const interact: HybridCommand = {
         .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
-        const subcommand = interaction.options.getSubcommand() as ActionType;
-        const target = interaction.options.getUser('usuario', true);
-        const author = interaction.user;
-
-        if (target.id === author.id) {
-            await interaction.reply({
-                content: 'No puedes interactuar contigo mismo.',
-                ephemeral: true
-            });
-            return
-        }
-
-        if (target.bot) {
-            await interaction.reply({
-                content: 'No puedes interactuar con bots.',
-                ephemeral: true
-            });
-            return
-        }
-
-        await interaction.deferReply();
-
         try {
-            const gifURL = await getRandomGif(ACTION_QUERIES[subcommand]);
-            const message = ACTION_MESSAGES[subcommand](author.displayName, target.displayName)
+            const subcommand = interaction.options.getSubcommand() as ActionType;
+            const target = interaction.options.getUser('usuario', true);
+            const author = interaction.user;
 
-            const embed = new EmbedBuilder()
-                .setDescription(message) // Zero-width space para cumplir con el requisito de Discord
-                .setImage(gifURL)
-                .setColor(0xFF69B4);
+            Validators.validateNotSelf(author, target);
+            Validators.validateNotBot(target);
 
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.deferReply();
+
+            try {
+                const gifURL = await getRandomGif(ACTION_QUERIES[subcommand]);
+                const message = ACTION_MESSAGES[subcommand](author.displayName, target.displayName)
+
+                const embed = new EmbedBuilder()
+                    .setDescription(message)
+                    .setImage(gifURL)
+                    .setColor(COLORS.INTERACTION);
+
+                await interaction.editReply({ embeds: [embed] });
+            } catch (error) {
+                throw new CommandError(
+                    ErrorType.API_ERROR,
+                    `Error obteniendo GIF de Tenor`,
+                    `❌ No se pudo obtener el GIF. Intenta de nuevo.`
+                );
+            }
         } catch (error) {
-            console.error('Error obteniendo GIF:', error);;
-            const message = ACTION_MESSAGES[subcommand](author.displayName, target.displayName);
-            await interaction.editReply({
-                content: `${message}\n\n_(No se pudo cargar el GIF)_`
-            });
-
+            await handleCommandError(error, interaction, 'interact');
         }
     },
 
     async executePrefix(message: Message, args: string[]) {
-        const subcommand = args[0]?.toLowerCase() as ActionType;
-        const validSubcommands = Object.keys(ACTION_QUERIES);
-
-        if (!subcommand || !validSubcommands.includes(subcommand)) {
-            await message.reply(
-                `❌ **Uso:** \`!interact <acción> @usuario\`\n\n` +
-                `**Acciones disponibles:**\n${validSubcommands.map(cmd => `• \`${cmd}\``).join('\n')}`
-            );
-            return;
-        }
-
-        const target = message.mentions.users.first();
-
-        if (!target) {
-            await message.reply('❌ Debes mencionar a un usuario.');
-            return;
-        }
-
-        if (target.id === message.author.id) {
-            await message.reply('❌ No puedes interactuar contigo mismo.');
-            return;
-        }
-
-        if (target.bot) {
-            await message.reply('❌ No puedes interactuar con bots.');
-            return;
-        }
-
-        const loadingMsg = await message.reply('🔄 Cargando GIF...');
-        const messageText = ACTION_MESSAGES[subcommand](message.author.displayName, target.displayName)
-
         try {
-            const gifUrl = await getRandomGif(ACTION_QUERIES[subcommand]);
+            const subcommand = args[0]?.toLowerCase() as ActionType;
+            const validSubcommands = Object.keys(ACTION_QUERIES);
 
-            const embed = new EmbedBuilder()
-                .setDescription(messageText) // Zero-width space para cumplir con el requisito de Discord
-                .setImage(gifUrl)
-                .setColor(0xFF69B4);
+            if (!subcommand || !validSubcommands.includes(subcommand)) {
+                await message.reply(
+                    `❌ **Uso:** \`!interact <acción> @usuario\`\n\n` +
+                    `**Acciones disponibles:**\n${validSubcommands.map(cmd => `• \`${cmd}\``).join('\n')}`
+                );
+                return;
+            }
 
-            await loadingMsg.edit({
-                content: null,
-                embeds: [embed]
-            });
-        } catch (error) {
-            console.error('Error obteniendo GIF:', error);
+            const target = message.mentions.users.first();
+
+            Validators.validateUserProvided(target);
+            Validators.validateNotSelf(message.author, target);
+            Validators.validateNotBot(target);
+
+            const loadingMsg = await message.reply('🔄 Cargando GIF...');
             const messageText = ACTION_MESSAGES[subcommand](message.author.displayName, target.displayName)
-            await loadingMsg.edit({
-                content: `${messageText}\n\n_(No se pudo cargar el GIF)_`
-            });
+
+            try {
+                const gifUrl = await getRandomGif(ACTION_QUERIES[subcommand]);
+
+                const embed = new EmbedBuilder()
+                    .setDescription(messageText)
+                    .setImage(gifUrl)
+                    .setColor(COLORS.INTERACTION);
+
+                await loadingMsg.edit({
+                    content: null,
+                    embeds: [embed]
+                });
+            } catch (error) {
+                throw new CommandError(
+                    ErrorType.API_ERROR,
+                    'No se ha podido obtener un GIF de Tenor',
+                    '❌ No se pudo obtener el GIF. Intenta de nuevo.'
+                );
+            }
+        } catch (error) {
+            await handleCommandError(error, message, 'interact');
         }
     },
 };
