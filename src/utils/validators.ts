@@ -38,6 +38,16 @@ export class Validators {
         }
     }
 
+    static validateMemberProvided(member: GuildMember | null | undefined): asserts member is GuildMember {
+        if (!member) {
+            throw new CommandError(
+                ErrorType.VALIDATION_ERROR,
+                'No se ha proporcionado un miembro',
+                '❌ Debes mencionar o seleccionar un miembro del servidor.'
+            );
+        }
+    }
+
     static validateInGuild(
         context: ChatInputCommandInteraction | Message
     ): asserts context is (ChatInputCommandInteraction | Message) & { guild: Guild } {

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
+import { handleCommandError } from '../../utils/errorHandler.js';
 
 export const avatar: HybridCommand = {
     type: 'hybrid',
@@ -22,23 +23,30 @@ export const avatar: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
 
-        const user = interaction.options.getUser('usuario') || interaction.user;
+        try {
+            const user = interaction.options.getUser('usuario') || interaction.user;
+            const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
 
-        const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
-
-        await interaction.reply({
-            content: `Avatar de **${user.displayName}**:`,
-            files: [avatarURL]
-        });
+            await interaction.reply({
+                content: `Avatar de **${user.displayName}**:`,
+                files: [avatarURL]
+            });
+        } catch (error) {
+            await handleCommandError(error, interaction, 'avatar');
+        }
     },
 
     async executePrefix(message: Message, args: string[]) {
-        const user = message.mentions.users.first() || message.author;
-        const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
+        try {
+            const user = message.mentions.users.first() || message.author;
+            const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
 
-        await message.reply({
-            content: `Avatar de *${user.displayName}*`,
-            files: [avatarURL]
-        });
+            await message.reply({
+                content: `Avatar de *${user.displayName}*`,
+                files: [avatarURL]
+            });
+        } catch (error) {
+            await handleCommandError(error, message, 'avatar');
+        }
     }
 };

@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { UnifiedCommand } from '../../types/Command.js'
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from "../../utils/constants.js";
+import { handleCommandError } from "../../utils/errorHandler.js";
 
 export const ping: UnifiedCommand = {
     type: 'unified',
@@ -16,12 +17,17 @@ export const ping: UnifiedCommand = {
         .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 
     async execute(context) {
-        const isInteraction = context instanceof ChatInputCommandInteraction;
+        try {
+            const isInteraction = context instanceof ChatInputCommandInteraction;
 
-        if (isInteraction) {
-            await context.reply('🏓 Pong!');
-        } else {
-            await context.reply('🏓 Pong!');
+            if (isInteraction) {
+                await context.reply('🏓 Pong!');
+            } else {
+                await context.reply('🏓 Pong!');
+            }
+        } catch (error) {
+            const isInteraction = context instanceof ChatInputCommandInteraction;
+            await handleCommandError(error, context, 'ping');
         }
     },
 };

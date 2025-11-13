@@ -1,6 +1,7 @@
 import { SlashCommandBuilder, ChatInputCommandInteraction } from "discord.js";
 import { Command } from '../../types/Command.js';
 import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from "../../utils/constants.js";
+import { handleCommandError } from "../../utils/errorHandler.js";
 
 export const saludar: Command = {
     type: 'unified',
@@ -16,16 +17,19 @@ export const saludar: Command = {
         .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 
     async execute(context) {
-        const isInteraction = context instanceof ChatInputCommandInteraction;
+        try {
+            const isInteraction = context instanceof ChatInputCommandInteraction;
 
-        const user = isInteraction ? context.user : context.author;
-        const saludo = `Hola **${user.displayName}**!`;
+            const user = isInteraction ? context.user : context.author;
+            const saludo = `Hola **${user.displayName}**!`;
 
-        if (isInteraction) {
-            await context.reply(saludo);
-        } else {
-            await context.reply(saludo);
+            if (isInteraction) {
+                await context.reply(saludo);
+            } else {
+                await context.reply(saludo);
+            }
+        } catch (error) {
+            await handleCommandError(error, context, 'saludad');
         }
-
     },
-}
+};
