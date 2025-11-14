@@ -6,8 +6,11 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 
 - **Comandos Slash y Prefijo**: Soporte para ambos tipos de comandos
 - **Sistema de Comandos Modular**: Fácil de extender y mantener
+- **Subcomandos con Aliases**: Sistema avanzado de subcomandos con soporte para aliases
 - **Interacciones con GIFs**: Comandos de interacción con usuarios usando Tenor API
 - **Gestión de Eventos**: Sistema de eventos completamente modular
+- **Sistema de Logging**: Logger configurable con niveles (debug, info, warn, error)
+- **Manejo de Errores**: Sistema robusto de manejo de errores con mensajes personalizados
 - **TypeScript**: Código type-safe y mantenible
 
 ## 📋 Requisitos
@@ -84,19 +87,26 @@ Hikari-Koizumi-2.0/
 ## 🎮 Comandos Disponibles
 
 ### Interacción
-- `/interact hug @usuario` - Abraza a un usuario
-- `/interact kiss @usuario` - Besa a un usuario
-- `/interact pat @usuario` - Acaricia la cabeza de un usuario
-- `/interact slap @usuario` - Abofetea a un usuario
-- `/interact poke @usuario` - Molesta a un usuario
-- `/interact cuddle @usuario` - Se acurruca con un usuario
-- `/interact bite @usuario` - Muerde a un usuario
-- `/interact tickle @usuario` - Hace cosquillas a un usuario
+- `/interact hug @usuario` o `*hug @usuario` - Abraza a un usuario
+- `/interact kiss @usuario` o `*kiss @usuario` - Besa a un usuario
+- `/interact pat @usuario` o `*pat @usuario` - Acaricia la cabeza de un usuario
+- `/interact slap @usuario` o `*slap @usuario` - Abofetea a un usuario
+- `/interact poke @usuario` o `*poke @usuario` - Molesta a un usuario
+- `/interact cuddle @usuario` o `*cuddle @usuario` - Se acurruca con un usuario
+- `/interact bite @usuario` o `*bite @usuario` - Muerde a un usuario
+- `/interact tickle @usuario` o `*tickle @usuario` - Hace cosquillas a un usuario
+
+**Nota:** Los subcomandos también tienen aliases. Por ejemplo: `*abrazo @usuario` funciona igual que `*hug @usuario`.
 
 ### Utilidad
-- `/ping` - Responde con Pong!
-- `/saludar` - El bot te saluda
-- `/avatar [@usuario]` - Muestra el avatar de un usuario
+- `/ping` o `*ping` - Responde con Pong!
+- `/saludar` o `*saludar` - El bot te saluda
+- `/avatar [@usuario]` o `*avatar [@usuario]` - Muestra el avatar de un usuario
+
+### Moderación
+- `/moderation kick @usuario [razón]` o `*kick @usuario [razón]` - Expulsa a un usuario
+- `/moderation ban @usuario [razón]` o `*ban @usuario [razón]` - Banea a un usuario
+- `/moderation timeout @usuario [tiempo] [razón]` o `*timeout @usuario [tiempo] [razón]` - Silencia temporalmente a un usuario
 
 ## 🔧 Configuración
 
@@ -108,6 +118,8 @@ Hikari-Koizumi-2.0/
 | `APPLICATION_ID` | ID de la aplicación del bot | ✅ |
 | `PREFIX` | Prefijo para comandos (default: `*`) | ❌ |
 | `TENOR_API_KEY` | API Key de Tenor para GIFs | ✅ (para interacciones) |
+| `NODE_ENV` | Entorno de ejecución (`development` o `production`) | ❌ |
+| `LOG_LEVEL` | Nivel de logging (`debug`, `info`, `warn`, `error`) | ❌ |
 
 ### Obtener una API Key de Tenor
 

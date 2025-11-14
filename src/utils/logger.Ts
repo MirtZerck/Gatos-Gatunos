@@ -15,7 +15,7 @@ const LOG_LEVEL_MAP: Record<string, LogLevel> = {
 };
 
 const LOG_COLORS = {
-    EBUG: '\x1b[36m', // Celeste
+    DEBUG: '\x1b[36m', // Celeste
     INFO: '\x1b[32m', //  Verde
     WARN: '\x1b[33m', // Amarillo
     ERROR: '\x1b[31m', // Rojo

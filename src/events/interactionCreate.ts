@@ -37,7 +37,7 @@ export default {
                 await command.executeSlash(interaction);
             }
         } catch (error) {
-            logger.error('InteractionCreate', `Error ejecutando ${interaction.commandName}`);
+            logger.error('InteractionCreate', `Error ejecutando ${interaction.commandName}`, error);
 
             const errorMensaje = {
                 content: 'Hubo un error al ejecutar este comando.',

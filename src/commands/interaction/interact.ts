@@ -38,8 +38,17 @@ export const interact: HybridCommand = {
     type: 'hybrid',
     name: 'interact',
     description: 'Comandos de interacción con otros usuarios',
-    category: CATEGORIES.INTERACTION,
-    aliases: ['int', 'interactuar', 'interaccion'],
+    category: CATEGORIES.INTERACTION,    
+    subcommands: [
+        { name: 'hug', aliases: ['abrazo', 'abrazar'], description: 'Abraza a alguien' },
+        { name: 'kiss', aliases: ['beso', 'besar'], description: 'Besa a alguien' },
+        { name: 'pat', aliases: ['acariciar'], description: 'Acaricia la cabeza' },
+        { name: 'slap', aliases: ['cachetada', 'bofetada'], description: 'Abofetea' },
+        { name: 'poke', aliases: ['molestar'], description: 'Molesta a alguien' },
+        { name: 'cuddle', aliases: ['acurrucar'], description: 'Acurrúcate' },
+        { name: 'bite', aliases: ['morder'], description: 'Muerde' },
+        { name: 'tickle', aliases: ['cosquillas'], description: 'Haz cosquillas' },
+    ],
 
     data: new SlashCommandBuilder()
         .setName('interact')

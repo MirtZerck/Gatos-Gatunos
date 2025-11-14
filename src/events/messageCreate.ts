@@ -38,12 +38,41 @@ export default {
                 message.guild?.name
             )
 
+            let finalArgs = args; 
+
+            if (command.type === 'hybrid' && 'subcommands' in command && command.subcommands) {
+                const isSubcommand = command.subcommands.some(sub => 
+                sub.name === commandName || sub.aliases?.includes(commandName)
+                );
+                
+                if (!isSubcommand && client.commandManager?.isOriginalCommand(command.name)) {
+                    const firstArg = args[0]?.toLowerCase();
+                    const isFirstArgSubcommand = command.subcommands.some(sub => 
+                        sub.name === firstArg || sub.aliases?.includes(firstArg)
+                    );
+                    
+                    if (isFirstArgSubcommand) {                        
+                        return;
+                    }
+                }
+                
+                if (isSubcommand) {                  
+                const subcommandInfo = command.subcommands.find(sub =>
+                    sub.name === commandName || sub.aliases?.includes(commandName)
+                );
+
+                if (subcommandInfo) {
+                    finalArgs = [subcommandInfo.name, ...args];
+                }
+                }
+            }
+
             if (command.type === 'prefix-only') {
-                await command.execute(message, args)
+                await command.execute(message, finalArgs)
             } else if (command.type === 'unified') {
-                await command.execute(message, args);
+                await command.execute(message, finalArgs);
             } else if (command.type === 'hybrid') {
-                await command.executePrefix(message, args);
+                await command.executePrefix(message, finalArgs);
             }
         } catch (error) {
             logger.error('MessageCreate', `Error ejecutando ${commandName}`, error)

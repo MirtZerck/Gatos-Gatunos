@@ -3,6 +3,7 @@ import { Event } from "../types/Events.js";
 import { readdirSync } from "fs";
 import { join, dirname } from 'path'
 import { fileURLToPath } from "url";
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -33,12 +34,12 @@ export class EventManager {
                         event.execute(this.client, ...args)
                     )
                 }
-                console.log(`  ├─ ${event.name} ${event.once ? '(once)' : ''}`);
+                logger.debug('EventManager', `  ├─ ${event.name} ${event.once ? '(once)' : ''}`);
 
             }
         }
 
-        console.log(`${eventFiles.length} eventos cargados`);
+        logger.module('EventManager', eventFiles.length);
 
     }
 

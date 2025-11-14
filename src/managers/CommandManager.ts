@@ -1,5 +1,5 @@
 import { Collection, REST, Routes } from "discord.js";
-import { Command, PrefixOnlyCommand } from "../types/Command.js";
+import { Command, PrefixOnlyCommand, SubcommandInfo } from "../types/Command.js";
 import { readdirSync, statSync } from "fs";
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from "url";
@@ -10,9 +10,11 @@ const __dirname = dirname(__filename);
 
 export class CommandManager {
     public commands: Collection<string, Command>;
+    private originalCommandNames: Set<string>;
 
     constructor() {
         this.commands = new Collection();
+        this.originalCommandNames = new Set();
     }
 
     /*  Carga todos los comandos desde las subcarpetas  */
@@ -23,6 +25,7 @@ export class CommandManager {
         const commandPath = join(__dirname, '../commands');
         await this.loadCommandsFromDirectory(commandPath);
 
+        this.registerSubcommandAliases();
 
         const categories = new Map<string, string[]>();
 
@@ -53,11 +56,50 @@ export class CommandManager {
                 }[command.type];
 
                 logger.debug('CommandManager', `${typeIcon} ${cmdName} ${aliases}`);
-
             }
-
         }
+    }
 
+    private registerSubcommandAliases(): void {
+        const commandsWithSubcommands = Array.from(this.commands.values()).filter(
+            (cmd): cmd is Extract<Command, { subcommands?: SubcommandInfo[] }> => 
+                'subcommands' in cmd && Array.isArray(cmd.subcommands)
+        );
+    
+        for (const command of commandsWithSubcommands) {
+            if (!command.subcommands) continue;
+    
+            for (const subcommand of command.subcommands) {                
+                this.registerSubcommandAlias(command, subcommand.name);
+    
+                if (subcommand.aliases) {
+                    for (const alias of subcommand.aliases) {
+                        this.registerSubcommandAlias(command, alias);
+                    }
+                }
+            }
+        }
+    }
+
+    private registerSubcommandAlias(parentCommand: Command, alias: string): void {      
+        if (this.commands.has(alias)) {
+            logger.warn('CommandManager', `Alias "${alias}" ya existe, saltando`);
+            return;
+        }
+    
+        // Los aliases de subcomandos solo tienen sentido para comandos de prefijo
+        if (parentCommand.type === 'slash-only') {
+            return;
+        }
+    
+        const subcommandWrapper: Command = {
+            ...parentCommand,
+            name: alias,
+            aliases: [], 
+        };
+    
+        this.commands.set(alias, subcommandWrapper);
+        logger.debug('CommandManager', `  ↳ Registrado alias: ${alias}`);
     }
 
     /*  Carga comandos recursivamente desde un directorio */
@@ -100,6 +142,7 @@ export class CommandManager {
 
             if (isValid) {
                 this.commands.set(command.name, command);
+                this.originalCommandNames.add(command.name);
             } else {
                 logger.warn('CommandManager', `Comando inválido: ${filePath}`);
             }
@@ -122,18 +165,26 @@ export class CommandManager {
         });
     }
 
+    /* Verifica si un comando es original (no un wrapper de alias) */
+    isOriginalCommand(name: string): boolean {
+        return this.originalCommandNames.has(name);
+    }
+
     /* Registra todos los comandos slash en Discord */
     async deployCommands(token: string, clientId: string): Promise<void> {
-        // Filtrar solo comandos con data (excluir prefix-only)
-        const slashCommands = Array.from(this.commands.values()).filter(
-            (cmd): cmd is Exclude<Command, PrefixOnlyCommand> =>
-                cmd.type !== 'prefix-only' && 'data' in cmd
-        );
+        // Filtrar solo comandos originales con data (excluir prefix-only y wrappers de aliases)
+        const slashCommands = Array.from(this.commands.entries())
+            .filter(([name, cmd]) => 
+                this.originalCommandNames.has(name) &&
+                cmd.type !== 'prefix-only' && 
+                'data' in cmd
+            )
+            .map(([, cmd]) => cmd) as Exclude<Command, PrefixOnlyCommand>[];
 
         const commandsData = slashCommands.map(cmd => cmd.data.toJSON());
 
         if (commandsData.length === 0) {
-            console.log('⚠️ No hay comandos slash para registrar');
+            logger.warn('CommandManager', '⚠️ No hay comandos slash para registrar');
             return;
         }
 
@@ -171,10 +222,10 @@ export class CommandManager {
             }
             categories.get(category)!.push(command);
         }
-        console.log('\n📋 Comandos disponibles:\n');
+        logger.info('CommandManager', '\n📋 Comandos disponibles:\n');
 
         for (const [category, cmds] of categories) {
-            console.log(`\n📁 ${category}:`);
+            logger.info('CommandManager', `\n📁 ${category}:`);
             for (const cmd of cmds) {
                 const aliasesStr = (cmd.type !== 'slash-only' && 'aliases' in cmd && cmd.aliases)
                     ? ` (${cmd.aliases.join(', ')})`
@@ -183,7 +234,7 @@ export class CommandManager {
                 const typeIndicator = cmd.type === 'slash-only' ? '/' :
                     cmd.type === 'prefix-only' ? '!' : '/!';
 
-                console.log(`  ├─ ${typeIndicator}${cmd.name}${aliasesStr}: ${cmd.description}`);
+                logger.info('CommandManager', `  ├─ ${typeIndicator}${cmd.name}${aliasesStr}: ${cmd.description}`);
 
             }
         }

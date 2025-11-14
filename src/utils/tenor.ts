@@ -1,4 +1,5 @@
 import { config } from "../config.js";
+import { logger } from "./logger.js";
 
 const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
 
@@ -28,7 +29,7 @@ export async function getRandomGif(query: string, limit: number = 20): Promise<s
 
         return gif.media_formats.gif.url;
     } catch (error) {
-        console.log('Error obteniendo GIF de Tenor:', error);
+        logger.error('Tenor', 'Error obteniendo GIF de Tenor', error);
 
         return 'https://media.tenor.com/images/error.gif'
 
@@ -58,7 +59,7 @@ export async function getTrendingGif(category?: string): Promise<string> {
 
         return gif.media_formats.gif.url;
     } catch (error) {
-        console.error('Error obteniendo GIF trending:', error);
+        logger.error('Tenor', 'Error obteniendo GIF trending', error);
         return 'https://media.tenor.com/images/error.gif';
 
     }

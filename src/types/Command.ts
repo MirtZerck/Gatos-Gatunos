@@ -28,15 +28,25 @@ export interface PrefixOnlyCommand extends BaseCommand {
     aliases?: string[];
     execute: (message: Message, args: string[]) => Promise<void>
 }
+
+export interface SubcommandInfo {
+    name: string;
+    aliases?: string[];
+    description: string;
+}
+
 export interface HybridCommand extends BaseCommand {
     type: 'hybrid';
-    aliases: string[];
+    aliases?: string[];
+    subcommands?: SubcommandInfo[];
     data: SlashCommandBuilder | SlashCommandSubcommandsOnlyBuilder | SlashCommandOptionsOnlyBuilder;
     contexts?: InteractionContextType[];
     integrationTypes?: ApplicationIntegrationType[];
     executeSlash: (interaction: ChatInputCommandInteraction) => Promise<void>;
     executePrefix: (message: Message, args: string[]) => Promise<void>;
 }
+
+
 
 export interface UnifiedCommand extends BaseCommand {
     type: 'unified';

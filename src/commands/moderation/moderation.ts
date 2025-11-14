@@ -16,7 +16,11 @@ export const moderation: HybridCommand = {
     name: 'moderation',
     description: 'Comandos de moderación del servidor',
     category: CATEGORIES.MODERATION,
-    aliases: ['mod', 'moderacion'],
+    subcommands: [
+        { name: 'kick', aliases: ['expulsar'], description: 'Expulsa un usuario' },
+        { name: 'ban', aliases: ['banear'], description: 'Banea un usuario' },
+        { name: 'timeout', aliases: ['silenciar', 'mute'], description: 'Silencia temporalmente' },
+    ],
 
     data: new SlashCommandBuilder()
         .setName('moderation')

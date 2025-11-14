@@ -96,7 +96,7 @@ export async function safeExecute<T>(
     try {
         return await fn();
     } catch (error) {
-        console.error(errorMensaje, error);
+        logger.error('SafeExecute', errorMensaje, error);
         return null;
     }
 }
