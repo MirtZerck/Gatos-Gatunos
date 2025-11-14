@@ -1,6 +1,7 @@
 import { Events, Message } from "discord.js";
 import { Event } from "../types/Events.js";
 import { config } from "../config.js";
+import { logger } from "../utils/logger.js";
 
 export default {
     name: Events.MessageCreate,
@@ -30,7 +31,12 @@ export default {
         }
 
         try {
-            console.log(` ${message.author.displayName} usó ${config.prefix}${commandName}`);
+            logger.command(
+                'prefix',
+                message.author.tag,
+                commandName,
+                message.guild?.name
+            )
 
             if (command.type === 'prefix-only') {
                 await command.execute(message, args)
@@ -40,7 +46,7 @@ export default {
                 await command.executePrefix(message, args);
             }
         } catch (error) {
-            console.error(`Error ejecutando ${commandName}:`, error);
+            logger.error('MessageCreate', `Error ejecutando ${commandName}`, error)
             await message.reply('Hubo un error al ejecutar este comando.')
 
         }

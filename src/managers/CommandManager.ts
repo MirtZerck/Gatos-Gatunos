@@ -3,6 +3,7 @@ import { Command, PrefixOnlyCommand } from "../types/Command.js";
 import { readdirSync, statSync } from "fs";
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from "url";
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,9 +18,11 @@ export class CommandManager {
     /*  Carga todos los comandos desde las subcarpetas  */
 
     async loadCommands(): Promise<void> {
-        const commandPath = join(__dirname, '../commands');
+        logger.info('CommandManager', '📦 Cargando comandos...')
 
+        const commandPath = join(__dirname, '../commands');
         await this.loadCommandsFromDirectory(commandPath);
+
 
         const categories = new Map<string, string[]>();
 
@@ -31,10 +34,9 @@ export class CommandManager {
             categories.get(category)!.push(name);
         }
 
-        console.log(`${this.commands.size} comandos cargados.`);
+        logger.module('CommandManager', this.commands.size);
 
         for (const [category, commandNames] of categories) {
-            console.log(`📁 ${category}:`);
 
             for (const cmdName of commandNames) {
                 const command = this.commands.get(cmdName)!;
@@ -50,7 +52,7 @@ export class CommandManager {
                     'unified': '🔗'
                 }[command.type];
 
-                console.log(`  ├─ ${typeIcon} ${cmdName}${aliases}`);
+                logger.debug('CommandManager', `${typeIcon} ${cmdName} ${aliases}`);
 
             }
 
@@ -99,10 +101,10 @@ export class CommandManager {
             if (isValid) {
                 this.commands.set(command.name, command);
             } else {
-                console.log(`  ├─ ⚠️ ${filePath}: Comando inválido`);
+                logger.warn('CommandManager', `Comando inválido: ${filePath}`);
             }
         } catch (error) {
-            console.error(`  ├─ ❌ Error cargando ${filePath}:`, error);
+            logger.error('CommandManager', `Error cargando ${filePath}:`, error);
         }
     }
 
@@ -135,7 +137,7 @@ export class CommandManager {
             return;
         }
 
-        console.log(`\n🚀 Registrando ${commandsData.length} comandos slash en Discord...`);
+        logger.info('CommandManager', `🚀 Registrando ${commandsData.length} comandos slash`);
 
         const rest = new REST().setToken(token)
 
@@ -144,14 +146,13 @@ export class CommandManager {
             { body: commandsData }
         );
 
-        console.log('✅ Comandos slash registrados exitosamente.');
+        logger.info('CommandManager', '✅ Comandos registrados en Discord');
 
         const prefixOnlyCount = Array.from(this.commands.values())
-            .filter(cmd => cmd.type == 'prefix-only').length;
+            .filter(cmd => cmd.type === 'prefix-only').length;
 
         if (prefixOnlyCount > 0) {
-            console.log(`ℹ️ ${prefixOnlyCount} comandos solo con prefijo no se registran en Discord`);
-
+            logger.info('CommandManager', `ℹ️ ${prefixOnlyCount} comandos solo con prefijo`);
         }
     }
 

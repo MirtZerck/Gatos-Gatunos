@@ -2,6 +2,7 @@ import {
     ChatInputCommandInteraction,
     Message
 } from 'discord.js';
+import { logger } from './logger.js';
 
 export enum ErrorType {
     API_ERROR = 'API_ERROR',
@@ -30,7 +31,7 @@ export async function handleCommandError(
     context: ChatInputCommandInteraction | Message,
     commandName: string
 ): Promise<void> {
-    console.error(`[${commandName}] Error:`, error);
+    logger.error(commandName, 'Error en comando', error)
 
     let userMessage = '❌ Ocurrió un error inesperado. Por favor, intenta de nuevo.'
     let shouldLog = true;
@@ -40,30 +41,34 @@ export async function handleCommandError(
 
         switch (error.type) {
             case ErrorType.API_ERROR:
-                console.error(`[${commandName}] API Error:`, error.message);
+                logger.error(commandName, `API ERROR: ${error.message}`);
                 shouldLog = false;
                 break;
 
             case ErrorType.VALIDATION_ERROR:
-                console.warn(`[${commandName}] Permiso denegado:`, error.message);
+                logger.warn(commandName, `Validación fallida: ${error.message}`);
                 shouldLog = false;
                 break
 
+            case ErrorType.PERMISSION_ERROR:
+                logger.warn(commandName, `Permiso denegado: ${error.message}`);
+                shouldLog = false;
+                break;
+
             case ErrorType.RATE_LIMIT:
-                console.warn(`[${commandName}] Rate limit alcanzado`);
+                logger.warn(commandName, 'Rate limit alcanzado')
                 userMessage = `⏱️ Estás usando los comandos muy rápido. Espera un momento.`
                 break;
 
             case ErrorType.NOT_FOUND:
-                console.warn(`${commandName} No encontrado:`, error.message);
+                logger.warn(commandName, 'No encontrado')
 
             case ErrorType.UNKNOWN:
-                console.error(`[${commandName}] Error desconocido:`, error.message);
+                logger.error(commandName, `Error desconocido: ${error.message}`)
                 break
         }
     } else if (error instanceof Error) {
-        console.error(`[${commandName}] Error no manejado:`, error.message);
-        console.error(error.stack);
+        logger.error(commandName, 'Error no manejado', error)
     }
 
     try {
@@ -79,7 +84,7 @@ export async function handleCommandError(
 
         }
     } catch (replyError) {
-        console.error(`[${commandName}] No se pudo responder al usuario:`, replyError);
+        logger.error(commandName, 'No se pudo responder al usuario', replyError)
 
     }
 }

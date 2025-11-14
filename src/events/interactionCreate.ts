@@ -1,5 +1,6 @@
 import { Events } from "discord.js";
 import { Event } from "../types/Events.js";
+import { logger } from "../utils/logger.js";
 
 export default {
     name: Events.InteractionCreate,
@@ -10,7 +11,7 @@ export default {
         const command = client.commands.get(interaction.commandName);
 
         if (!command) {
-            console.error(`Comando ${interaction.commandName} no encontrado.`);
+            logger.error('InteractionCreate', `Comando no encontrado: ${interaction.commandName}`);
             return;
         }
 
@@ -23,7 +24,12 @@ export default {
         }
 
         try {
-            console.log(`${interaction.user.displayName} usó /${interaction.commandName}`);
+            logger.command(
+                'slash',
+                interaction.user.tag,
+                interaction.commandName,
+                interaction.guild?.name
+            )
 
             if (command.type === 'slash-only' || command.type === 'unified') {
                 await command.execute(interaction);
@@ -31,7 +37,7 @@ export default {
                 await command.executeSlash(interaction);
             }
         } catch (error) {
-            console.log(`Error ejecutando ${interaction.commandName}`, error);
+            logger.error('InteractionCreate', `Error ejecutando ${interaction.commandName}`);
 
             const errorMensaje = {
                 content: 'Hubo un error al ejecutar este comando.',
