@@ -60,7 +60,7 @@ export default {
             await buttonInteraction.deferUpdate();
         } catch (error) {
             logger.error('ButtonInteraction', 'Error en deferUpdate', error);
-            return; // Si falla el defer, no podemos continuar
+            return;
         }
 
         const requestManager = (client as BotClient).requestManager;
@@ -69,7 +69,6 @@ export default {
         const request = requestManager?.findRequestByMessage(buttonInteraction.message.id);
 
         if (!request) {
-            // La solicitud expiró o no existe
             const expiredEmbed = new EmbedBuilder()
                 .setDescription('❌ Esta solicitud ha expirado o ya fue respondida.')
                 .setColor(COLORS.WARNING);
@@ -83,7 +82,6 @@ export default {
 
         // ✅ Verificar que quien responde es el usuario correcto
         if (buttonInteraction.user.id !== request.targetId) {
-            // Enviar mensaje efímero al usuario incorrecto
             const wrongUserEmbed = new EmbedBuilder()
                 .setDescription('❌ Esta solicitud no es para ti.')
                 .setColor(COLORS.DANGER);
@@ -96,11 +94,9 @@ export default {
         }
 
         // ✅ Extraer información del customId
-        // Formato: interact_accept_hug o act_reject_dance
         const parts = buttonInteraction.customId.split('_');
-        const commandType = parts[0]; // 'interact' o 'act'
         const actionType = parts[1]; // 'accept' o 'reject'
-        const action = parts[2] || request.action; // Acción específica
+        const action = parts[2] || request.action;
 
         // ✅ Procesar respuesta
         try {
@@ -113,21 +109,11 @@ export default {
             // ✅ Limpiar solicitud ESPECÍFICA del RequestManager
             if (requestManager) {
                 requestManager.resolveRequestWith(request.authorId, request.targetId);
-                
-                // Log de solicitudes restantes (opcional - para debug)
-                const remainingRequests = requestManager.getAllPendingRequestsByAuthor(request.authorId);
-                if (remainingRequests.length > 0) {
-                    logger.debug(
-                        'ButtonInteraction',
-                        `${request.authorId} tiene ${remainingRequests.length} solicitud(es) adicional(es) activa(s)`
-                    );
-                }
             }
 
         } catch (error) {
             logger.error('ButtonInteraction', 'Error procesando respuesta', error);
             
-            // Intentar mostrar mensaje de error
             try {
                 const errorEmbed = new EmbedBuilder()
                     .setDescription('❌ Hubo un error al procesar tu respuesta.')
@@ -138,8 +124,7 @@ export default {
                     components: []
                 });
             } catch {
-                // Si falla, al menos lo registramos
-                logger.error('ButtonInteraction', 'No se pudo enviar mensaje de error al usuario');
+                logger.error('ButtonInteraction', 'No se pudo enviar mensaje de error');
             }
         }
     }
@@ -153,26 +138,46 @@ async function handleAccept(
     action: string,
     client: BotClient
 ): Promise<void> {
-    // ✅ Validar que tenemos los datos necesarios
     if (!ACTION_QUERIES[action] || !ACTION_MESSAGES[action]) {
-        throw new Error(`Acción no válida o no soportada: ${action}`);
+        throw new Error(`Acción no válida: ${action}`);
     }
 
     // ✅ Obtener usuarios
     const author = await client.users.fetch(request.authorId);
     const target = interaction.user;
 
-    // ✅ Obtener GIF (operación lenta, pero ya hicimos defer)
+    // ✅ Obtener GIF
     const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
     const message = ACTION_MESSAGES[action](author.displayName, target.displayName);
 
+    // ✅ Registrar estadística (si está disponible y debe trackearse)
+    const statsManager = client.interactionStatsManager;
+    let statsDescription: string | null = null;
+
+    if (statsManager && statsManager.shouldTrack(action)) {
+        try {
+            await statsManager.recordInteraction(author.id, target.id, action);
+            
+            // Obtener estadísticas breves
+            statsDescription = await statsManager.getBriefStats(author.id, target.id);
+        } catch (error) {
+            logger.error('ButtonInteraction', 'Error registrando estadística', error);
+            // Continuar sin estadísticas si falla
+        }
+    }
+
+    // ✅ Construir embed con estadísticas
     const successEmbed = new EmbedBuilder()
         .setDescription(message)
         .setImage(gifUrl)
         .setColor(COLORS.INTERACTION)
         .setTimestamp();
 
-    // ✅ Actualizar mensaje con resultado
+    // Agregar footer con estadísticas si están disponibles
+    if (statsDescription) {
+        successEmbed.setFooter({ text: statsDescription });
+    }
+
     await interaction.editReply({
         embeds: [successEmbed],
         components: []
@@ -190,7 +195,6 @@ async function handleReject(
     action: string,
     client: BotClient
 ): Promise<void> {
-    // ✅ Obtener usuarios
     const author = await client.users.fetch(request.authorId);
     const target = interaction.user;
     const actionName = ACTION_NAMES[action] || action;
@@ -202,7 +206,6 @@ async function handleReject(
         .setColor(COLORS.DANGER)
         .setTimestamp();
 
-    // ✅ Actualizar mensaje con rechazo
     await interaction.editReply({
         embeds: [rejectEmbed],
         components: []

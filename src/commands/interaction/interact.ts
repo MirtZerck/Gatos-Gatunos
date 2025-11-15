@@ -229,7 +229,7 @@ async function handleRequestAction(
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
     
-    // ✅ Verificar si ya tiene una solicitud pendiente CON ESTE USUARIO ESPECÍFICO
+    // ✅ Verificar solicitud pendiente
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
@@ -241,28 +241,23 @@ async function handleRequestAction(
         return;
     }
 
-    // ✅ Mostrar lista de solicitudes activas si tiene otras (opcional - para informar al usuario)
-    if (requestManager && requestManager.hasPendingRequest(author.id)) {
-        const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
-        const otherRequests = allRequests.filter(r => r.targetId !== target.id);
-        
-        if (otherRequests.length > 0) {
-            // Mostrar aviso informativo pero permitir continuar
-            logger.debug(
-                'interact',
-                `${author.tag} tiene ${otherRequests.length} solicitud(es) adicional(es) activa(s)`
-            );
-        }
-    }
+    // ✅ Calcular timestamp de expiración (10 minutos desde ahora)
+    const expiresAt = Date.now() + 600000; // 10 minutos en ms
+    const expiresTimestamp = Math.floor(expiresAt / 1000);
 
-    // ✅ Crear embed de solicitud
+    // ✅ Crear embed de solicitud con tiempo de expiración visible
     const requestEmbed = new EmbedBuilder()
         .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
+            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n` +
+            `¿Aceptas?\n\n` +
+            `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
         .setColor(COLORS.INFO)
-        .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
+        .setFooter({ 
+            text: `De: ${author.tag} | Responde antes de que expire`,
+            iconURL: author.displayAvatarURL() 
+        })
         .setTimestamp();
 
     const buttons = new ActionRowBuilder<ButtonBuilder>()
@@ -279,13 +274,12 @@ async function handleRequestAction(
                 .setEmoji('❌')
         );
 
-    // ✅ Enviar mensaje (ya tenemos defer, usamos editReply)
     const message = await interaction.editReply({
         embeds: [requestEmbed],
         components: [buttons]
     });
 
-    // ✅ Registrar en RequestManager (10 minutos = 600000ms)
+    // ✅ Registrar en RequestManager
     if (requestManager) {
         try {
             requestManager.createRequest(
@@ -297,18 +291,20 @@ async function handleRequestAction(
                 600000 // 10 minutos
             );
         } catch (error) {
-            logger.error('interact', 'Error creando solicitud en RequestManager', error);
+            logger.error('interact', 'Error creando solicitud', error);
         }
     }
 
-    // ✅ Timeout manual de 10 minutos
+    // ✅ Timeout de 10 minutos
     setTimeout(async () => {
         try {
-            // Verificar si el mensaje todavía tiene componentes (no fue respondido)
             const currentMessage = await interaction.fetchReply();
             if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
-                    .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                    .setDescription(
+                        `⏰ ${target.displayName} no respondió a tiempo.\n\n` +
+                        `La solicitud de **${ACTION_NAMES[action]}** ha expirado.`
+                    )
                     .setColor(COLORS.WARNING)
                     .setTimestamp();
 
@@ -317,17 +313,17 @@ async function handleRequestAction(
                     components: []
                 });
 
-                // Limpiar del RequestManager
                 if (requestManager) {
                     requestManager.resolveRequestWith(author.id, target.id);
                 }
             }
         } catch {
-            // Ignorar errores (el mensaje pudo haber sido eliminado)
+            // Mensaje eliminado o error
         }
-    }, 600000); // 10 minutos
+    }, 600000);
 }
 
+// ✅ Versión para prefix con mismo formato
 async function handleRequestActionPrefix(
     message: Message,
     action: ActionType,
@@ -336,7 +332,6 @@ async function handleRequestActionPrefix(
 ): Promise<void> {
     const requestManager = (message.client as BotClient).requestManager;
     
-    // ✅ Verificar solicitud pendiente CON ESTE USUARIO ESPECÍFICO
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
@@ -348,26 +343,21 @@ async function handleRequestActionPrefix(
         return;
     }
 
-    // ✅ Aviso informativo de otras solicitudes activas (opcional)
-    if (requestManager && requestManager.hasPendingRequest(author.id)) {
-        const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
-        const otherRequests = allRequests.filter(r => r.targetId !== target.id);
-        
-        if (otherRequests.length > 0) {
-            logger.debug(
-                'interact',
-                `${author.tag} tiene ${otherRequests.length} solicitud(es) adicional(es) activa(s)`
-            );
-        }
-    }
+    const expiresAt = Date.now() + 600000;
+    const expiresTimestamp = Math.floor(expiresAt / 1000);
 
     const requestEmbed = new EmbedBuilder()
         .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
+            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n` +
+            `¿Aceptas?\n\n` +
+            `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
         .setColor(COLORS.INFO)
-        .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
+        .setFooter({ 
+            text: `De: ${author.tag} | Responde antes de que expire`,
+            iconURL: author.displayAvatarURL() 
+        })
         .setTimestamp();
 
     const buttons = new ActionRowBuilder<ButtonBuilder>()
@@ -389,7 +379,6 @@ async function handleRequestActionPrefix(
         components: [buttons]
     });
 
-    // ✅ Registrar en RequestManager (10 minutos)
     if (requestManager) {
         try {
             requestManager.createRequest(
@@ -398,20 +387,22 @@ async function handleRequestActionPrefix(
                 action,
                 requestMessage.id,
                 message.id,
-                600000 // 10 minutos
+                600000
             );
         } catch (error) {
-            logger.error('interact', 'Error creando solicitud en RequestManager', error);
+            logger.error('interact', 'Error creando solicitud', error);
         }
     }
 
-    // ✅ Timeout manual de 10 minutos
     setTimeout(async () => {
         try {
             const currentMessage = await message.channel.messages.fetch(requestMessage.id);
             if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
-                    .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                    .setDescription(
+                        `⏰ ${target.displayName} no respondió a tiempo.\n\n` +
+                        `La solicitud de **${ACTION_NAMES[action]}** ha expirado.`
+                    )
                     .setColor(COLORS.WARNING)
                     .setTimestamp();
 
@@ -427,5 +418,5 @@ async function handleRequestActionPrefix(
         } catch {
             // Ignorar
         }
-    }, 600000); // 10 minutos
+    }, 600000);
 }
