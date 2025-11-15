@@ -1,5 +1,5 @@
 import { config } from "../config.js";
-import { logger } from "./logger_temp.js";
+import { logger } from "./logger.js";
 
 /* URL base de la API v2 de Tenor */
 const TENOR_API_URL = 'https://tenor.googleapis.com/v2';

@@ -1,7 +1,7 @@
 import { Events, Message } from "discord.js";
 import { Event } from "../types/Events.js";
 import { config } from "../config.js";
-import { logger } from "../utils/logger_temp.js";
+import { logger } from "../utils/logger.js";
 
 export default {
     name: Events.MessageCreate,

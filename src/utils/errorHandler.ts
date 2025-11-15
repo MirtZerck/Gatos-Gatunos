@@ -2,7 +2,7 @@ import {
     ChatInputCommandInteraction,
     Message
 } from 'discord.js';
-import { logger } from './logger_temp.js';
+import { logger } from './logger.js';
 
 /**
  * *Tipos de errores manejados por el sistema.

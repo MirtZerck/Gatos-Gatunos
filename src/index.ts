@@ -3,7 +3,7 @@ import { config } from './config.js'
 import { BotClient } from "./types/BotClient.js";
 import { CommandManager } from "./managers/CommandManager.js";
 import { EventManager } from "./managers/EventManager.js";
-import { logger } from './utils/logger_temp.js';
+import { logger } from './utils/logger.js';
 
 async function main() {
     const client = new BotClient({

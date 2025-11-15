@@ -3,7 +3,7 @@ import { Event } from "../types/Events.js";
 import { readdirSync } from "fs";
 import { join, dirname } from 'path'
 import { fileURLToPath } from "url";
-import { logger } from '../utils/logger_temp.js';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);

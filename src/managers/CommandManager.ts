@@ -3,7 +3,7 @@ import { Command, PrefixOnlyCommand, SubcommandInfo } from "../types/Command.js"
 import { readdirSync, statSync } from "fs";
 import { join, dirname } from 'path';
 import { fileURLToPath, pathToFileURL } from "url";
-import { logger } from '../utils/logger_temp.js';
+import { logger } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
