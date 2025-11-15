@@ -17,13 +17,10 @@ import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
 
 const ACTION_QUERIES = {
-    // Con solicitud (íntimas/románticas)
     hug: 'anime hug',
     kiss: 'anime kiss',
     pat: 'anime head pat',
     cuddle: 'anime cuddle',
-
-    // Sin solicitud (juguetonas/agresivas)
     slap: 'anime slap',
     poke: 'anime poke',
     bite: 'anime bite',
@@ -101,24 +98,15 @@ export const interact: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
+            // ✅ DEFER INMEDIATAMENTE
+            await interaction.deferReply();
+
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario', true);
             const author = interaction.user;
 
-            // Diferir la respuesta inmediatamente para evitar que expire la interacción
-            await interaction.deferReply();
-
-            // Validar después de deferReply (si fallan, editaremos la respuesta)
-            try {
-                Validators.validateNotSelf(author, target);
-                Validators.validateNotBot(target);
-            } catch (validationError) {
-                const errorMessage = validationError instanceof CommandError 
-                    ? validationError.userMessage 
-                    : '❌ Error de validación.';
-                await interaction.editReply({ content: errorMessage });
-                return;
-            }
+            Validators.validateNotSelf(author, target);
+            Validators.validateNotBot(target);
 
             if (REQUIRE_REQUEST.includes(subcommand)) {
                 await handleRequestAction(interaction, subcommand, author, target);
@@ -168,7 +156,6 @@ export const interact: HybridCommand = {
 };
 
 async function handleDirectAction(interaction: ChatInputCommandInteraction, action: ActionType, author: any, target: any): Promise<void> {
-    // Nota: deferReply ya se hizo en executeSlash, así que no lo hacemos aquí
     try {
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
         const embed = new EmbedBuilder()
@@ -198,10 +185,7 @@ async function handleDirectActionPrefix(message: Message, action: ActionType, au
 async function handleRequestAction(interaction: ChatInputCommandInteraction, action: ActionType, author: any, target: any): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
     if (!requestManager) {
-        await interaction.editReply({
-            content: '❌ Sistema no disponible.'
-        });
-        return;
+        throw new CommandError(ErrorType.UNKNOWN, 'RequestManager no disponible', '❌ Sistema no disponible.');
     }
 
     if (requestManager.hasPendingRequest(author.id)) {
@@ -226,8 +210,8 @@ async function handleRequestAction(interaction: ChatInputCommandInteraction, act
         new ButtonBuilder().setCustomId(`interact_reject_${action}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger).setEmoji('❌')
     );
 
-    // Usar editReply en lugar de reply ya que ya hicimos deferReply
-    const message = await interaction.editReply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
+    await interaction.editReply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
+    const message = await interaction.fetchReply();
     requestManager.createRequest(author.id, target.id, action, message.id, interaction.id);
 }
 

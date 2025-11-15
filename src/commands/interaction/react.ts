@@ -31,7 +31,6 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-// Mensajes CON objetivo (causado por alguien)
 const MESSAGES_WITH_TARGET: Record<ActionType, (author: string, target: string) => string> = {
     smile: (author, target) => `**${author}** sonríe gracias a **${target}** 😊`,
     laugh: (author, target) => `**${author}** se ríe por **${target}** 😂`,
@@ -50,7 +49,6 @@ const MESSAGES_WITH_TARGET: Record<ActionType, (author: string, target: string) 
     stare: (author, target) => `**${author}** mira fijamente a **${target}** 👀`,
 };
 
-// Mensajes SIN objetivo (solo)
 const MESSAGES_SOLO: Record<ActionType, (author: string) => string> = {
     smile: (author) => `**${author}** está sonriendo 😊`,
     laugh: (author) => `**${author}** se está riendo 😂`,
@@ -73,7 +71,7 @@ export const react: HybridCommand = {
     type: 'hybrid',
     name: 'react',
     description: 'Reacciones y expresiones emocionales',
-    category: CATEGORIES.INTERACTION,
+    category: CATEGORIES.INTERACTION,    
     subcommands: [
         { name: 'smile', aliases: ['sonreir'], description: 'Sonríe' },
         { name: 'laugh', aliases: ['reir'], description: 'Ríe' },
@@ -130,25 +128,16 @@ export const react: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
+            // ✅ DEFER INMEDIATAMENTE
+            await interaction.deferReply();
+
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
-            // Diferir la respuesta inmediatamente para evitar que expire la interacción
-            await interaction.deferReply();
-
-            // Validar después de deferReply (si fallan, editaremos la respuesta)
             if (target) {
-                try {
-                    Validators.validateNotSelf(author, target);
-                    Validators.validateNotBot(target);
-                } catch (validationError) {
-                    const errorMessage = validationError instanceof CommandError 
-                        ? validationError.userMessage 
-                        : '❌ Error de validación.';
-                    await interaction.editReply({ content: errorMessage });
-                    return;
-                }
+                Validators.validateNotSelf(author, target);
+                Validators.validateNotBot(target);
             }
 
             await handleReaction(interaction, subcommand, author, target);
@@ -191,19 +180,16 @@ export const react: HybridCommand = {
     },
 };
 
-// ==================== HANDLERS ====================
-
 async function handleReaction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
     author: any,
     target: any | null
 ): Promise<void> {
-    // Nota: deferReply ya se hizo en executeSlash, así que no lo hacemos aquí
     try {
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
-
-        const message = target
+        
+        const message = target 
             ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
             : MESSAGES_SOLO[action](author.displayName);
 
@@ -228,8 +214,8 @@ async function handleReactionPrefix(
 
     try {
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
-
-        const messageText = target
+        
+        const messageText = target 
             ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
             : MESSAGES_SOLO[action](author.displayName);
 

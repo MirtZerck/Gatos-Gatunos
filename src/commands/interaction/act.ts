@@ -17,12 +17,9 @@ import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
 
 const ACTION_QUERIES = {
-    // Con solicitud si hay objetivo
     dance: 'anime dance',
     sing: 'anime sing',
     highfive: 'anime high five',
-
-    // Sin solicitud (objetivo opcional)
     wave: 'anime wave',
     bow: 'anime bow',
     clap: 'anime clap',
@@ -33,20 +30,15 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-// Acciones que requieren solicitud SI hay objetivo
 const REQUIRE_REQUEST_WITH_TARGET: ActionType[] = ['dance', 'sing', 'highfive'];
-
-// Acciones que NO requieren solicitud (objetivo opcional)
 const NO_REQUEST: ActionType[] = ['wave', 'bow', 'clap', 'cheer', 'salute', 'nod'];
 
-// Mensajes cuando requieren solicitud (con objetivo)
 const REQUEST_MESSAGES: Partial<Record<ActionType, (author: string, target: string) => string>> = {
     dance: (author, target) => `**${author}** quiere bailar con **${target}** 💃`,
     sing: (author, target) => `**${author}** quiere cantar con **${target}** 🎤`,
     highfive: (author, target) => `**${author}** quiere chocar los cinco con **${target}** ✋`,
 };
 
-// Mensajes para acciones CON objetivo (sin solicitud)
 const MESSAGES_WITH_TARGET: Partial<Record<ActionType, (author: string, target: string) => string>> = {
     wave: (author, target) => `**${author}** saluda a **${target}** 👋`,
     bow: (author, target) => `**${author}** hace una reverencia ante **${target}** 🙇`,
@@ -56,7 +48,6 @@ const MESSAGES_WITH_TARGET: Partial<Record<ActionType, (author: string, target: 
     nod: (author, target) => `**${author}** asiente ante **${target}** 👍`,
 };
 
-// Mensajes para acciones SIN objetivo (solo)
 const MESSAGES_SOLO: Partial<Record<ActionType, (author: string) => string>> = {
     dance: (author) => `**${author}** está bailando 💃`,
     sing: (author) => `**${author}** está cantando 🎤`,
@@ -117,25 +108,16 @@ export const act: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
+            // ✅ DEFER INMEDIATAMENTE para evitar timeout
+            await interaction.deferReply();
+
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
-            // Diferir la respuesta inmediatamente para evitar que expire la interacción
-            await interaction.deferReply();
-
-            // Validar después de deferReply (si fallan, editaremos la respuesta)
             if (target) {
-                try {
-                    Validators.validateNotSelf(author, target);
-                    Validators.validateNotBot(target);
-                } catch (validationError) {
-                    const errorMessage = validationError instanceof CommandError 
-                        ? validationError.userMessage 
-                        : '❌ Error de validación.';
-                    await interaction.editReply({ content: errorMessage });
-                    return;
-                }
+                Validators.validateNotSelf(author, target);
+                Validators.validateNotBot(target);
             }
 
             // Si tiene objetivo Y requiere solicitud
@@ -197,7 +179,7 @@ async function handleDirectAction(
     author: any,
     target: any | null
 ): Promise<void> {
-    // Nota: deferReply ya se hizo en executeSlash, así que no lo hacemos aquí
+    // Ya se hizo deferReply() antes, así que usamos editReply
     try {
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
 
@@ -256,15 +238,14 @@ async function handleRequestAction(
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
     if (!requestManager) {
-        await interaction.editReply({
-            content: '❌ Sistema no disponible.'
-        });
-        return;
+        throw new CommandError(ErrorType.UNKNOWN, 'RequestManager no disponible', '❌ Sistema no disponible.');
     }
 
     if (requestManager.hasPendingRequest(author.id)) {
         const pending = requestManager.getPendingRequest(author.id);
         const remaining = Math.ceil(requestManager.getRemainingTime(author.id) / 60000);
+
+        // Usar editReply porque ya hicimos defer
         await interaction.editReply({
             content: `⏱️ Ya tienes una solicitud pendiente con <@${pending?.targetId}>. Espera ${remaining} min.`
         });
@@ -284,8 +265,11 @@ async function handleRequestAction(
         new ButtonBuilder().setCustomId(`act_reject_${action}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger).setEmoji('❌')
     );
 
-    // Usar editReply en lugar de reply ya que ya hicimos deferReply
-    const message = await interaction.editReply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
+    // Usar editReply porque ya hicimos defer
+    await interaction.editReply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
+
+    // Obtener el mensaje editado
+    const message = await interaction.fetchReply();
     requestManager.createRequest(author.id, target.id, action, message.id, interaction.id);
 }
 
