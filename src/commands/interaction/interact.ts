@@ -6,14 +6,13 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    MessageFlags
+    ComponentType
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 import { getRandomGif } from '../../utils/tenor.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
-import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
 
 const ACTION_QUERIES = {
@@ -31,7 +30,9 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
+// Acciones que requieren solicitud con botones
 const REQUIRE_REQUEST: ActionType[] = ['hug', 'kiss', 'pat', 'cuddle'];
+// Acciones directas sin solicitud
 const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'bite', 'tickle', 'bonk', 'boop'];
 
 const REQUEST_MESSAGES: Record<ActionType, (author: string, target: string) => string> = {
@@ -50,6 +51,19 @@ const REQUEST_MESSAGES: Record<ActionType, (author: string, target: string) => s
 const ACTION_EMOJIS: Record<ActionType, string> = {
     hug: '🤗', kiss: '😘', pat: '😊', cuddle: '🥰',
     slap: '🖐️', poke: '👉', bite: '😬', tickle: '🤭', bonk: '🔨', boop: '👆',
+};
+
+const ACTION_NAMES: Record<ActionType, string> = {
+    hug: 'abrazo',
+    kiss: 'beso',
+    pat: 'caricia',
+    cuddle: 'acurrucada',
+    slap: 'bofetada',
+    poke: 'molestia',
+    bite: 'mordida',
+    tickle: 'cosquillas',
+    bonk: 'golpe juguetón',
+    boop: 'toque de nariz',
 };
 
 export const interact: HybridCommand = {
@@ -98,16 +112,18 @@ export const interact: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            // ✅ DEFER INMEDIATAMENTE
-            await interaction.deferReply();
-
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario', true);
             const author = interaction.user;
 
+            // ✅ PASO 1: Validaciones rápidas
             Validators.validateNotSelf(author, target);
             Validators.validateNotBot(target);
 
+            // ✅ PASO 2: DEFER INMEDIATO
+            await interaction.deferReply();
+
+            // ✅ PASO 3: Decidir flujo según tipo de acción
             if (REQUIRE_REQUEST.includes(subcommand)) {
                 await handleRequestAction(interaction, subcommand, author, target);
             } else {
@@ -155,92 +171,269 @@ export const interact: HybridCommand = {
     },
 };
 
-async function handleDirectAction(interaction: ChatInputCommandInteraction, action: ActionType, author: any, target: any): Promise<void> {
+// ==================== HANDLERS PARA ACCIONES DIRECTAS ====================
+
+async function handleDirectAction(
+    interaction: ChatInputCommandInteraction,
+    action: ActionType,
+    author: any,
+    target: any
+): Promise<void> {
     try {
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
+        const message = REQUEST_MESSAGES[action](author.displayName, target.displayName);
+
         const embed = new EmbedBuilder()
-            .setDescription(REQUEST_MESSAGES[action](author.displayName, target.displayName))
+            .setDescription(message)
             .setImage(gifURL)
             .setColor(COLORS.INTERACTION);
+
+        // Ya hicimos defer, usar editReply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
     }
 }
 
-async function handleDirectActionPrefix(message: Message, action: ActionType, author: any, target: any): Promise<void> {
+async function handleDirectActionPrefix(
+    message: Message,
+    action: ActionType,
+    author: any,
+    target: any
+): Promise<void> {
     const loadingMsg = await message.reply('🔄 Cargando GIF...');
+
     try {
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
+        const messageText = REQUEST_MESSAGES[action](author.displayName, target.displayName);
+
         const embed = new EmbedBuilder()
-            .setDescription(REQUEST_MESSAGES[action](author.displayName, target.displayName))
+            .setDescription(messageText)
             .setImage(gifUrl)
             .setColor(COLORS.INTERACTION);
+
         await loadingMsg.edit({ content: null, embeds: [embed] });
     } catch (error) {
         throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
     }
 }
 
-async function handleRequestAction(interaction: ChatInputCommandInteraction, action: ActionType, author: any, target: any): Promise<void> {
-    const requestManager = (interaction.client as BotClient).requestManager;
-    if (!requestManager) {
-        throw new CommandError(ErrorType.UNKNOWN, 'RequestManager no disponible', '❌ Sistema no disponible.');
-    }
+// ==================== HANDLERS PARA SOLICITUDES CON BOTONES ====================
 
-    if (requestManager.hasPendingRequest(author.id)) {
-        const pending = requestManager.getPendingRequest(author.id);
-        const remaining = Math.ceil(requestManager.getRemainingTime(author.id) / 60000);
-        await interaction.editReply({
-            content: `⏱️ Ya tienes una solicitud pendiente con <@${pending?.targetId}>. Espera ${remaining} min.`
-        });
-        return;
-    }
-
-    const embed = new EmbedBuilder()
+async function handleRequestAction(
+    interaction: ChatInputCommandInteraction,
+    action: ActionType,
+    author: any,
+    target: any
+): Promise<void> {
+    // Crear embed de solicitud
+    const requestEmbed = new EmbedBuilder()
         .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
-        .setDescription(REQUEST_MESSAGES[action](author.displayName, target.displayName))
-        .addFields({ name: '⏰ Tiempo', value: 'Expira en **10 minutos**' })
-        .setColor(COLORS.INTERACTION)
+        .setDescription(
+            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
+        )
+        .setColor(COLORS.INFO)
         .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
         .setTimestamp();
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId(`interact_accept_${action}`).setLabel('Aceptar').setStyle(ButtonStyle.Success).setEmoji('✅'),
-        new ButtonBuilder().setCustomId(`interact_reject_${action}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger).setEmoji('❌')
-    );
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('accept')
+                .setLabel('Aceptar')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅'),
+            new ButtonBuilder()
+                .setCustomId('reject')
+                .setLabel('Rechazar')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('❌')
+        );
 
-    await interaction.editReply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
-    const message = await interaction.fetchReply();
-    requestManager.createRequest(author.id, target.id, action, message.id, interaction.id);
+    // Mostrar mensaje con botones (ya hicimos defer, usar editReply)
+    const message = await interaction.editReply({
+        embeds: [requestEmbed],
+        components: [buttons]
+    });
+
+    // Crear collector para respuestas
+    try {
+        const collector = message.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 30000, // 30 segundos
+            filter: (i) => i.user.id === target.id // Solo el usuario objetivo
+        });
+
+        collector.on('collect', async (buttonInteraction) => {
+            // ✅ Responder al botón inmediatamente
+            await buttonInteraction.deferUpdate();
+
+            if (buttonInteraction.customId === 'accept') {
+                // Usuario aceptó - obtener GIF y mostrar
+                try {
+                    const gifURL = await getRandomGif(ACTION_QUERIES[action]);
+                    const successMessage = REQUEST_MESSAGES[action](author.displayName, target.displayName);
+
+                    const resultEmbed = new EmbedBuilder()
+                        .setDescription(successMessage)
+                        .setImage(gifURL)
+                        .setColor(COLORS.INTERACTION)
+                        .setTimestamp();
+
+                    await interaction.editReply({
+                        embeds: [resultEmbed],
+                        components: []
+                    });
+                } catch (error) {
+                    throw new CommandError(
+                        ErrorType.API_ERROR,
+                        'Error obteniendo GIF de Tenor',
+                        '❌ No se pudo obtener el GIF.'
+                    );
+                }
+            } else {
+                // Usuario rechazó
+                const rejectEmbed = new EmbedBuilder()
+                    .setDescription(
+                        `${target.displayName} rechazó el **${ACTION_NAMES[action]}** de ${author.displayName}. 💔`
+                    )
+                    .setColor(COLORS.DANGER)
+                    .setTimestamp();
+
+                await interaction.editReply({
+                    embeds: [rejectEmbed],
+                    components: []
+                });
+            }
+
+            collector.stop();
+        });
+
+        collector.on('end', async (collected) => {
+            // Si no hubo respuesta (timeout)
+            if (collected.size === 0) {
+                const timeoutEmbed = new EmbedBuilder()
+                    .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                    .setColor(COLORS.WARNING)
+                    .setTimestamp();
+
+                try {
+                    await interaction.editReply({
+                        embeds: [timeoutEmbed],
+                        components: []
+                    });
+                } catch {
+                    // Ignorar errores de edición
+                }
+            }
+        });
+
+    } catch (collectorError) {
+        throw new CommandError(
+            ErrorType.UNKNOWN,
+            'Error en el collector de botones',
+            '❌ Hubo un error procesando la respuesta.'
+        );
+    }
 }
 
-async function handleRequestActionPrefix(message: Message, action: ActionType, author: any, target: any): Promise<void> {
-    const requestManager = (message.client as BotClient).requestManager;
-    if (!requestManager) {
-        throw new CommandError(ErrorType.UNKNOWN, 'RequestManager no disponible', '❌ Sistema no disponible.');
-    }
-
-    if (requestManager.hasPendingRequest(author.id)) {
-        const pending = requestManager.getPendingRequest(author.id);
-        const remaining = Math.ceil(requestManager.getRemainingTime(author.id) / 60000);
-        await message.reply(`⏱️ Ya tienes una solicitud pendiente con <@${pending?.targetId}>. Espera ${remaining} min.`);
-        return;
-    }
-
-    const embed = new EmbedBuilder()
+async function handleRequestActionPrefix(
+    message: Message,
+    action: ActionType,
+    author: any,
+    target: any
+): Promise<void> {
+    const requestEmbed = new EmbedBuilder()
         .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
-        .setDescription(REQUEST_MESSAGES[action](author.displayName, target.displayName))
-        .addFields({ name: '⏰ Tiempo', value: 'Expira en **10 minutos**' })
-        .setColor(COLORS.INTERACTION)
+        .setDescription(
+            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
+        )
+        .setColor(COLORS.INFO)
         .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
         .setTimestamp();
 
-    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
-        new ButtonBuilder().setCustomId(`interact_accept_${action}`).setLabel('Aceptar').setStyle(ButtonStyle.Success).setEmoji('✅'),
-        new ButtonBuilder().setCustomId(`interact_reject_${action}`).setLabel('Rechazar').setStyle(ButtonStyle.Danger).setEmoji('❌')
-    );
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('accept')
+                .setLabel('Aceptar')
+                .setStyle(ButtonStyle.Success)
+                .setEmoji('✅'),
+            new ButtonBuilder()
+                .setCustomId('reject')
+                .setLabel('Rechazar')
+                .setStyle(ButtonStyle.Danger)
+                .setEmoji('❌')
+        );
 
-    const sentMessage = await message.reply({ content: `<@${target.id}>`, embeds: [embed], components: [row] });
-    requestManager.createRequest(author.id, target.id, action, sentMessage.id, `prefix_${message.id}`);
+    const requestMessage = await message.reply({
+        embeds: [requestEmbed],
+        components: [buttons]
+    });
+
+    const collector = requestMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 30000,
+        filter: (i) => i.user.id === target.id
+    });
+
+    collector.on('collect', async (buttonInteraction) => {
+        await buttonInteraction.deferUpdate();
+
+        if (buttonInteraction.customId === 'accept') {
+            try {
+                const gifURL = await getRandomGif(ACTION_QUERIES[action]);
+                const successMessage = REQUEST_MESSAGES[action](author.displayName, target.displayName);
+
+                const resultEmbed = new EmbedBuilder()
+                    .setDescription(successMessage)
+                    .setImage(gifURL)
+                    .setColor(COLORS.INTERACTION)
+                    .setTimestamp();
+
+                await requestMessage.edit({
+                    embeds: [resultEmbed],
+                    components: []
+                });
+            } catch (error) {
+                throw new CommandError(
+                    ErrorType.API_ERROR,
+                    'Error obteniendo GIF de Tenor',
+                    '❌ No se pudo obtener el GIF.'
+                );
+            }
+        } else {
+            const rejectEmbed = new EmbedBuilder()
+                .setDescription(
+                    `${target.displayName} rechazó el **${ACTION_NAMES[action]}** de ${author.displayName}. 💔`
+                )
+                .setColor(COLORS.DANGER)
+                .setTimestamp();
+
+            await requestMessage.edit({
+                embeds: [rejectEmbed],
+                components: []
+            });
+        }
+
+        collector.stop();
+    });
+
+    collector.on('end', async (collected) => {
+        if (collected.size === 0) {
+            const timeoutEmbed = new EmbedBuilder()
+                .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                .setColor(COLORS.WARNING)
+                .setTimestamp();
+
+            try {
+                await requestMessage.edit({
+                    embeds: [timeoutEmbed],
+                    components: []
+                });
+            } catch {
+                // Ignorar
+            }
+        }
+    });
 }

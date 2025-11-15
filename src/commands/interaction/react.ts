@@ -71,7 +71,7 @@ export const react: HybridCommand = {
     type: 'hybrid',
     name: 'react',
     description: 'Reacciones y expresiones emocionales',
-    category: CATEGORIES.INTERACTION,    
+    category: CATEGORIES.INTERACTION,
     subcommands: [
         { name: 'smile', aliases: ['sonreir'], description: 'Sonríe' },
         { name: 'laugh', aliases: ['reir'], description: 'Ríe' },
@@ -128,18 +128,20 @@ export const react: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            // ✅ DEFER INMEDIATAMENTE
-            await interaction.deferReply();
-
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
+            // Validaciones rápidas (solo si hay target)
             if (target) {
                 Validators.validateNotSelf(author, target);
                 Validators.validateNotBot(target);
             }
 
+            // ✅ CRÍTICO: Defer INMEDIATAMENTE después de validaciones
+            await interaction.deferReply();
+
+            // Obtener GIF (operación lenta)
             await handleReaction(interaction, subcommand, author, target);
 
         } catch (error) {
@@ -180,6 +182,8 @@ export const react: HybridCommand = {
     },
 };
 
+// ==================== FUNCIONES AUXILIARES ====================
+
 async function handleReaction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
@@ -187,9 +191,11 @@ async function handleReaction(
     target: any | null
 ): Promise<void> {
     try {
+        // Obtener GIF de Tenor (operación lenta)
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
-        
-        const message = target 
+
+        // Determinar mensaje según si hay target o no
+        const message = target
             ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
             : MESSAGES_SOLO[action](author.displayName);
 
@@ -198,9 +204,14 @@ async function handleReaction(
             .setImage(gifURL)
             .setColor(COLORS.INTERACTION);
 
+        // Ya hicimos defer, usar editReply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
-        throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
+        throw new CommandError(
+            ErrorType.API_ERROR,
+            'Error obteniendo GIF de Tenor',
+            '❌ No se pudo obtener el GIF. Intenta de nuevo.'
+        );
     }
 }
 
@@ -213,9 +224,11 @@ async function handleReactionPrefix(
     const loadingMsg = await message.reply('🔄 Cargando GIF...');
 
     try {
+        // Obtener GIF de Tenor
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
-        
-        const messageText = target 
+
+        // Determinar mensaje según si hay target o no
+        const messageText = target
             ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
             : MESSAGES_SOLO[action](author.displayName);
 
@@ -226,6 +239,10 @@ async function handleReactionPrefix(
 
         await loadingMsg.edit({ content: null, embeds: [embed] });
     } catch (error) {
-        throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
+        throw new CommandError(
+            ErrorType.API_ERROR,
+            'Error obteniendo GIF de Tenor',
+            '❌ No se pudo obtener el GIF. Intenta de nuevo.'
+        );
     }
 }

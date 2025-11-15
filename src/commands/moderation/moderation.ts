@@ -10,8 +10,6 @@ import { HybridCommand } from '../../types/Command.js';
 import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS, EMOJIS } from '../../utils/constants.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
-import { logger } from '../../utils/logger.js';
-import { config } from '../../config.js';
 
 export const moderation: HybridCommand = {
     type: 'hybrid',
@@ -29,7 +27,6 @@ export const moderation: HybridCommand = {
         .setDescription('Comandos de moderación del servidor')
         .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
         .setDMPermission(false)
-
         .addSubcommand(subcommand =>
             subcommand
                 .setName('kick')
@@ -90,7 +87,7 @@ export const moderation: HybridCommand = {
                         .setDescription('Duración en minutos')
                         .setRequired(true)
                         .setMinValue(1)
-                        .setMaxValue(40320) // 28 días
+                        .setMaxValue(40320)
                 )
                 .addStringOption(option =>
                     option
@@ -106,7 +103,6 @@ export const moderation: HybridCommand = {
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
             Validators.validateInGuild(interaction);
-
             const subcommand = interaction.options.getSubcommand();
 
             switch (subcommand) {
@@ -128,7 +124,6 @@ export const moderation: HybridCommand = {
     async executePrefix(message: Message, args: string[]) {
         try {
             Validators.validateInGuild(message);
-
             const subcommand = args[0]?.toLowerCase();
             const validSubcommands = ['kick', 'ban', 'timeout'];
 
@@ -140,7 +135,7 @@ export const moderation: HybridCommand = {
                     `• \`ban @usuario [días] [razón]\` - Banear usuario\n` +
                     `• \`timeout @usuario <minutos> [razón]\` - Silenciar temporalmente`
                 );
-                return
+                return;
             }
 
             switch (subcommand) {
@@ -160,18 +155,18 @@ export const moderation: HybridCommand = {
     },
 };
 
+// ==================== HANDLERS PARA SLASH COMMANDS ====================
+
 async function handleKickSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     const target = interaction.options.getMember('usuario') as GuildMember | null;
     const reason = interaction.options.getString('razon') || 'Sin razón especificada';
-
     await executeKick(interaction, target, reason);
 }
 
 async function handleBanSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     const target = interaction.options.getMember('usuario') as GuildMember | null;
-    const reason = interaction.options.getString('razon') || 'Sin  razón especificada';
+    const reason = interaction.options.getString('razon') || 'Sin razón especificada';
     const deleteMessageDays = interaction.options.getInteger('borrar_mensajes') || 0;
-
     await executeBan(interaction, target, reason, deleteMessageDays);
 }
 
@@ -179,16 +174,17 @@ async function handleTimeoutSlash(interaction: ChatInputCommandInteraction): Pro
     const target = interaction.options.getMember('usuario') as GuildMember | null;
     const duration = interaction.options.getInteger('duracion', true);
     const reason = interaction.options.getString('razon') || 'Sin razón especificada';
-
     await executeTimeout(interaction, target, duration, reason);
 }
+
+// ==================== HANDLERS PARA PREFIX COMMANDS ====================
 
 async function handleKickPrefix(message: Message, args: string[]): Promise<void> {
     const target = message.mentions.members?.first();
     const reason = args.slice(1).join(' ') || 'Sin razón especificada';
 
     if (!target) {
-        await message.reply(`❌ Debes mencionar a un usuario. Ejemplo: \`${config.prefix}moderation kick @usuario spam\``);
+        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod kick @usuario spam`');
         return;
     }
 
@@ -199,7 +195,7 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
     const target = message.mentions.members?.first();
 
     if (!target) {
-        await message.reply(`❌ Debes mencionar a un usuario. Ejemplo: \`${config.prefix}moderation ban @usuario 7 toxicidad\``);
+        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod ban @usuario 7 toxicidad`');
         return;
     }
 
@@ -212,7 +208,6 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
     }
 
     const reason = args.slice(reasonStartIndex).join(' ') || 'Sin razón especificada';
-
     await executeBan(message, target, reason, deleteMessageDays);
 }
 
@@ -220,7 +215,7 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
     const target = message.mentions.members?.first();
 
     if (!target) {
-        await message.reply(`❌ Debes mencionar a un usuario. Ejemplo: \`${config.prefix}moderation timeout @usuario 30 flood\``);
+        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod timeout @usuario 30 flood`');
         return;
     }
 
@@ -232,9 +227,10 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
     }
 
     const reason = args.slice(2).join(' ') || 'Sin razón especificada';
-
     await executeTimeout(message, target, duration, reason);
 }
+
+// ==================== FUNCIONES DE EJECUCIÓN ====================
 
 async function executeKick(
     context: ChatInputCommandInteraction | Message,
@@ -245,56 +241,45 @@ async function executeKick(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
+    // ✅ PASO 1: Validaciones rápidas (síncronas)
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
-
-    Validators.validateUserPermissions(
-        member,
-        [PermissionFlagsBits.KickMembers],
-        ['Expulsar Miembros']
-    );
-
-    Validators.validateBotPermissions(
-        context.guild!,
-        [PermissionFlagsBits.KickMembers],
-        ['Expulsar Miembros']
-    );
-
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.KickMembers], ['Expulsar Miembros']);
+    Validators.validateBotPermissions(context.guild!, [PermissionFlagsBits.KickMembers], ['Expulsar Miembros']);
     Validators.validateRoleHierarchy(member, target, 'expulsar');
     Validators.validateBotRoleHierarchy(context.guild!, target, 'expulsar');
 
     if (!target.kickable) {
-        throw new CommandError(
-            ErrorType.PERMISSION_ERROR,
-            'El objetivo no es kickable',
-            '❌ No puedo expulsar a este usuario.'
-        )
+        throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es kickable', '❌ No puedo expulsar a este usuario.');
     }
 
+    // ✅ PASO 2: DEFER INMEDIATO (antes de operaciones lentas)
     if (isInteraction) {
         await context.deferReply();
     }
+
+    // ✅ PASO 3: Operaciones lentas (enviar DM, kick)
     try {
+        // Intentar notificar al usuario (puede fallar si tiene DMs cerrados)
         try {
             await target.send({
                 embeds: [
                     new EmbedBuilder()
-                        .setTitle(`${EMOJIS.BAN} Has sido expulsado`)
+                        .setTitle(`${EMOJIS.KICK} Has sido expulsado`)
                         .setDescription(`**Servidor:** ${context.guild!.name}\n**Razón:** ${reason}`)
                         .setColor(COLORS.DANGER)
                         .setTimestamp()
                 ]
             });
-        } catch (dmError) {
-            logger.debug(
-                'Moderation',
-                `No se pudo enviar DM a ${target.user.tag}: DMs cerrados o bot bloqueado`
-            );
+        } catch {
+            // Ignorar si no se puede enviar DM
         }
 
+        // Ejecutar la acción de moderación
         await target.kick(reason);
 
+        // ✅ PASO 4: Responder con el resultado
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario expulsado`)
             .setDescription(
@@ -311,11 +296,7 @@ async function executeKick(
             await context.reply({ embeds: [embed] });
         }
     } catch (error) {
-        throw new CommandError(
-            ErrorType.UNKNOWN,
-            'Fallo al expulsar usuario',
-            '❌ No se pudo expulsar al usuario. Verifica los permisos.'
-        );
+        throw new CommandError(ErrorType.UNKNOWN, 'Fallo al expulsar usuario', '❌ No se pudo expulsar al usuario. Verifica los permisos.');
     }
 }
 
@@ -329,40 +310,26 @@ async function executeBan(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-
+    // ✅ PASO 1: Validaciones rápidas
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
-
-    Validators.validateUserPermissions(
-        member,
-        [PermissionFlagsBits.BanMembers],
-        ['Banear Miembros']
-    );
-
-    Validators.validateBotPermissions(
-        context.guild!,
-        [PermissionFlagsBits.BanMembers],
-        ['Banear Miembros']
-    );
-
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.BanMembers], ['Banear Miembros']);
+    Validators.validateBotPermissions(context.guild!, [PermissionFlagsBits.BanMembers], ['Banear Miembros']);
     Validators.validateRoleHierarchy(member, target, 'banear');
     Validators.validateBotRoleHierarchy(context.guild!, target, 'banear');
 
     if (!target.bannable) {
-        throw new CommandError(
-            ErrorType.PERMISSION_ERROR,
-            'El objetivo no es baneable',
-            '❌ No puedo banear a este usuario.'
-        );
+        throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es baneable', '❌ No puedo banear a este usuario.');
     }
 
+    // ✅ PASO 2: DEFER INMEDIATO
     if (isInteraction) {
         await context.deferReply();
     }
 
+    // ✅ PASO 3: Operaciones lentas
     try {
-
         try {
             await target.send({
                 embeds: [
@@ -373,18 +340,13 @@ async function executeBan(
                         .setTimestamp()
                 ]
             });
-        } catch (dmError) {
-            logger.debug(
-                'Moderation',
-                `No se pudo enviar DM a ${target.user.tag}: DMs cerrados o bot bloqueado`
-            );
+        } catch {
+            // Ignorar
         }
 
-        await target.ban({
-            reason,
-            deleteMessageSeconds: deleteMessageDays * 24 * 60 * 60
-        });
+        await target.ban({ reason, deleteMessageSeconds: deleteMessageDays * 24 * 60 * 60 });
 
+        // ✅ PASO 4: Responder
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario baneado`)
             .setDescription(
@@ -401,13 +363,8 @@ async function executeBan(
         } else {
             await context.reply({ embeds: [embed] });
         }
-
     } catch (error) {
-        throw new CommandError(
-            ErrorType.UNKNOWN,
-            'Fallo al banear usuario',
-            '❌ No se pudo banear al usuario. Verifica los permisos.'
-        );
+        throw new CommandError(ErrorType.UNKNOWN, 'Fallo al banear usuario', '❌ No se pudo banear al usuario. Verifica los permisos.');
     }
 }
 
@@ -421,41 +378,27 @@ async function executeTimeout(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
+    // ✅ PASO 1: Validaciones rápidas
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
-
-    Validators.validateUserPermissions(
-        member,
-        [PermissionFlagsBits.ModerateMembers],
-        ['Moderar Miembros']
-    );
-
-    Validators.validateBotPermissions(
-        context.guild!,
-        [PermissionFlagsBits.ModerateMembers],
-        ['Moderar Miembros']
-    );
-
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
+    Validators.validateBotPermissions(context.guild!, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
     Validators.validateRoleHierarchy(member, target, 'silenciar');
     Validators.validateBotRoleHierarchy(context.guild!, target, 'silenciar');
 
     if (!target.moderatable) {
-        throw new CommandError(
-            ErrorType.PERMISSION_ERROR,
-            'El objetivo no es silenciable',
-            '❌ No puedo silenciar a este usuario.'
-        );
+        throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es silenciable', '❌ No puedo silenciar a este usuario.');
     }
 
+    // ✅ PASO 2: DEFER INMEDIATO
     if (isInteraction) {
         await context.deferReply();
     }
 
+    // ✅ PASO 3: Operaciones lentas
     try {
         const timeoutUntil = new Date(Date.now() + duration * 60 * 1000);
-
-
         await target.timeout(duration * 60 * 1000, reason);
 
         try {
@@ -473,13 +416,11 @@ async function executeTimeout(
                         .setTimestamp()
                 ]
             });
-        } catch (dmError) {
-            logger.debug(
-                'Moderation',
-                `No se pudo enviar DM a ${target.user.tag}: DMs cerrados o bot bloqueado`
-            );
+        } catch {
+            // Ignorar
         }
 
+        // ✅ PASO 4: Responder
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario silenciado`)
             .setDescription(
@@ -497,12 +438,7 @@ async function executeTimeout(
         } else {
             await context.reply({ embeds: [embed] });
         }
-
     } catch (error) {
-        throw new CommandError(
-            ErrorType.UNKNOWN,
-            'Fallo al silenciar usuario',
-            '❌ No se pudo silenciar al usuario. Verifica los permisos.'
-        );
+        throw new CommandError(ErrorType.UNKNOWN, 'Fallo al silenciar usuario', '❌ No se pudo silenciar al usuario. Verifica los permisos.');
     }
 }
