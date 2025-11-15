@@ -1,6 +1,6 @@
 import { config } from './config.js';
 import { CommandManager } from './managers/CommandManager.js';
-import { logger } from './utils/logger.js';
+import { logger } from './utils/logger_temp.js';
 
 async function deploy() {
     const commandManager = new CommandManager();
