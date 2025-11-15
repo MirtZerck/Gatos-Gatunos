@@ -10,6 +10,7 @@ import { HybridCommand } from '../../types/Command.js';
 import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS, EMOJIS } from '../../utils/constants.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
+import { logger } from '../../utils/logger.js';
 
 export const moderation: HybridCommand = {
     type: 'hybrid',
@@ -284,8 +285,11 @@ async function executeKick(
                         .setTimestamp()
                 ]
             });
-        } catch {
-
+        } catch (dmError) {
+            logger.debug(
+                'Moderation',
+                `No se pudo enviar DM a ${target.user.tag}: DMs cerrados o bot bloqueado`
+            );
         }
 
         await target.kick(reason);
@@ -368,8 +372,11 @@ async function executeBan(
                         .setTimestamp()
                 ]
             });
-        } catch {
-
+        } catch (dmError) {
+            logger.debug(
+                'Moderation',
+                `No se pudo enviar DM a ${target.user.tag}: DMs cerrados o bot bloqueado`
+            );
         }
 
         await target.ban({
@@ -465,8 +472,11 @@ async function executeTimeout(
                         .setTimestamp()
                 ]
             });
-        } catch {
-
+        } catch (dmError) {
+            logger.debug(
+                'Moderation',
+                `No se pudo enviar DM a ${target.user.tag}: DMs cerrados o bot bloqueado`
+            );
         }
 
         const embed = new EmbedBuilder()

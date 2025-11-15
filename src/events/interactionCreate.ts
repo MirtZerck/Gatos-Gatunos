@@ -23,6 +23,22 @@ export default {
             return;
         }
 
+        if (client.cooldownManager) {
+            const cooldownRemaining = client.cooldownManager.getRemainingCooldown(
+                interaction.commandName,
+                interaction.user.id
+            );
+
+            if (cooldownRemaining > 0) {
+                const seconds = Math.ceil(cooldownRemaining / 1000);
+                await interaction.reply({
+                    content: `⏱️ Debes esperar **${seconds}** segundo${seconds !== 1 ? 's' : ''} antes de usar este comando nuevamente.`,
+                    ephemeral: true
+                });
+                return;
+            }
+        }
+
         try {
             logger.command(
                 'slash',
@@ -36,6 +52,14 @@ export default {
             } else if (command.type === 'hybrid') {
                 await command.executeSlash(interaction);
             }
+
+            if (client.cooldownManager) {
+                client.cooldownManager.setCooldown(
+                    interaction.commandName,
+                    interaction.user.id
+                );
+            }
+
         } catch (error) {
             logger.error('InteractionCreate', `Error ejecutando ${interaction.commandName}`, error);
 

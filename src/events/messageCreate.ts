@@ -27,7 +27,28 @@ export default {
 
         if (command.type === 'slash-only') {
             await message.reply('❌ Este comando solo funciona como slash command (`/`).')
-            return
+            return;
+        }
+
+        if (client.cooldownManager) {
+            const cooldownRemaining = client.cooldownManager.getRemainingCooldown(
+                command.name,
+                message.author.id
+            );
+
+            if (cooldownRemaining > 0) {
+                const seconds = Math.ceil(cooldownRemaining / 1000);
+                const reply = await message.reply(
+                    `⏱️ Debes esperar **${seconds}** segundo${seconds !== 1 ? 's' : ''} antes de usar este comando nuevamente.`
+                );
+
+                // Eliminar el mensaje después de 5 segundos
+                setTimeout(() => {
+                    reply.delete().catch(() => { });
+                }, 5000);
+
+                return;
+            }
         }
 
         try {
@@ -38,32 +59,32 @@ export default {
                 message.guild?.name
             )
 
-            let finalArgs = args; 
+            let finalArgs = args;
 
             if (command.type === 'hybrid' && 'subcommands' in command && command.subcommands) {
-                const isSubcommand = command.subcommands.some(sub => 
-                sub.name === commandName || sub.aliases?.includes(commandName)
-                );
-                
-                if (!isSubcommand && client.commandManager?.isOriginalCommand(command.name)) {
-                    const firstArg = args[0]?.toLowerCase();
-                    const isFirstArgSubcommand = command.subcommands.some(sub => 
-                        sub.name === firstArg || sub.aliases?.includes(firstArg)
-                    );
-                    
-                    if (isFirstArgSubcommand) {                        
-                        return;
-                    }
-                }
-                
-                if (isSubcommand) {                  
-                const subcommandInfo = command.subcommands.find(sub =>
+                const isSubcommand = command.subcommands.some(sub =>
                     sub.name === commandName || sub.aliases?.includes(commandName)
                 );
 
-                if (subcommandInfo) {
-                    finalArgs = [subcommandInfo.name, ...args];
+                if (!isSubcommand && client.commandManager?.isOriginalCommand(command.name)) {
+                    const firstArg = args[0]?.toLowerCase();
+                    const isFirstArgSubcommand = command.subcommands.some(sub =>
+                        sub.name === firstArg || sub.aliases?.includes(firstArg)
+                    );
+
+                    if (isFirstArgSubcommand) {
+                        return;
+                    }
                 }
+
+                if (isSubcommand) {
+                    const subcommandInfo = command.subcommands.find(sub =>
+                        sub.name === commandName || sub.aliases?.includes(commandName)
+                    );
+
+                    if (subcommandInfo) {
+                        finalArgs = [subcommandInfo.name, ...args];
+                    }
                 }
             }
 
@@ -74,6 +95,14 @@ export default {
             } else if (command.type === 'hybrid') {
                 await command.executePrefix(message, finalArgs);
             }
+
+            if (client.cooldownManager) {
+                client.cooldownManager.setCooldown(
+                    command.name,
+                    message.author.id
+                );
+            }
+
         } catch (error) {
             logger.error('MessageCreate', `Error ejecutando ${commandName}`, error)
             await message.reply('Hubo un error al ejecutar este comando.')
