@@ -243,7 +243,7 @@ async function handleCooldownClear(interaction: ChatInputCommandInteraction): Pr
     if (!cooldownManager) {
         await interaction.reply({
             content: '❌ El sistema de cooldowns no está disponible.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -286,14 +286,14 @@ async function handleCooldownClear(interaction: ChatInputCommandInteraction): Pr
         .setColor(COLORS.SUCCESS)
         .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 async function handleCooldownCheck(interaction: ChatInputCommandInteraction): Promise<void> {
     if (interaction.memberPermissions && !interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
         await interaction.reply({
             content: '❌ Necesitas permisos de **Administrador** para usar este comando.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -302,7 +302,7 @@ async function handleCooldownCheck(interaction: ChatInputCommandInteraction): Pr
     if (!cooldownManager) {
         await interaction.reply({
             content: '❌ El sistema de cooldowns no está disponible.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -347,7 +347,7 @@ async function handleCooldownCheck(interaction: ChatInputCommandInteraction): Pr
         });
     }
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 
