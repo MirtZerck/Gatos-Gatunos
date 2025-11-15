@@ -8,12 +8,46 @@ import { logger } from '../utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * *Gestor de eventos de Discord.
+ * *Carga y registra automáticamante todos los event handlers desde el directorio de eventos.
+ * 
+ * @class EventManager
+ * @example
+ * ```typescript
+ * const eventManager = new EventManager(client);
+ * await eventManager.loadEvents();
+ * ```
+ */
 export class EventManager {
+    /* Cliente de Discord al que se vincularán los eventos */
     private client: BotClient;
+
+    /**
+     * *Crea una nueva instancia del gestor de eventos.
+     * 
+     * @param {BotClient} client - Instancia del cliente de Discord 
+     */
 
     constructor(client: BotClient) {
         this.client = client;
     }
+
+    /**
+     * *Carga todos los eventos desde el directorio de eventos.
+     * *Registra automáticamente los listeners en el cliente de Discord.
+     * *Soporta eventos que se ejecutan una sola vez (once) o múltiples veces (on).
+     * 
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} Si hay un error al leer el directorio de eventos
+     * 
+     * @example
+     * ```typescript
+     * await eventManager.loadEvents();
+     * * // Todos los eventos en src/events/ están ahora registrados
+     * ```
+     */
 
     async loadEvents(): Promise<void> {
         const eventsPath = join(__dirname, '../events');
@@ -42,6 +76,4 @@ export class EventManager {
         logger.module('EventManager', eventFiles.length);
 
     }
-
-
 }

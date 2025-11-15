@@ -8,16 +8,47 @@ import { logger } from '../utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
+/**
+ * *Gestor centralizado de comandos del bot.
+ * *Maneja la carga, registro y búsqueda de comandos desde el sistema de archivos.
+ * 
+ * @class CommandManager
+ * @example
+ * ```typescript
+ * const manager = new CommandManager();
+ * await manager.loadCommands();
+ * const command = manager.getCommand('ping');
+ * ```
+ */
 export class CommandManager {
+    /** Colección de comandos cargados, indexados por nombre */
     public commands: Collection<string, Command>;
+
+    /** Set de nombres de comandos originales (excluye aliases y wrappers) */
     private originalCommandNames: Set<string>;
 
+    /**
+     * Crea una nueva instancia del gestor de comandos
+     */
     constructor() {
         this.commands = new Collection();
         this.originalCommandNames = new Set();
     }
 
-    /*  Carga todos los comandos desde las subcarpetas  */
+    /**
+ * *Carga todos los comandos desde el directorio de comandos y sus subcarpetas.
+ * *Registra comandos originales y sus aliases automáticamente.
+ * 
+ * @async
+ * @throws {Error} Si hay un error crítico al cargar los archivos de comandos
+ * @returns {Promise<void>}
+ * 
+ * @example
+ * ```typescript
+ * await commandManager.loadCommands();
+ * console.log(`${commandManager.commands.size} comandos cargados`);
+ * ```
+ */
 
     async loadCommands(): Promise<void> {
         logger.info('CommandManager', '📦 Cargando comandos...')
@@ -60,18 +91,29 @@ export class CommandManager {
         }
     }
 
+    /**
+     * *Registra aliases de subcomandos como comandos independientes.
+     * *Permite que los aliases de subcomandos funcionen como comandos de prefijo directos.
+     * 
+     * @private
+     * @returns {void}
+     * 
+     * @example
+     * * //Si 'interact hug' tiene alias 'abrazo', esto registra 'abrazo' como comando
+     */
+
     private registerSubcommandAliases(): void {
         const commandsWithSubcommands = Array.from(this.commands.values()).filter(
-            (cmd): cmd is Extract<Command, { subcommands?: SubcommandInfo[] }> => 
+            (cmd): cmd is Extract<Command, { subcommands?: SubcommandInfo[] }> =>
                 'subcommands' in cmd && Array.isArray(cmd.subcommands)
         );
-    
+
         for (const command of commandsWithSubcommands) {
             if (!command.subcommands) continue;
-    
-            for (const subcommand of command.subcommands) {                
+
+            for (const subcommand of command.subcommands) {
                 this.registerSubcommandAlias(command, subcommand.name);
-    
+
                 if (subcommand.aliases) {
                     for (const alias of subcommand.aliases) {
                         this.registerSubcommandAlias(command, alias);
@@ -81,28 +123,45 @@ export class CommandManager {
         }
     }
 
-    private registerSubcommandAlias(parentCommand: Command, alias: string): void {      
+    /**
+     * *Registra un alias de subcomando como un wrapper del comando padre.
+     * 
+     * @private
+     * @param {Command} parentCommand - Comando padre que contiene el subcomando 
+     * @param {string} alias - Alias a registrar 
+     * @returns {void}
+     */
+
+    private registerSubcommandAlias(parentCommand: Command, alias: string): void {
         if (this.commands.has(alias)) {
             logger.warn('CommandManager', `Alias "${alias}" ya existe, saltando`);
             return;
         }
-    
+
         // Los aliases de subcomandos solo tienen sentido para comandos de prefijo
         if (parentCommand.type === 'slash-only') {
             return;
         }
-    
+
         const subcommandWrapper: Command = {
             ...parentCommand,
             name: alias,
-            aliases: [], 
+            aliases: [],
         };
-    
+
         this.commands.set(alias, subcommandWrapper);
         logger.debug('CommandManager', `  ↳ Registrado alias: ${alias}`);
     }
 
-    /*  Carga comandos recursivamente desde un directorio */
+    /**   
+     * *Carga comandos recursivamente desde un directorio y sus subdirectorios.
+     * 
+     * @private
+     * @async
+     * @param {string} dir - Ruta del directorio a escanear
+     * @returns {Promise<voi>}
+     * @throws {Error} Si hay un error al leer el directorio
+    */
 
     private async loadCommandsFromDirectory(dir: string): Promise<void> {
         const files = readdirSync(dir);
@@ -121,7 +180,14 @@ export class CommandManager {
         }
     }
 
-    /*  Carga un archivo de comando individual */
+    /**
+     * *Carga un archivo de comando individual 
+     * 
+     * @private
+     * @async
+     * @param {string} filePath - Ruta completa al archivo del comando
+     * @returns {Promise<void>}
+     */
 
     private async loadCommandFile(filePath: string): Promise<void> {
         try {
@@ -147,11 +213,32 @@ export class CommandManager {
                 logger.warn('CommandManager', `Comando inválido: ${filePath}`);
             }
         } catch (error) {
-            logger.error('CommandManager', `Error cargando ${filePath}:`, error);
+            logger.error(
+                'CommandManager',
+                `Error cargando comando desde ${filePath}:`,
+                error
+            );
+
+            if (error instanceof Error) {
+                logger.debug('CommandManager', `Detalles: ${error.message}`);
+                logger.debug('CommandManager', `Stack: ${error.stack?.split('\n')[0]}`);
+            }
         }
     }
 
-    /* Obtiene un comando por nombre o alias */
+    /**
+     * *Obtiene un comando por nombre o alias 
+     * *Busca primero por nombre exacto, luego por alias.
+     * 
+     * @param {string} name - Nombre o alias del comando a buscar
+     * @returns {Command | undefined} El comando encontrado o undefined
+     * 
+     * @example
+     * ```typescript
+     * const command = manager.getCommand('ping');
+     * const sameCommand = manager.getCommand('p'); // usando alias
+     * ```
+     */
 
     getCommand(name: string): Command | undefined {
         // Buscar por nombre exacto
@@ -165,18 +252,45 @@ export class CommandManager {
         });
     }
 
-    /* Verifica si un comando es original (no un wrapper de alias) */
+    /**
+     *  *Verifica si un comando es original (no es un wrapper de alias).
+     * 
+     * @param {string} name - Nombre del comando a verificar
+     * @returns {boolean} true si es un comando original, false si es un alias
+     * 
+     * @example
+     * ```typescript
+     * manager.isOriginalCommand('ping'); // true
+     * manager.isOriginalCommand('p') // false (es alias)
+     * ```
+    */
+
     isOriginalCommand(name: string): boolean {
         return this.originalCommandNames.has(name);
     }
 
-    /* Registra todos los comandos slash en Discord */
+    /**
+    * *Registra todos los comandos slash en Discord a través de la API.
+    * *Solo registra comandos originales que soporten slash commands.
+    * 
+    * @async
+    * @param {string} token - Token del bot de Discord
+    * @param {string} clientId - ID de la aplicación del bot
+    * @returns {Promise <void>}
+    * @throws {Error} Si hay un error al comunicarse con la API de Discord
+    * 
+    * @example
+    * ```typescript
+    * await manager.deployCommands(config.token, config.clientId);
+    * ```    
+    */
+
     async deployCommands(token: string, clientId: string): Promise<void> {
         // Filtrar solo comandos originales con data (excluir prefix-only y wrappers de aliases)
         const slashCommands = Array.from(this.commands.entries())
-            .filter(([name, cmd]) => 
+            .filter(([name, cmd]) =>
                 this.originalCommandNames.has(name) &&
-                cmd.type !== 'prefix-only' && 
+                cmd.type !== 'prefix-only' &&
                 'data' in cmd
             )
             .map(([, cmd]) => cmd) as Exclude<Command, PrefixOnlyCommand>[];
@@ -207,7 +321,14 @@ export class CommandManager {
         }
     }
 
-    /* Lista todos los comandos por categoría */
+    /**
+     *  * Lista todos los comandos cargados organizados por categoría.
+     * *Imprime la información en la consola usando el logger.
+     * 
+     * @returns {void}
+     * 
+     * @deprecated Considera usar getStats() para obtener datos esctructurados
+     */
 
     listCommands(): void {
         const categories = new Map<string, Command[]>();
@@ -240,7 +361,23 @@ export class CommandManager {
         }
     }
 
-    /* Obtiene estadísticas de los comandos cargados */
+    /** 
+     * * Obtiene estadísticas sobre los comandos cargados.
+     * 
+     * @returns {{
+     * total: number,
+     * byType: Record<Command['type'], number>,
+     * byCategory: Record<string, number>
+     * }}
+     * 
+     * @example
+     * ```typescript
+     * const stats = manager.getStats();
+     * console.log(`Total: ${stats.total}`);
+     * console.log(`Slash-only: ${stats.byType['slash-only]}`);
+     * ```
+     */
+
     getStats(): {
         total: number;
         byType: Record<Command['type'], number>;

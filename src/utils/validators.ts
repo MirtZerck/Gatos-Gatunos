@@ -8,7 +8,35 @@ import {
 } from 'discord.js';
 import { CommandError, ErrorType } from './errorHandler.js';
 
+/**
+ * *Colección de validadores reutilizables para comandos de Discord.
+ * Todos los métodos lanzan CommandError si la validación falla.
+ * 
+ * @class Validators
+ * 
+ * @example
+ * ```typescript
+ * /// Validar que no sea el mismo usuario
+ * Validators.validateNotSelf(author, target);
+ * 
+ * /// Validar permisos
+ * Validators.validateUserPermissions(
+ *   member,
+ *   [PermissionFlagsBits.KickMembers],
+ *   ['Expulsar Miembros']
+ * );
+ * ```
+ */
 export class Validators {
+    /**
+     * *Valida que el usuario objetivo no sea el mismo que el autor.
+     * 
+     * @static
+     * @param {User} author - Usuario que ejecuta la acción
+     * @param {User} target - Usuario objetivo
+     * @throws {CommandError} Si el autor y el objetivo son el mismo usuario
+     */
+
     static validateNotSelf(author: User, target: User): void {
         if (target.id === author.id) {
             throw new CommandError(
@@ -18,6 +46,15 @@ export class Validators {
             );
         }
     }
+
+    /**
+     * *Valida que el usuario objetivo no sea un bot.
+     * 
+     * @static
+     * @param {User} target - Usuario a validar
+     * @throws {CommandError} Si el usuario es un bot
+     */
+
     static validateNotBot(target: User): void {
         if (target.bot) {
             throw new CommandError(
@@ -27,6 +64,16 @@ export class Validators {
             );
         }
     }
+
+    /**
+     * *Valida que se haya proporcionado un usuario.
+     * *Type guard que asegura que user no es null/undefined.
+     * 
+     * @static
+     * @param {User | null | undefined} user - Usuario a validar
+     * @throws {CommandError} Si no se proporcionó un usuario
+     * @asserts user is User
+     */
 
     static validateUserProvided(user: User | null | undefined): asserts user is User {
         if (!user) {
@@ -38,6 +85,16 @@ export class Validators {
         }
     }
 
+    /**
+     * *Valida que se haya proporcionado un miembro del servidor.
+     * *Type guard que asegura que member no es null/undefined.
+     * 
+     * @static
+     * @param {GuildMember | null | undefined} member - Miembro a validar
+     * @throws {CommandError} Si no se proporcionó un miembro
+     * @asserts member is GuildMember
+     */
+
     static validateMemberProvided(member: GuildMember | null | undefined): asserts member is GuildMember {
         if (!member) {
             throw new CommandError(
@@ -47,6 +104,16 @@ export class Validators {
             );
         }
     }
+
+    /**
+     * *Valida que el comando se esté ejecutando dentro de un servidor.
+     * *Type guard que asegura que context.guild existe.
+     * 
+     * @static
+     * @param {ChatInputCommandInteraction | Message} context - Contexto de ejecución
+     * @throws {CommandError} Si el comando no se ejecuta en un servidor
+     * @asserts context is (ChatInputCommandInteraction | Message) & { guild: Guild }
+     */
 
     static validateInGuild(
         context: ChatInputCommandInteraction | Message
@@ -59,6 +126,17 @@ export class Validators {
             );
         }
     }
+
+    /**
+     * *Valida que el usuario tenga los permisos necesarios.
+     * 
+     * @static
+     * @param {GuildMember | null | undefined} member - Miembro a validar
+     * @param {bigint[]} permissions - Array de permisos requeridos
+     * @param {string[]} permissionNames - Nombres legibles de los permisos
+     * @throws {CommandError} Si el miembro no tiene alguno de los permisos
+     * @asserts member is GuildMember
+     */
 
     static validateUserPermissions(
         member: GuildMember | null | undefined,
@@ -89,6 +167,16 @@ export class Validators {
             );
         }
     }
+
+    /**
+     * *Valida que el bot tenga los permisos necesarios en el servidor.
+     * 
+     * @static
+     * @param {Guild | null | undefined} guild - Servidor donde validar permisos
+     * @param {bigint[]} permissions - Array de permisos requeridos
+     * @param {string[]} permissionNames - Nombres legibles de los permisos
+     * @throws {CommandError} Si el bot no tiene alguno de los permisos
+     */
 
     static validateBotPermissions(
         guild: Guild | null | undefined,
@@ -130,6 +218,17 @@ export class Validators {
         }
     }
 
+    /**
+     * *Valida que un string no esté vacío.
+     * *Type guard que asegura que value es string no vacío.
+     * 
+     * @static
+     * @param {string | null | undefined} value - Valor a validar
+     * @param {string} fieldName - Nombre del campo para el mensaje de error
+     * @throws {CommandError} Si el valor está vacío o es null/undefined
+     * @asserts value is string
+     */
+
     static validateNotEmpty(value: string | null | undefined, fieldName: string): asserts value is string {
         if (!value || value.trim().length === 0) {
             throw new CommandError(
@@ -155,6 +254,17 @@ export class Validators {
         }
     }
 
+    /**
+     * *Valida la jerarquía de roles entre moderador y objetivo.
+     * *Asegura que el moderador tenga un rol superior al objetivo.
+     * 
+     * @static
+     * @param {GuildMember} author - Miembro que ejecuta la acción
+     * @param {GuildMember} target - Miembro objetivo
+     * @param {string} action - Nombre de la acción (para el mensaje de error)
+     * @throws {CommandError} Si el objetivo tiene rol igual o superior
+     */
+
     static validateRoleHierarchy(
         author: GuildMember,
         target: GuildMember,
@@ -168,6 +278,18 @@ export class Validators {
             );
         }
     }
+
+
+    /**
+     * *Valida la jerarquía de roles entre el bot y el objetivo.
+     * *Asegura que el bot tenga un rol superior al objetivo.
+     * 
+     * @static
+     * @param {Guild} guild - Servidor donde validar
+     * @param {GuildMember} target - Miembro objetivo
+     * @param {string} action - Nombre de la acción (para el mensaje de error)
+     * @throws {CommandError} Si el objetivo tiene rol igual o superior al bot
+     */
 
     static validateBotRoleHierarchy(
         guild: Guild,

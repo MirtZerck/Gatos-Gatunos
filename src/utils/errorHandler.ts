@@ -4,16 +4,53 @@ import {
 } from 'discord.js';
 import { logger } from './logger.js';
 
+/**
+ * *Tipos de errores manejados por el sistema.
+ * *Cada tipo determina el nivel de logging y el mensaje al usuario.
+ * 
+ * @enum {string}
+ */
+
 export enum ErrorType {
+    /* Error relacionado con APIs externas (Discord, Tenor, etc.) */
     API_ERROR = 'API_ERROR',
+    /* Error de permisos insuficientes */
     PERMISSION_ERROR = 'PERMISSION_ERROR',
+    /* Error de validación de datos de entrada */
     VALIDATION_ERROR = 'VALIDATION_ERROR',
+    /* Error por límite de tasa excedido */
     RATE_LIMIT = 'RATE_LIMIT',
+    /* Recurso no encontrado */
     NOT_FOUND = 'NOT_FOUND',
+    /* Error no categorizado */
     UNKNOWN = 'UNKNOWN'
 }
 
+/**
+ * *Error personalizado con tipo y mensaje para el usuario.
+ * *Extiende la clase Error nativa con información adicional para el manejo contextual.
+ * 
+ * @class CommandError
+ * @extends Error
+ * 
+ * @example
+ * ```typescript
+ * throw new CommandError(
+ *   ErrorType.PERMISSION_ERROR,
+ *   'Usuario sin permisos',
+ *   '❌ No tienes permiso para usar este comando.'
+ * );
+ * ```
+ */
 export class CommandError extends Error {
+    /**
+     * *Crea un nuevo CommandError.
+     * 
+     * @param {ErrorType} type - Tipo de error
+     * @param {string} message - Mensaje técnico para logs
+     * @param {string} [userMessage] - Mensaje amigable para mostrar al usuario
+     */
+
     constructor(
         public type: ErrorType,
         message: string,
@@ -25,6 +62,26 @@ export class CommandError extends Error {
         Error.captureStackTrace(this, this.constructor);
     }
 }
+
+/**
+ * *Maneja errores de comandos de forma centralizada.
+ * *Registra el error, determina el mensaje apropiado y responde al usuario.
+ * 
+ * @async
+ * @param {unknown} error - Error capturado
+ * @param {ChatInputCommandInteraction | Message} context - Contexto de ejecución del comando
+ * @param {string} commandName - Nombre del comando que generó el error
+ * @returns {Promise<void>}
+ * 
+ * @example
+ * ```typescript
+ * try {
+ *   await executeCommand();
+ * } catch (error) {
+ *   await handleCommandError(error, interaction, 'ping');
+ * }
+ * ```
+ */
 
 export async function handleCommandError(
     error: unknown,
@@ -88,6 +145,29 @@ export async function handleCommandError(
 
     }
 }
+
+/**
+ * *Ejecuta una función de forma segura, capturando cualquier error.
+ * *Útil para operaciones que no deben interrumpir el flujo principal.
+ * 
+ * @async
+ * @template T - Tipo de retorno de la función
+ * @param {() => Promise<T>} fn - Función asíncrona a ejecutar
+ * @param {string} [errorMensaje='Error en la operación'] - Mensaje de error para logging
+ * @returns {Promise<T | null>} Resultado de la función o null si falla
+ * 
+ * @example
+ * ```typescript
+ * const data = await safeExecute(
+ *   async () => await fetchData(),
+ *   'Error obteniendo datos'
+ * );
+ * 
+ * if (data) {
+ *   /// usar data
+ * }
+ * ```
+ */
 
 export async function safeExecute<T>(
     fn: () => Promise<T>,
