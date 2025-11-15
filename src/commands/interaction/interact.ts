@@ -9,6 +9,7 @@ import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/con
 import { getRandomGif } from '../../utils/tenor.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
+import { config } from '../../config.js';
 
 const ACTION_QUERIES = {
     hug: 'anime hug',
@@ -38,7 +39,7 @@ export const interact: HybridCommand = {
     type: 'hybrid',
     name: 'interact',
     description: 'Comandos de interacción con otros usuarios',
-    category: CATEGORIES.INTERACTION,    
+    category: CATEGORIES.INTERACTION,
     subcommands: [
         { name: 'hug', aliases: ['abrazo', 'abrazar'], description: 'Abraza a alguien' },
         { name: 'kiss', aliases: ['beso', 'besar'], description: 'Besa a alguien' },
@@ -184,7 +185,7 @@ export const interact: HybridCommand = {
 
             if (!subcommand || !validSubcommands.includes(subcommand)) {
                 await message.reply(
-                    `❌ **Uso:** \`!interact <acción> @usuario\`\n\n` +
+                    `❌ **Uso:** \`${config.prefix}interact <acción> @usuario\`\n\n` +
                     `**Acciones disponibles:**\n${validSubcommands.map(cmd => `• \`${cmd}\``).join('\n')}`
                 );
                 return;

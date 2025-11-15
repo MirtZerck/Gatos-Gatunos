@@ -30,7 +30,7 @@ async function main() {
     const cooldownManager = new CooldownManager();
     client.cooldownManager = cooldownManager
 
-    cooldownManager.setCooldownConfig('ping', 3000); // 3 segundos
+    cooldownManager.setCooldownConfig('utility', 3000); // 3 segundos
     cooldownManager.setCooldownConfig('interact', 5000) // 5 segundos
     cooldownManager.setCooldownConfig('moderation', 2000) // 2 segundos
 

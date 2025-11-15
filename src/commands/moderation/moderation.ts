@@ -11,6 +11,7 @@ import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS, EMOJIS } from '../../u
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { logger } from '../../utils/logger.js';
+import { config } from '../../config.js';
 
 export const moderation: HybridCommand = {
     type: 'hybrid',
@@ -187,7 +188,7 @@ async function handleKickPrefix(message: Message, args: string[]): Promise<void>
     const reason = args.slice(1).join(' ') || 'Sin razón especificada';
 
     if (!target) {
-        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod kick @usuario spam`');
+        await message.reply(`❌ Debes mencionar a un usuario. Ejemplo: \`${config.prefix}moderation kick @usuario spam\``);
         return;
     }
 
@@ -198,7 +199,7 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
     const target = message.mentions.members?.first();
 
     if (!target) {
-        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod ban @usuario 7 toxicidad`');
+        await message.reply(`❌ Debes mencionar a un usuario. Ejemplo: \`${config.prefix}moderation ban @usuario 7 toxicidad\``);
         return;
     }
 
@@ -219,7 +220,7 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
     const target = message.mentions.members?.first();
 
     if (!target) {
-        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod timeout @usuario 30 flood`');
+        await message.reply(`❌ Debes mencionar a un usuario. Ejemplo: \`${config.prefix}moderation timeout @usuario 30 flood\``);
         return;
     }
 
