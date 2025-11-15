@@ -21,7 +21,6 @@ export const utility: HybridCommand = {
     subcommands: [
         { name: 'ping', aliases: ['p', 'pong'], description: 'Responde con Pong!' },
         { name: 'avatar', aliases: ['av', 'pfp'], description: 'Muestra el avatar de un usuario' },
-        { name: 'saludar', aliases: ['saludo', 'hola'], description: 'El bot te saluda' },
         { name: 'cooldown', aliases: [], description: 'Gestiona cooldowns (solo admins)' },
     ],
 
@@ -47,11 +46,6 @@ export const utility: HybridCommand = {
                 )
         )
 
-        .addSubcommand(subcommand =>
-            subcommand
-                .setName('saludar')
-                .setDescription('El bot te saluda')
-        )
 
         .addSubcommand(subcommand =>
             subcommand
@@ -109,9 +103,6 @@ export const utility: HybridCommand = {
                 case 'avatar':
                     await handleAvatar(interaction);
                     break;
-                case 'saludar':
-                    await handleSaludar(interaction);
-                    break;
                 case 'cooldown-stats':
                     await handleCooldownStats(interaction);
                     break;
@@ -137,7 +128,6 @@ export const utility: HybridCommand = {
                     `**Subcomandos disponibles:**\n` +
                     `• \`ping\` (\`p\`, \`pong\`) - Responde con Pong!\n` +
                     `• \`avatar\` (\`av\`, \`pfp\`) [@usuario] - Muestra avatar\n` +
-                    `• \`saludar\` (\`saludo\`, \`hola\`) - El bot te saluda\n` +
                     `• \`cooldown\` - Gestiona cooldowns (admin)`
                 );
                 return;
@@ -149,9 +139,6 @@ export const utility: HybridCommand = {
                     break;
                 case 'avatar':
                     await handleAvatarPrefix(message, args.slice(1));
-                    break;
-                case 'saludar':
-                    await handleSaludarPrefix(message);
                     break;
                 case 'cooldown':
                     await handleCooldownPrefix(message, args.slice(1));
@@ -177,11 +164,6 @@ async function handleAvatar(interaction: ChatInputCommandInteraction): Promise<v
         content: `Avatar de **${user.displayName}**:`,
         files: [avatarURL]
     });
-}
-
-async function handleSaludar(interaction: ChatInputCommandInteraction): Promise<void> {
-    const user = interaction.user;
-    await interaction.reply(`¡Hola **${user.displayName}**!`);
 }
 
 async function handleCooldownStats(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -363,10 +345,6 @@ async function handleAvatarPrefix(message: Message, args: string[]): Promise<voi
         content: `Avatar de **${user.displayName}**:`,
         files: [avatarURL]
     });
-}
-
-async function handleSaludarPrefix(message: Message): Promise<void> {
-    await message.reply(`¡Hola **${message.author.displayName}**!`);
 }
 
 async function handleCooldownPrefix(message: Message, args: string[]): Promise<void> {
