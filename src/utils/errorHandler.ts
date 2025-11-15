@@ -1,6 +1,7 @@
 import {
     ChatInputCommandInteraction,
-    Message
+    Message,
+    MessageFlags
 } from 'discord.js';
 import { logger } from './logger.js';
 
@@ -134,7 +135,7 @@ export async function handleCommandError(
             if (context.replied || context.deferred) {
                 await context.editReply({ content: userMessage, embeds: [] });
             } else {
-                await context.reply({ content: userMessage, ephemeral: true });
+                await context.reply({ content: userMessage, flags: MessageFlags.Ephemeral });
             }
         } else {
             await context.reply(userMessage);

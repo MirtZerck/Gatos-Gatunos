@@ -1,4 +1,4 @@
-import { Events } from "discord.js";
+import { Events, MessageFlags } from "discord.js";
 import { Event } from "../types/Events.js";
 import { logger } from "../utils/logger.js";
 
@@ -18,7 +18,7 @@ export default {
         if (command.type === 'prefix-only') {
             await interaction.reply({
                 content: '❌ Este comando solo funciona con prefijo.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             });
             return;
         }
@@ -33,7 +33,7 @@ export default {
                 const seconds = Math.ceil(cooldownRemaining / 1000);
                 await interaction.reply({
                     content: `⏱️ Debes esperar **${seconds}** segundo${seconds !== 1 ? 's' : ''} antes de usar este comando nuevamente.`,
-                    ephemeral: true
+                    flags: MessageFlags.Ephemeral
                 });
                 return;
             }
@@ -65,7 +65,7 @@ export default {
 
             const errorMensaje = {
                 content: 'Hubo un error al ejecutar este comando.',
-                ephemeral: true
+                flags: MessageFlags.Ephemeral
             };
 
             if (interaction.replied || interaction.deferred) {

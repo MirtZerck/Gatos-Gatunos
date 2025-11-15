@@ -3,6 +3,7 @@ import { config } from './config.js'
 import { BotClient } from "./types/BotClient.js";
 import { CommandManager } from "./managers/CommandManager.js";
 import { CooldownManager } from "./managers/CooldownManager.js";
+import { RequestManager } from "./managers/RequestManager.js";
 import { EventManager } from "./managers/EventManager.js";
 import { logger } from './utils/logger.js';
 
@@ -34,6 +35,10 @@ async function main() {
     cooldownManager.setCooldownConfig('interact', 5000) // 5 segundos
     cooldownManager.setCooldownConfig('moderation', 2000) // 2 segundos
 
+    logger.info('Bot', 'Inicializando sistema de solicitudes...');
+    const requestManager = new RequestManager();
+    client.requestManager = requestManager;
+
     logger.info('Bot', 'Cargando eventos...');
     const commandEvents = new EventManager(client);
     await commandEvents.loadEvents();
@@ -44,6 +49,7 @@ async function main() {
     process.on('SIGINT', () => {
         logger.info('Bot', 'Cerrando bot...');
         cooldownManager.destroy();
+        requestManager.destroy();
         client.destroy();
         process.exit(0);
     });

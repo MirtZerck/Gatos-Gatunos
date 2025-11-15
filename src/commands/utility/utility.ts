@@ -3,7 +3,8 @@ import {
     ChatInputCommandInteraction,
     Message,
     EmbedBuilder,
-    PermissionFlagsBits
+    PermissionFlagsBits,
+    MessageFlags
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -187,7 +188,7 @@ async function handleCooldownStats(interaction: ChatInputCommandInteraction): Pr
     if (interaction.memberPermissions && !interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
         await interaction.reply({
             content: '❌ Necesitas permisos de **Administrador** para usar este comando.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -196,7 +197,7 @@ async function handleCooldownStats(interaction: ChatInputCommandInteraction): Pr
     if (!cooldownManager) {
         await interaction.reply({
             content: '❌ El sistema de cooldowns no está disponible.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
@@ -226,14 +227,14 @@ async function handleCooldownStats(interaction: ChatInputCommandInteraction): Pr
         .setFooter({ text: 'Los cooldowns se limpian automáticamente cada minuto' })
         .setTimestamp();
 
-    await interaction.reply({ embeds: [embed], ephemeral: true });
+    await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
 }
 
 async function handleCooldownClear(interaction: ChatInputCommandInteraction): Promise<void> {
     if (interaction.memberPermissions && !interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
         await interaction.reply({
             content: '❌ Necesitas permisos de **Administrador** para usar este comando.',
-            ephemeral: true
+            flags: MessageFlags.Ephemeral
         });
         return;
     }
