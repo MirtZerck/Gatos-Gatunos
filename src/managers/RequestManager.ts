@@ -4,7 +4,6 @@ import { logger } from "../utils/logger.js";
 /**
  * *Información de una solicitud de interacción pendiente.
  */
-
 export interface PendingRequest {
     /* ID del usuario que envió la solicitud */
     authorId: string;
@@ -22,54 +21,50 @@ export interface PendingRequest {
 
 /**
  * *Gestor de solicitudes de interacción entre usuarios.
- * *Maneja solicitudes pendientes, previene spam y gestiona timeouts.
+ * *Permite múltiples solicitudes por autor siempre que sean con objetivos diferentes.
  * 
  * @class RequestManager
  * @example
  * ```typescript
  * const requestManager = new RequestManager();
  * 
- * /// Verificar si un usuario tiene solicitud pendiente
- * if (requestManager.hasPendingRequest(userId)) {
- *   await interaction.reply('Ya tienes una solicitud pendiente');
- *   return;
- * }
+ * // ✅ Crear solicitud con Michi
+ * requestManager.createRequest(userId, 'michi123', 'hug', msgId, intId);
  * 
- * /// Crear solicitud
- * requestManager.createRequest(authorId, targetId, 'hug', messageId, interactionId);
+ * // ✅ Crear otra solicitud con Carlos (permitido)
+ * requestManager.createRequest(userId, 'carlos456', 'kiss', msgId2, intId2);
+ * 
+ * // ❌ Crear otra con Michi (rechazado - ya existe)
+ * if (requestManager.hasPendingRequestWith(userId, 'michi123')) {
+ *   await interaction.editReply('Ya tienes una solicitud pendiente con Michi');
+ * }
  * ```
  */
-
 export class RequestManager {
     /**
      * *Mapa de solicitudes pendientes.
-     * *Estructura: authorId -> PendingRequest
+     * *Estructura: authorId -> Map<targetId, PendingRequest>
+     * *Esto permite múltiples solicitudes por autor con diferentes objetivos
      */
-
-    private pendingRequests: Collection<string, PendingRequest>;
+    private pendingRequests: Collection<string, Map<string, PendingRequest>>;
 
     /* Intervalo para limpiar solicitudes expiradas. */
-
     private cleanupInterval: NodeJS.Timeout;
 
     /* Duración por defecto de una solicitud (10 minutos en ms). */
-
     private readonly DEFAULT_REQUEST_DURATION = 10 * 60 * 1000; // 10 minutos
 
     /* Intervalo de limpieza en milisegundos (1 minuto). */
-
     private readonly CLEANUP_INTERVAL = 60000;
 
     /**
      * *Crea una nueva instancia del gestor de solicitudes.
      * *Inicia automáticamente la limpieza periódica de solicitudes expiradas.
      */
-
     constructor() {
         this.pendingRequests = new Collection();
 
         // Iniciar limpieza automática cada minuto
-
         this.cleanupInterval = setInterval(() => {
             this.cleanup();
         }, this.CLEANUP_INTERVAL);
@@ -79,6 +74,7 @@ export class RequestManager {
 
     /**
      * *Crea una nueva solicitud de interacción.
+     * *Permite múltiples solicitudes por autor siempre que sean con objetivos diferentes.
      * 
      * @param {string} authorId - ID del usuario que envía la solicitud
      * @param {string} targetId - ID del usuario objetivo
@@ -99,7 +95,6 @@ export class RequestManager {
      * );
      * ```
      */
-
     createRequest(
         authorId: string,
         targetId: string,
@@ -121,7 +116,13 @@ export class RequestManager {
             interactionId
         };
 
-        this.pendingRequests.set(authorId, request);
+        // ✅ Obtener o crear el mapa de solicitudes del autor
+        if (!this.pendingRequests.has(authorId)) {
+            this.pendingRequests.set(authorId, new Map());
+        }
+
+        // ✅ Agregar la solicitud indexada por targetId
+        this.pendingRequests.get(authorId)!.set(targetId, request);
 
         logger.debug(
             'RequestManager',
@@ -132,28 +133,38 @@ export class RequestManager {
     }
 
     /**
-     * *Verifica si un usuario tiene una solicitud pendiente.
+     * *Verifica si un autor tiene UNA solicitud pendiente específica con un objetivo.
      * 
-     * @param {string} authorId - ID del usuario a verificar
-     * @returns {boolean} true si tiene solicitud pendiente
+     * @param {string} authorId - ID del usuario autor
+     * @param {string} targetId - ID del usuario objetivo
+     * @returns {boolean} true si tiene solicitud pendiente con ese objetivo específico
      * 
      * @example
      * ```typescript
-     * if (requestManager.hasPendingRequest(interaction.user.id)) {
-     *   await interaction.reply('Ya tienes una solicitud pendiente');
+     * // Verificar si ya hay solicitud con Michi
+     * if (requestManager.hasPendingRequestWith(userId, michiId)) {
+     *   await interaction.editReply('Ya tienes una solicitud pendiente con Michi');
      *   return;
      * }
+     * 
+     * // ✅ Si no tiene, crear nueva solicitud
+     * requestManager.createRequest(userId, michiId, 'hug', msgId, intId);
      * ```
      */
+    hasPendingRequestWith(authorId: string, targetId: string): boolean {
+        const authorRequests = this.pendingRequests.get(authorId);
+        if (!authorRequests) return false;
 
-    hasPendingRequest(authorId: string): boolean {
-        const request = this.pendingRequests.get(authorId);
+        const request = authorRequests.get(targetId);
         if (!request) return false;
 
         const now = Date.now();
         if (request.expiresAt <= now) {
             // La solicitud expiró, eliminarla
-            this.pendingRequests.delete(authorId);
+            authorRequests.delete(targetId);
+            if (authorRequests.size === 0) {
+                this.pendingRequests.delete(authorId);
+            }
             return false;
         }
 
@@ -161,31 +172,114 @@ export class RequestManager {
     }
 
     /**
-     * *Obtiene una solicitud pendiente de un usuario.
+     * *Verifica si un autor tiene ALGUNA solicitud pendiente (con cualquier objetivo).
+     * *Útil para mostrar lista de solicitudes activas.
      * 
-     * @param {string} authorId - ID del usuario
+     * @param {string} authorId - ID del usuario autor
+     * @returns {boolean} true si tiene al menos una solicitud pendiente
+     * 
+     * @example
+     * ```typescript
+     * if (requestManager.hasPendingRequest(userId)) {
+     *   const requests = requestManager.getAllPendingRequestsByAuthor(userId);
+     *   // Mostrar lista de solicitudes activas
+     * }
+     * ```
+     */
+    hasPendingRequest(authorId: string): boolean {
+        const authorRequests = this.pendingRequests.get(authorId);
+        if (!authorRequests || authorRequests.size === 0) return false;
+
+        // Verificar que al menos una solicitud no haya expirado
+        const now = Date.now();
+        for (const [targetId, request] of authorRequests) {
+            if (request.expiresAt > now) {
+                return true;
+            } else {
+                // Limpiar expiradas mientras verificamos
+                authorRequests.delete(targetId);
+            }
+        }
+
+        // Si no quedan solicitudes válidas, limpiar
+        if (authorRequests.size === 0) {
+            this.pendingRequests.delete(authorId);
+        }
+
+        return false;
+    }
+
+    /**
+     * *Obtiene una solicitud pendiente específica entre un autor y un objetivo.
+     * 
+     * @param {string} authorId - ID del usuario autor
+     * @param {string} targetId - ID del usuario objetivo
      * @returns {PendingRequest | null} La solicitud o null si no existe
      * 
      * @example
      * ```typescript
-     * const request = requestManager.getPendingRequest(userId);
+     * const request = requestManager.getPendingRequestWith(userId, targetId);
      * if (request) {
-     *   console.log(`Solicitud pendiente: ${request.action}`);
+     *   console.log(`Solicitud de ${request.action} - expira en ${request.expiresAt}`);
      * }
      * ```
      */
+    getPendingRequestWith(authorId: string, targetId: string): PendingRequest | null {
+        const authorRequests = this.pendingRequests.get(authorId);
+        if (!authorRequests) return null;
 
-    getPendingRequest(authorId: string): PendingRequest | null {
-        const request = this.pendingRequests.get(authorId);
+        const request = authorRequests.get(targetId);
         if (!request) return null;
 
         const now = Date.now();
         if (request.expiresAt <= now) {
-            this.pendingRequests.delete(authorId);
+            authorRequests.delete(targetId);
+            if (authorRequests.size === 0) {
+                this.pendingRequests.delete(authorId);
+            }
             return null;
         }
 
         return request;
+    }
+
+    /**
+     * *Obtiene TODAS las solicitudes pendientes de un autor.
+     * 
+     * @param {string} authorId - ID del usuario autor
+     * @returns {PendingRequest[]} Array de solicitudes pendientes (puede estar vacío)
+     * 
+     * @example
+     * ```typescript
+     * const requests = requestManager.getAllPendingRequestsByAuthor(userId);
+     * if (requests.length > 0) {
+     *   const list = requests.map(r => `• ${r.action} con <@${r.targetId}>`).join('\n');
+     *   await interaction.editReply(`Tienes ${requests.length} solicitudes pendientes:\n${list}`);
+     * }
+     * ```
+     */
+    getAllPendingRequestsByAuthor(authorId: string): PendingRequest[] {
+        const authorRequests = this.pendingRequests.get(authorId);
+        if (!authorRequests) return [];
+
+        const now = Date.now();
+        const validRequests: PendingRequest[] = [];
+
+        for (const [targetId, request] of authorRequests) {
+            if (request.expiresAt > now) {
+                validRequests.push(request);
+            } else {
+                // Limpiar expiradas
+                authorRequests.delete(targetId);
+            }
+        }
+
+        // Limpiar si no quedan solicitudes
+        if (authorRequests.size === 0) {
+            this.pendingRequests.delete(authorId);
+        }
+
+        return validRequests;
     }
 
     /**
@@ -199,70 +293,116 @@ export class RequestManager {
      * ```typescript
      * const request = requestManager.findRequestByMessage(buttonInteraction.message.id);
      * if (request) {
-     *   // Procesar respuesta
+     *   // Procesar respuesta del botón
      * }
      * ```
      */
-
     findRequestByMessage(messageId: string): PendingRequest | null {
-        for (const [, request] of this.pendingRequests) {
-            if (request.messageId === messageId) {
-                const now = Date.now();
-                if (request.expiresAt <= now) {
-                    this.pendingRequests.delete(request.authorId);
-                    return null;
+        const now = Date.now();
+
+        for (const [authorId, authorRequests] of this.pendingRequests) {
+            for (const [targetId, request] of authorRequests) {
+                if (request.messageId === messageId) {
+                    if (request.expiresAt <= now) {
+                        // Expiró, limpiar
+                        authorRequests.delete(targetId);
+                        if (authorRequests.size === 0) {
+                            this.pendingRequests.delete(authorId);
+                        }
+                        return null;
+                    }
+                    return request;
                 }
-                return request;
             }
         }
         return null;
     }
 
     /**
-     * *Resuelve (elimina) una solicitud pendiente.
+     * *Resuelve (elimina) una solicitud pendiente específica.
      * *Se debe llamar cuando se acepta o rechaza una solicitud.
      * 
      * @param {string} authorId - ID del usuario autor de la solicitud
+     * @param {string} targetId - ID del usuario objetivo
      * @returns {boolean} true si se eliminó, false si no existía
      * 
      * @example
      * ```typescript
-     * /// Al aceptar o rechazar
-     * requestManager.resolveRequest(request.authorId);
+     * // Al aceptar o rechazar
+     * requestManager.resolveRequestWith(request.authorId, request.targetId);
      * ```
      */
+    resolveRequestWith(authorId: string, targetId: string): boolean {
+        const authorRequests = this.pendingRequests.get(authorId);
+        if (!authorRequests) return false;
 
-    resolveRequest(authorId: string): boolean {
-        const deleted = this.pendingRequests.delete(authorId);
+        const deleted = authorRequests.delete(targetId);
+
         if (deleted) {
-            logger.debug('RequestManager', `Solicitud resuelta: ${authorId}`);
+            logger.debug('RequestManager', `Solicitud resuelta: ${authorId} → ${targetId}`);
+
+            // Si no quedan solicitudes para este autor, limpiar
+            if (authorRequests.size === 0) {
+                this.pendingRequests.delete(authorId);
+            }
         }
+
         return deleted;
     }
 
     /**
-     * *Obtiene el tiempo restante de una solicitud en milisegundos.
+     * *Resuelve (elimina) TODAS las solicitudes de un autor.
+     * *Útil para cuando un usuario se desconecta o quiere cancelar todo.
      * 
-     * @param {string} authorId - ID del usuario
+     * @param {string} authorId - ID del usuario autor
+     * @returns {number} Cantidad de solicitudes eliminadas
+     * 
+     * @example
+     * ```typescript
+     * const cleared = requestManager.resolveAllRequestsByAuthor(userId);
+     * console.log(`${cleared} solicitudes canceladas`);
+     * ```
+     */
+    resolveAllRequestsByAuthor(authorId: string): number {
+        const authorRequests = this.pendingRequests.get(authorId);
+        if (!authorRequests) return 0;
+
+        const count = authorRequests.size;
+        this.pendingRequests.delete(authorId);
+
+        logger.debug('RequestManager', `Todas las solicitudes de ${authorId} resueltas: ${count}`);
+        return count;
+    }
+
+    /**
+     * *Obtiene el tiempo restante de una solicitud específica en milisegundos.
+     * 
+     * @param {string} authorId - ID del usuario autor
+     * @param {string} targetId - ID del usuario objetivo
      * @returns {number} Milisegundos restantes (0 si no existe o expiró)
      * 
      * @example
      * ```typescript
-     * const remaining = requestManager.getRemainingTime(userId);
+     * const remaining = requestManager.getRemainingTimeWith(userId, targetId);
      * const minutes = Math.ceil(remaining / 60000);
      * console.log(`Expira en ${minutes} minutos`);
      * ```
      */
-
-    getRemainingTime(authorId: string): number {
-        const request = this.pendingRequests.get(authorId);
+    getRemainingTimeWith(authorId: string, targetId: string): number {
+        const request = this.getPendingRequestWith(authorId, targetId);
         if (!request) return 0;
 
         const now = Date.now();
         const remaining = request.expiresAt - now;
 
         if (remaining <= 0) {
-            this.pendingRequests.delete(authorId);
+            const authorRequests = this.pendingRequests.get(authorId);
+            if (authorRequests) {
+                authorRequests.delete(targetId);
+                if (authorRequests.size === 0) {
+                    this.pendingRequests.delete(authorId);
+                }
+            }
             return 0;
         }
 
@@ -276,22 +416,28 @@ export class RequestManager {
      * @private
      * @returns {number} Cantidad de solicitudes eliminadas
      */
-
     private cleanup(): number {
         const now = Date.now();
         let cleanedCount = 0;
 
-        const expiredKeys: string[] = [];
+        for (const [authorId, authorRequests] of this.pendingRequests) {
+            const expiredTargets: string[] = [];
 
-        for (const [authorId, request] of this.pendingRequests) {
-            if (request.expiresAt <= now) {
-                expiredKeys.push(authorId);
+            for (const [targetId, request] of authorRequests) {
+                if (request.expiresAt <= now) {
+                    expiredTargets.push(targetId);
+                }
             }
-        }
 
-        for (const key of expiredKeys) {
-            this.pendingRequests.delete(key);
-            cleanedCount++;
+            for (const targetId of expiredTargets) {
+                authorRequests.delete(targetId);
+                cleanedCount++;
+            }
+
+            // Si no quedan solicitudes para este autor, limpiar
+            if (authorRequests.size === 0) {
+                this.pendingRequests.delete(authorId);
+            }
         }
 
         if (cleanedCount > 0) {
@@ -315,9 +461,12 @@ export class RequestManager {
      * console.log(`${cleared} solicitudes limpiadas`);
      * ```
      */
-
     clearAllRequests(): number {
-        const count = this.pendingRequests.size;
+        let count = 0;
+        for (const [, authorRequests] of this.pendingRequests) {
+            count += authorRequests.size;
+        }
+
         this.pendingRequests.clear();
 
         logger.info('RequestManager', `Todas las solicitudes limpiadas: ${count}`);
@@ -329,32 +478,47 @@ export class RequestManager {
      * 
      * @returns {{
      *   totalRequests: number,
-     *   byAction: Record<string, number>
+     *   totalAuthors: number,
+     *   byAction: Record<string, number>,
+     *   averageRequestsPerAuthor: number
      * }} Estadísticas de solicitudes
      * 
      * @example
      * ```typescript
      * const stats = requestManager.getStats();
      * console.log(`Solicitudes activas: ${stats.totalRequests}`);
+     * console.log(`Usuarios con solicitudes: ${stats.totalAuthors}`);
+     * console.log(`Promedio por usuario: ${stats.averageRequestsPerAuthor.toFixed(2)}`);
      * ```
      */
-
     getStats(): {
         totalRequests: number;
+        totalAuthors: number;
         byAction: Record<string, number>;
+        averageRequestsPerAuthor: number;
     } {
+        let totalRequests = 0;
         const byAction: Record<string, number> = {};
 
-        for (const [, request] of this.pendingRequests) {
-            if (!byAction[request.action]) {
-                byAction[request.action] = 0;
+        for (const [, authorRequests] of this.pendingRequests) {
+            for (const [, request] of authorRequests) {
+                totalRequests++;
+
+                if (!byAction[request.action]) {
+                    byAction[request.action] = 0;
+                }
+                byAction[request.action]++;
             }
-            byAction[request.action]++;
         }
 
+        const totalAuthors = this.pendingRequests.size;
+        const averageRequestsPerAuthor = totalAuthors > 0 ? totalRequests / totalAuthors : 0;
+
         return {
-            totalRequests: this.pendingRequests.size,
-            byAction
+            totalRequests,
+            totalAuthors,
+            byAction,
+            averageRequestsPerAuthor
         };
     }
 
@@ -370,7 +534,6 @@ export class RequestManager {
      * });
      * ```
      */
-
     destroy(): void {
         clearInterval(this.cleanupInterval);
         this.clearAllRequests();

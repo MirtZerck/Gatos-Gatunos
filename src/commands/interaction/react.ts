@@ -128,20 +128,32 @@ export const react: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
+            // ✅ PASO 1: Obtener datos (SÍNCRONO)
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
-            // Validaciones rápidas (solo si hay target)
+            // ✅ PASO 2: Validaciones SÍNCRONAS (solo si hay target)
             if (target) {
-                Validators.validateNotSelf(author, target);
-                Validators.validateNotBot(target);
+                try {
+                    Validators.validateNotSelf(author, target);
+                    Validators.validateNotBot(target);
+                } catch (error) {
+                    if (error instanceof CommandError) {
+                        await interaction.reply({ 
+                            content: error.userMessage || '❌ Validación fallida',
+                            ephemeral: true 
+                        });
+                        return;
+                    }
+                    throw error;
+                }
             }
 
-            // ✅ CRÍTICO: Defer INMEDIATAMENTE después de validaciones
+            // ✅ PASO 3: DEFER INMEDIATO (después de validaciones síncronas)
             await interaction.deferReply();
 
-            // Obtener GIF (operación lenta)
+            // ✅ PASO 4: Operación asíncrona (obtener GIF - ya tenemos 15 minutos)
             await handleReaction(interaction, subcommand, author, target);
 
         } catch (error) {
@@ -191,10 +203,10 @@ async function handleReaction(
     target: any | null
 ): Promise<void> {
     try {
-        // Obtener GIF de Tenor (operación lenta)
+        // ✅ Obtener GIF de Tenor (operación lenta, pero ya hicimos defer)
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
 
-        // Determinar mensaje según si hay target o no
+        // ✅ Determinar mensaje según si hay target o no
         const message = target
             ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
             : MESSAGES_SOLO[action](author.displayName);
@@ -204,7 +216,7 @@ async function handleReaction(
             .setImage(gifURL)
             .setColor(COLORS.INTERACTION);
 
-        // Ya hicimos defer, usar editReply
+        // ✅ Ya hicimos defer, usar editReply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         throw new CommandError(
@@ -224,10 +236,10 @@ async function handleReactionPrefix(
     const loadingMsg = await message.reply('🔄 Cargando GIF...');
 
     try {
-        // Obtener GIF de Tenor
+        // ✅ Obtener GIF de Tenor
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
 
-        // Determinar mensaje según si hay target o no
+        // ✅ Determinar mensaje según si hay target o no
         const messageText = target
             ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
             : MESSAGES_SOLO[action](author.displayName);

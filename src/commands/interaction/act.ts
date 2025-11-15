@@ -6,7 +6,6 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
-    ComponentType
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -14,6 +13,8 @@ import { getRandomGif } from '../../utils/tenor.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
+import { BotClient } from '../../types/BotClient.js';
+import { logger } from '../../utils/logger.js';
 
 const ACTION_QUERIES = {
     dance: 'anime dance',
@@ -29,9 +30,7 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-// Acciones que requieren solicitud cuando hay usuario objetivo
 const REQUIRE_REQUEST_WITH_TARGET: ActionType[] = ['dance', 'sing', 'highfive'];
-// Acciones que siempre son directas
 const NO_REQUEST: ActionType[] = ['wave', 'bow', 'clap', 'cheer', 'salute', 'nod'];
 
 const REQUEST_MESSAGES: Partial<Record<ActionType, (author: string, target: string) => string>> = {
@@ -124,20 +123,32 @@ export const act: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
+            // ✅ PASO 1: Obtener datos (SÍNCRONO)
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
-            // Validaciones rápidas
+            // ✅ PASO 2: Validaciones SÍNCRONAS (solo si hay target)
             if (target) {
-                Validators.validateNotSelf(author, target);
-                Validators.validateNotBot(target);
+                try {
+                    Validators.validateNotSelf(author, target);
+                    Validators.validateNotBot(target);
+                } catch (error) {
+                    if (error instanceof CommandError) {
+                        await interaction.reply({ 
+                            content: error.userMessage || '❌ Validación fallida',
+                            ephemeral: true 
+                        });
+                        return;
+                    }
+                    throw error;
+                }
             }
 
-            // ✅ CRÍTICO: Defer INMEDIATAMENTE
+            // ✅ PASO 3: DEFER INMEDIATO
             await interaction.deferReply();
 
-            // Decidir si es solicitud o acción directa
+            // ✅ PASO 4: Decidir flujo (ya tenemos 15 minutos)
             if (target && REQUIRE_REQUEST_WITH_TARGET.includes(subcommand)) {
                 await handleRequestAction(interaction, subcommand, author, target);
             } else {
@@ -187,7 +198,7 @@ export const act: HybridCommand = {
     },
 };
 
-// ==================== HANDLERS PARA ACCIONES DIRECTAS ====================
+// ==================== ACCIONES DIRECTAS ====================
 
 async function handleDirectAction(
     interaction: ChatInputCommandInteraction,
@@ -210,7 +221,6 @@ async function handleDirectAction(
             .setImage(gifURL)
             .setColor(COLORS.INTERACTION);
 
-        // Ya hicimos defer, usar editReply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
@@ -246,7 +256,7 @@ async function handleDirectActionPrefix(
     }
 }
 
-// ==================== HANDLERS PARA SOLICITUDES CON BOTONES ====================
+// ==================== SOLICITUDES CON BOTONES ====================
 
 async function handleRequestAction(
     interaction: ChatInputCommandInteraction,
@@ -254,113 +264,105 @@ async function handleRequestAction(
     author: any,
     target: any
 ): Promise<void> {
-    // Crear embed de solicitud
+    const requestManager = (interaction.client as BotClient).requestManager;
+    
+    // ✅ Verificar si ya tiene una solicitud pendiente CON ESTE USUARIO ESPECÍFICO
+    if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
+        const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
+        const minutes = Math.ceil(remainingTime / 60000);
+        
+        await interaction.editReply({
+            content: `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
+                    `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
+        });
+        return;
+    }
+
+    // ✅ Mostrar lista de solicitudes activas si tiene otras (opcional - para informar al usuario)
+    if (requestManager && requestManager.hasPendingRequest(author.id)) {
+        const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
+        const otherRequests = allRequests.filter(r => r.targetId !== target.id);
+        
+        if (otherRequests.length > 0) {
+            // Mostrar aviso informativo pero permitir continuar
+            logger.debug(
+                'interact',
+                `${author.tag} tiene ${otherRequests.length} solicitud(es) adicional(es) activa(s)`
+            );
+        }
+    }
+
+    // ✅ Crear embed de solicitud
     const requestEmbed = new EmbedBuilder()
+        .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere ${ACTION_NAMES[action]} contigo.\n\n¿Aceptas?`
+            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
         )
         .setColor(COLORS.INFO)
+        .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
         .setTimestamp();
 
     const buttons = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('accept')
+                .setCustomId(`interact_accept_${action}`)
                 .setLabel('Aceptar')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅'),
             new ButtonBuilder()
-                .setCustomId('reject')
+                .setCustomId(`interact_reject_${action}`)
                 .setLabel('Rechazar')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('❌')
         );
 
-    // Mostrar mensaje con botones (ya hicimos defer, usar editReply)
+    // ✅ Enviar mensaje (ya tenemos defer, usamos editReply)
     const message = await interaction.editReply({
         embeds: [requestEmbed],
         components: [buttons]
     });
 
-    // Crear collector para respuestas
-    try {
-        const collector = message.createMessageComponentCollector({
-            componentType: ComponentType.Button,
-            time: 30000, // 30 segundos
-            filter: (i) => i.user.id === target.id
-        });
+    // ✅ Registrar en RequestManager (10 minutos = 600000ms)
+    if (requestManager) {
+        try {
+            requestManager.createRequest(
+                author.id,
+                target.id,
+                action,
+                message.id,
+                interaction.id,
+                600000 // 10 minutos
+            );
+        } catch (error) {
+            logger.error('interact', 'Error creando solicitud en RequestManager', error);
+        }
+    }
 
-        collector.on('collect', async (buttonInteraction) => {
-            // Responder al botón inmediatamente
-            await buttonInteraction.deferUpdate();
-
-            if (buttonInteraction.customId === 'accept') {
-                // Usuario aceptó - obtener GIF y mostrar
-                try {
-                    const gifURL = await getRandomGif(ACTION_QUERIES[action]);
-                    const successMessage = MESSAGES_WITH_TARGET[action]!(author.displayName, target.displayName);
-
-                    const resultEmbed = new EmbedBuilder()
-                        .setDescription(successMessage)
-                        .setImage(gifURL)
-                        .setColor(COLORS.INTERACTION)
-                        .setTimestamp();
-
-                    await interaction.editReply({
-                        embeds: [resultEmbed],
-                        components: []
-                    });
-                } catch (error) {
-                    throw new CommandError(
-                        ErrorType.API_ERROR,
-                        'Error obteniendo GIF de Tenor',
-                        '❌ No se pudo obtener el GIF.'
-                    );
-                }
-            } else {
-                // Usuario rechazó
-                const rejectEmbed = new EmbedBuilder()
-                    .setDescription(
-                        `${target.displayName} rechazó la solicitud de **${ACTION_NAMES[action]}** de ${author.displayName}. 💔`
-                    )
-                    .setColor(COLORS.DANGER)
-                    .setTimestamp();
-
-                await interaction.editReply({
-                    embeds: [rejectEmbed],
-                    components: []
-                });
-            }
-
-            collector.stop();
-        });
-
-        collector.on('end', async (collected) => {
-            // Si no hubo respuesta (timeout)
-            if (collected.size === 0) {
+    // ✅ Timeout manual de 10 minutos
+    setTimeout(async () => {
+        try {
+            // Verificar si el mensaje todavía tiene componentes (no fue respondido)
+            const currentMessage = await interaction.fetchReply();
+            if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
                     .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
                     .setColor(COLORS.WARNING)
                     .setTimestamp();
 
-                try {
-                    await interaction.editReply({
-                        embeds: [timeoutEmbed],
-                        components: []
-                    });
-                } catch {
-                    // Ignorar errores de edición
+                await interaction.editReply({
+                    embeds: [timeoutEmbed],
+                    components: []
+                });
+
+                // Limpiar del RequestManager
+                if (requestManager) {
+                    requestManager.resolveRequestWith(author.id, target.id);
                 }
             }
-        });
-
-    } catch (collectorError) {
-        throw new CommandError(
-            ErrorType.UNKNOWN,
-            'Error en el collector de botones',
-            '❌ Hubo un error procesando la respuesta.'
-        );
-    }
+        } catch {
+            // Ignorar errores (el mensaje pudo haber sido eliminado)
+        }
+    }, 600000); // 10 minutos
 }
 
 async function handleRequestActionPrefix(
@@ -369,22 +371,51 @@ async function handleRequestActionPrefix(
     author: any,
     target: any
 ): Promise<void> {
+    const requestManager = (message.client as BotClient).requestManager;
+    
+    // ✅ Verificar solicitud pendiente CON ESTE USUARIO ESPECÍFICO
+    if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
+        const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
+        const minutes = Math.ceil(remainingTime / 60000);
+        
+        await message.reply(
+            `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
+            `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
+        );
+        return;
+    }
+
+    // ✅ Aviso informativo de otras solicitudes activas (opcional)
+    if (requestManager && requestManager.hasPendingRequest(author.id)) {
+        const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
+        const otherRequests = allRequests.filter(r => r.targetId !== target.id);
+        
+        if (otherRequests.length > 0) {
+            logger.debug(
+                'interact',
+                `${author.tag} tiene ${otherRequests.length} solicitud(es) adicional(es) activa(s)`
+            );
+        }
+    }
+
     const requestEmbed = new EmbedBuilder()
+        .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere ${ACTION_NAMES[action]} contigo.\n\n¿Aceptas?`
+            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
         )
         .setColor(COLORS.INFO)
+        .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
         .setTimestamp();
 
     const buttons = new ActionRowBuilder<ButtonBuilder>()
         .addComponents(
             new ButtonBuilder()
-                .setCustomId('accept')
+                .setCustomId(`interact_accept_${action}`)
                 .setLabel('Aceptar')
                 .setStyle(ButtonStyle.Success)
                 .setEmoji('✅'),
             new ButtonBuilder()
-                .setCustomId('reject')
+                .setCustomId(`interact_reject_${action}`)
                 .setLabel('Rechazar')
                 .setStyle(ButtonStyle.Danger)
                 .setEmoji('❌')
@@ -395,69 +426,43 @@ async function handleRequestActionPrefix(
         components: [buttons]
     });
 
-    const collector = requestMessage.createMessageComponentCollector({
-        componentType: ComponentType.Button,
-        time: 30000,
-        filter: (i) => i.user.id === target.id
-    });
+    // ✅ Registrar en RequestManager (10 minutos)
+    if (requestManager) {
+        try {
+            requestManager.createRequest(
+                author.id,
+                target.id,
+                action,
+                requestMessage.id,
+                message.id,
+                600000 // 10 minutos
+            );
+        } catch (error) {
+            logger.error('interact', 'Error creando solicitud en RequestManager', error);
+        }
+    }
 
-    collector.on('collect', async (buttonInteraction) => {
-        await buttonInteraction.deferUpdate();
-
-        if (buttonInteraction.customId === 'accept') {
-            try {
-                const gifURL = await getRandomGif(ACTION_QUERIES[action]);
-                const successMessage = MESSAGES_WITH_TARGET[action]!(author.displayName, target.displayName);
-
-                const resultEmbed = new EmbedBuilder()
-                    .setDescription(successMessage)
-                    .setImage(gifURL)
-                    .setColor(COLORS.INTERACTION)
+    // ✅ Timeout manual de 10 minutos
+    setTimeout(async () => {
+        try {
+            const currentMessage = await message.channel.messages.fetch(requestMessage.id);
+            if (currentMessage.components.length > 0) {
+                const timeoutEmbed = new EmbedBuilder()
+                    .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                    .setColor(COLORS.WARNING)
                     .setTimestamp();
 
-                await requestMessage.edit({
-                    embeds: [resultEmbed],
-                    components: []
-                });
-            } catch (error) {
-                throw new CommandError(
-                    ErrorType.API_ERROR,
-                    'Error obteniendo GIF de Tenor',
-                    '❌ No se pudo obtener el GIF.'
-                );
-            }
-        } else {
-            const rejectEmbed = new EmbedBuilder()
-                .setDescription(
-                    `${target.displayName} rechazó la solicitud de **${ACTION_NAMES[action]}** de ${author.displayName}. 💔`
-                )
-                .setColor(COLORS.DANGER)
-                .setTimestamp();
-
-            await requestMessage.edit({
-                embeds: [rejectEmbed],
-                components: []
-            });
-        }
-
-        collector.stop();
-    });
-
-    collector.on('end', async (collected) => {
-        if (collected.size === 0) {
-            const timeoutEmbed = new EmbedBuilder()
-                .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
-                .setColor(COLORS.WARNING)
-                .setTimestamp();
-
-            try {
                 await requestMessage.edit({
                     embeds: [timeoutEmbed],
                     components: []
                 });
-            } catch {
-                // Ignorar
+
+                if (requestManager) {
+                    requestManager.resolveRequestWith(author.id, target.id);
+                }
             }
+        } catch {
+            // Ignorar
         }
-    });
+    }, 600000); // 10 minutos
 }

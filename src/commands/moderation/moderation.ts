@@ -102,9 +102,22 @@ export const moderation: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            Validators.validateInGuild(interaction);
+            // ✅ PASO 1: Verificación SÍNCRONA de servidor
+            if (!interaction.guild) {
+                await interaction.reply({
+                    content: '❌ Este comando solo funciona en servidores.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            // ✅ PASO 2: Obtener datos (SÍNCRONO)
             const subcommand = interaction.options.getSubcommand();
 
+            // ✅ PASO 3: DEFER INMEDIATO (antes de validaciones asíncronas)
+            await interaction.deferReply();
+
+            // ✅ PASO 4: Ejecutar comando correspondiente (ya tenemos 15 minutos)
             switch (subcommand) {
                 case 'kick':
                     await handleKickSlash(interaction);
@@ -241,7 +254,7 @@ async function executeKick(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-    // ✅ PASO 1: Validaciones rápidas (síncronas)
+    // ✅ VALIDACIONES (ya tenemos defer si es interacción)
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
@@ -254,12 +267,7 @@ async function executeKick(
         throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es kickable', '❌ No puedo expulsar a este usuario.');
     }
 
-    // ✅ PASO 2: DEFER INMEDIATO (antes de operaciones lentas)
-    if (isInteraction) {
-        await context.deferReply();
-    }
-
-    // ✅ PASO 3: Operaciones lentas (enviar DM, kick)
+    // ✅ Operaciones asíncronas (enviar DM, kick)
     try {
         // Intentar notificar al usuario (puede fallar si tiene DMs cerrados)
         try {
@@ -276,15 +284,15 @@ async function executeKick(
             // Ignorar si no se puede enviar DM
         }
 
-        // Ejecutar la acción de moderación
+        // ✅ Ejecutar la acción de moderación
         await target.kick(reason);
 
-        // ✅ PASO 4: Responder con el resultado
+        // ✅ Responder con el resultado
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario expulsado`)
             .setDescription(
-                `**Usuario:** ${target.user.displayName}\n` +
-                `**Moderador:** ${author.displayName}\n` +
+                `**Usuario:** ${target.user.tag}\n` +
+                `**Moderador:** ${author.tag}\n` +
                 `**Razón:** ${reason}`
             )
             .setColor(COLORS.SUCCESS)
@@ -310,7 +318,7 @@ async function executeBan(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-    // ✅ PASO 1: Validaciones rápidas
+    // ✅ VALIDACIONES
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
@@ -323,12 +331,7 @@ async function executeBan(
         throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es baneable', '❌ No puedo banear a este usuario.');
     }
 
-    // ✅ PASO 2: DEFER INMEDIATO
-    if (isInteraction) {
-        await context.deferReply();
-    }
-
-    // ✅ PASO 3: Operaciones lentas
+    // ✅ Operaciones asíncronas
     try {
         try {
             await target.send({
@@ -346,7 +349,6 @@ async function executeBan(
 
         await target.ban({ reason, deleteMessageSeconds: deleteMessageDays * 24 * 60 * 60 });
 
-        // ✅ PASO 4: Responder
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario baneado`)
             .setDescription(
@@ -378,7 +380,7 @@ async function executeTimeout(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-    // ✅ PASO 1: Validaciones rápidas
+    // ✅ VALIDACIONES
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
@@ -391,12 +393,7 @@ async function executeTimeout(
         throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es silenciable', '❌ No puedo silenciar a este usuario.');
     }
 
-    // ✅ PASO 2: DEFER INMEDIATO
-    if (isInteraction) {
-        await context.deferReply();
-    }
-
-    // ✅ PASO 3: Operaciones lentas
+    // ✅ Operaciones asíncronas
     try {
         const timeoutUntil = new Date(Date.now() + duration * 60 * 1000);
         await target.timeout(duration * 60 * 1000, reason);
@@ -420,7 +417,6 @@ async function executeTimeout(
             // Ignorar
         }
 
-        // ✅ PASO 4: Responder
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario silenciado`)
             .setDescription(
