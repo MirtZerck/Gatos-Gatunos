@@ -1,4 +1,4 @@
-import { FirebaseManager } from './FirebaseManager.js';
+import { FirebaseManager } from './FirebaseAdminManager.js';
 import { logger } from '../utils/logger.js';
 
 /**

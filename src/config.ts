@@ -14,14 +14,8 @@ const configSchema = z.object({
     // Tenor
     tenorApiKey: z.string().min(1, 'TENOR_API_KEY es requerido'),
 
-    // Firebase
-    firebaseApiKey: z.string().min(1, 'FIREBASE_API_KEY es requerido'),
-    firebaseAuthDomain: z.string().min(1, 'FIREBASE_AUTH_DOMAIN es requerido'),
-    firebaseDatabaseURL: z.string().min(1, 'FIREBASE_DATABASE_URL es requerido'),
-    firebaseProjectId: z.string().min(1, 'FIREBASE_PROJECT_ID es requerido'),
-    firebaseStorageBucket: z.string().min(1, 'FIREBASE_STORAGE_BUCKET es requerido'),
-    firebaseMessagingSenderId: z.string().min(1, 'FIREBASE_MESSAGING_SENDER_ID es requerido'),
-    firebaseAppId: z.string().min(1, 'FIREBASE_APP_ID es requerido'),
+    // Firebase Admin SDK
+    firebaseAdminSdk: z.string().min(1, 'FIREBASE_ADMIN_SDK es requerido'),
 
     // Environment
     environment: z.enum(['development', 'production']).default('development'),
@@ -39,14 +33,8 @@ function loadConfig() {
             // Tenor
             tenorApiKey: process.env.TENOR_API_KEY,
 
-            // Firebase
-            firebaseApiKey: process.env.FIREBASE_API_KEY,
-            firebaseAuthDomain: process.env.FIREBASE_AUTH_DOMAIN,
-            firebaseDatabaseURL: process.env.FIREBASE_DATABASE_URL,
-            firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
-            firebaseStorageBucket: process.env.FIREBASE_STORAGE_BUCKET,
-            firebaseMessagingSenderId: process.env.FIREBASE_MESSAGING_SENDER_ID,
-            firebaseAppId: process.env.FIREBASE_APP_ID,
+            // Firebase Admin SDK
+            firebaseAdminSdk: process.env.FIREBASE_ADMIN_SDK,
 
             // Environment
             environment: process.env.NODE_ENV,
@@ -76,14 +64,6 @@ export const config = loadConfig();
 export type Config = z.infer<typeof configSchema>;
 
 /**
- * Configuración de Firebase extraída para FirebaseManager
+ * Configuración de Firebase Admin SDK parseada
  */
-export const firebaseConfig = {
-    apiKey: config.firebaseApiKey,
-    authDomain: config.firebaseAuthDomain,
-    databaseURL: config.firebaseDatabaseURL,
-    projectId: config.firebaseProjectId,
-    storageBucket: config.firebaseStorageBucket,
-    messagingSenderId: config.firebaseMessagingSenderId,
-    appId: config.firebaseAppId
-};
+export const firebaseAdminConfig = JSON.parse(config.firebaseAdminSdk);

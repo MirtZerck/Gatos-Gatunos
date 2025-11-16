@@ -3,7 +3,7 @@ import { Command } from "./Command.js";
 import { CommandManager } from "../managers/CommandManager.js";
 import { CooldownManager } from "../managers/CooldownManager.js";
 import { RequestManager } from "../managers/RequestManager.js";
-import { FirebaseManager } from "../managers/FirebaseManager.js";
+import { FirebaseAdminManager } from "../managers/FirebaseAdminManager.js";
 import { InteractionStatsManager } from "../managers/InteractionStatsManager.js";
 
 export class BotClient extends Client {
@@ -11,7 +11,7 @@ export class BotClient extends Client {
     public commandManager?: CommandManager;
     public cooldownManager?: CooldownManager;
     public requestManager?: RequestManager;
-    public firebaseManager?: FirebaseManager;
+    public firebaseAdminManager?: FirebaseAdminManager;
     public interactionStatsManager?: InteractionStatsManager;
 
     constructor(options: any) {

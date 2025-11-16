@@ -1,10 +1,10 @@
 import { GatewayIntentBits } from "discord.js";
-import { config, firebaseConfig } from './config.js'
+import { config, firebaseAdminConfig } from './config.js'
 import { BotClient } from "./types/BotClient.js";
 import { CommandManager } from "./managers/CommandManager.js";
 import { CooldownManager } from "./managers/CooldownManager.js";
 import { RequestManager } from "./managers/RequestManager.js";
-import { FirebaseManager } from "./managers/FirebaseManager.js";
+import { FirebaseAdminManager } from "./managers/FirebaseAdminManager.js";
 import { InteractionStatsManager } from "./managers/InteractionStatsManager.js";
 import { EventManager } from "./managers/EventManager.js";
 import { logger } from './utils/logger.js';
@@ -21,19 +21,19 @@ async function main() {
         ]
     });
 
-    // ✅ Inicializar Firebase PRIMERO
-    logger.info('Bot', '🔥 Conectando con Firebase...');
-    const firebaseManager = new FirebaseManager(firebaseConfig);
+    // ✅ Inicializar Firebase Admin SDK PRIMERO
+    logger.info('Bot', '🔥 Conectando con Firebase Admin SDK...');
+    const firebaseAdminManager = new FirebaseAdminManager(firebaseAdminConfig);
     try {
-        await firebaseManager.initialize();
-        client.firebaseManager = firebaseManager;
+        await firebaseAdminManager.initialize();
+        client.firebaseAdminManager = firebaseAdminManager;
 
         // Inicializar InteractionStatsManager
-        const interactionStatsManager = new InteractionStatsManager(firebaseManager);
+        const interactionStatsManager = new InteractionStatsManager(firebaseAdminManager);
         client.interactionStatsManager = interactionStatsManager;
         logger.info('Bot', '✅ Sistema de estadísticas de interacciones listo');
     } catch (error) {
-        logger.error('Bot', '❌ Error conectando con Firebase', error);
+        logger.error('Bot', '❌ Error conectando con Firebase Admin SDK', error);
         logger.warn('Bot', '⚠️ El bot continuará sin estadísticas de interacciones');
     }
 
@@ -73,8 +73,8 @@ async function main() {
         logger.info('Bot', 'Cerrando bot...');
         cooldownManager.destroy();
         requestManager.destroy();
-        if (firebaseManager) {
-            firebaseManager.destroy();
+        if (firebaseAdminManager) {
+            firebaseAdminManager.destroy();
         }
         client.destroy();
         process.exit(0);
