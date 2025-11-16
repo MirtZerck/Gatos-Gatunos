@@ -1,10 +1,10 @@
-import { FirebaseManager } from './FirebaseAdminManager.js';
+import { FirebaseAdminManager } from './FirebaseAdminManager.js';
 import { logger } from '../utils/logger.js';
 
 /**
  * Tipos de interacciones que se rastrean
  */
-export type TrackedInteractionType = 
+export type TrackedInteractionType =
     // Interact command - íntimas/afectivas
     | 'hug' | 'kiss' | 'pat' | 'cuddle'
     // Act command - colaborativas/positivas
@@ -42,7 +42,7 @@ export interface FormattedStats {
  * ```
  */
 export class InteractionStatsManager {
-    private firebaseManager: FirebaseManager;
+    private firebaseAdminManager: FirebaseAdminManager;
 
     /**
      * Interacciones que se rastrean (positivas/significativas)
@@ -50,10 +50,10 @@ export class InteractionStatsManager {
     private readonly TRACKED_INTERACTIONS: Set<TrackedInteractionType> = new Set([
         // Interact - íntimas/afectivas (todas las que requieren solicitud)
         'hug', 'kiss', 'pat', 'cuddle',
-        
+
         // Act - colaborativas/positivas (las que requieren solicitud con target)
         'dance', 'sing', 'highfive',
-        
+
         // Act - amistosas (no requieren solicitud pero son positivas)
         'wave', 'bow', 'cheer', 'clap'
     ]);
@@ -96,8 +96,8 @@ export class InteractionStatsManager {
         clap: 'aplausos'
     };
 
-    constructor(firebaseManager: FirebaseManager) {
-        this.firebaseManager = firebaseManager;
+    constructor(firebaseManager: FirebaseAdminManager) {
+        this.firebaseAdminManager = firebaseManager;
     }
 
     /**
@@ -144,7 +144,7 @@ export class InteractionStatsManager {
         }
 
         try {
-            await this.firebaseManager.recordInteraction(userId1, userId2, interactionType);
+            await this.firebaseAdminManager.recordInteraction(userId1, userId2, interactionType);
             logger.debug(
                 'InteractionStats',
                 `✅ Interacción registrada: ${userId1} ↔ ${userId2} (${interactionType})`
@@ -181,13 +181,13 @@ export class InteractionStatsManager {
         userId2: string
     ): Promise<FormattedStats | null> {
         try {
-            const rawStats = await this.firebaseManager.getInteractionStats(userId1, userId2);
+            const rawStats = await this.firebaseAdminManager.getInteractionStats(userId1, userId2);
 
             if (!rawStats) {
                 return null;
             }
 
-            const topInteractions = await this.firebaseManager.getTopInteractions(
+            const topInteractions = await this.firebaseAdminManager.getTopInteractions(
                 userId1,
                 userId2,
                 5
@@ -250,14 +250,12 @@ export class InteractionStatsManager {
             return null;
         }
 
-        let description = `**${user1Name}** y **${user2Name}** han interactuado **${stats.total}** ${
-            stats.total === 1 ? 'vez' : 'veces'
-        }`;
+        let description = `**${user1Name}** y **${user2Name}** han interactuado **${stats.total}** ${stats.total === 1 ? 'vez' : 'veces'
+            }`;
 
         if (stats.relationshipDays > 0) {
-            description += ` en los últimos **${stats.relationshipDays}** ${
-                stats.relationshipDays === 1 ? 'día' : 'días'
-            }`;
+            description += ` en los últimos **${stats.relationshipDays}** ${stats.relationshipDays === 1 ? 'día' : 'días'
+                }`;
         }
 
         description += '.\n\n';
@@ -315,7 +313,7 @@ export class InteractionStatsManager {
      * @returns {Promise<boolean>} true si se eliminó
      */
     async clearStats(userId1: string, userId2: string): Promise<boolean> {
-        return await this.firebaseManager.clearInteractionStats(userId1, userId2);
+        return await this.firebaseAdminManager.clearInteractionStats(userId1, userId2);
     }
 
     /**
