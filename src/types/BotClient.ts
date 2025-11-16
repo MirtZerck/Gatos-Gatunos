@@ -5,6 +5,7 @@ import { CooldownManager } from "../managers/CooldownManager.js";
 import { RequestManager } from "../managers/RequestManager.js";
 import { FirebaseAdminManager } from "../managers/FirebaseAdminManager.js";
 import { InteractionStatsManager } from "../managers/InteractionStatsManager.js";
+import { CustomCommandManager } from "../managers/CustomCommandManager.js";
 
 export class BotClient extends Client {
     public commands: Collection<string, Command>;
@@ -13,6 +14,7 @@ export class BotClient extends Client {
     public requestManager?: RequestManager;
     public firebaseAdminManager?: FirebaseAdminManager;
     public interactionStatsManager?: InteractionStatsManager;
+    public customCommandManager?: CustomCommandManager;
 
     constructor(options: any) {
         super(options);

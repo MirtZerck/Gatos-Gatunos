@@ -32,6 +32,13 @@ async function main() {
         const interactionStatsManager = new InteractionStatsManager(firebaseAdminManager);
         client.interactionStatsManager = interactionStatsManager;
         logger.info('Bot', '✅ Sistema de estadísticas de interacciones listo');
+
+        // Inicializar CustomCommandManager
+        const { CustomCommandManager } = await import('./managers/CustomCommandManager.js');
+        const customCommandManager = new CustomCommandManager(firebaseAdminManager);
+        client.customCommandManager = customCommandManager;
+        logger.info('Bot', '✅ Sistema de comandos personalizados listo');
+
     } catch (error) {
         logger.error('Bot', '❌ Error conectando con Firebase Admin SDK', error);
         logger.warn('Bot', '⚠️ El bot continuará sin estadísticas de interacciones');
