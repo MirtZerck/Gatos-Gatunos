@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <title>La prima de luis</title>
+    <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+    <h1>
+        Colador Enterprise
+    </h1>
+    <hr>
+    <br> <br>
+    <h2>
+        Empezar encuesta
+    </h2>
+    <p id="pregunta">Pregunta</p>
+    <form name="contact" id="contact-form" method="post">
+        <label for="opcion1">Si</label>
+        <input type="radio" id="opcion1" name="SantiagoForm" value="si" />
+
+        <label for="opcion2">No</label> 
+        <input type="radio" id="opcion2" name="SantiagoForm" value="no" /> 
+
+        <button type="submit">Enviar</button>
+    </form>
+</body>
+<script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+<script>
+    const { createClient } = supabase
+    supabase = createClient("https://gbzehnhqpldxmrpstuag.supabase.co", "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdiemVobmhxcGxkeG1ycHN0dWFnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjI4MTkxMDEsImV4cCI6MjA3ODM5NTEwMX0.TcJhH_X_ZRmjDryvnE0uxoWwPsCGzjbO3LM_bu8FeII")
+    const form = document.querySelector('#contact-form')
+    form.addEventListener('submit', async (event) => {
+        event.preventDefault()
+
+        let submision = {}
+        
+        // Capturar el radio button seleccionado
+        const selectedRadio = form.querySelector('input[name="SantiagoForm"]:checked')
+        if (selectedRadio) {
+            submision[selectedRadio.name] = selectedRadio.value
+        }
+        
+        // Capturar otros inputs (text, select, textarea) si los hay
+        const otherInputs = form.querySelectorAll('input[type="text"], input[type="email"], select, textarea')
+        otherInputs.forEach(element => {
+            const { value, name } = element
+            if (value) {
+                submision[name] = value
+            }
+        })
+        
+        const { error, data } = await supabase.from('entries').insert([submision])
+
+        if (error) {
+            alert('qmal')
+        } else {
+            alert('Tu respuesta ha sido enviada correctamente')
+        }
+
+        // Limpiar el formulario
+        form.reset()
+
+    })
+</script>
+</html>
+
+<!-- tengo 2 problemas con mis comandos custom, 1. al llamar gestionar por prefijo, el bot no reconoce al autor del mensaje y suelta un mensaje diciendo "❌ Solo el moderador que abrió el menú puede usarlo.", otro error es que al usar el menú de gestión solo te permite aceptar, rechazar una vez, luego de eso si intentas aceptar, rechazar o pasar la siguiente página la aplicación crashea en su totalidad, teniendo que reiniciar manualmente -->

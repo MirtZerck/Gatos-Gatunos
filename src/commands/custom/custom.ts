@@ -319,8 +319,20 @@ async function handleGestionarSlash(interaction: ChatInputCommandInteraction): P
         return;
     }
 
-    // Iniciar navegación
-    await showProposalNavigation(interaction, proposals, 0, customManager);
+    // ⚡ PRE-CARGAR: Verificar qué comandos existen (una sola consulta)
+    const commandExistsCache = new Map<string, boolean>();
+    const uniqueCommandNames = [...new Set(proposals.map(p => p.commandName))];
+
+    // Consultar todos los comandos en paralelo
+    await Promise.all(
+        uniqueCommandNames.map(async (cmdName) => {
+            const exists = await customManager.commandExists(interaction.guild!.id, cmdName);
+            commandExistsCache.set(cmdName, exists);
+        })
+    );
+
+    // Iniciar navegación con cache pre-cargado
+    await showProposalNavigation(interaction, proposals, 0, customManager, commandExistsCache);
 }
 
 async function handleGestionarPrefix(message: Message): Promise<void> {
@@ -347,19 +359,33 @@ async function handleGestionarPrefix(message: Message): Promise<void> {
         return;
     }
 
-    // Enviar mensaje y iniciar navegación
+    // ✅ Enviar mensaje y iniciar navegación pasando el ID del autor ORIGINAL
     const reply = await message.reply('🔄 Cargando propuestas...');
-    await showProposalNavigationPrefix(reply, proposals, 0, customManager);
+    await showProposalNavigationPrefix(reply, proposals, 0, customManager, message.author.id);
 }
 
 async function showProposalNavigation(
     interaction: ChatInputCommandInteraction,
     proposals: any[],
     currentIndex: number,
-    customManager: any
+    customManager: any,
+    commandExistsCache?: Map<string, boolean>  // ✅ Cache para evitar consultas repetidas
 ): Promise<void> {
+    // ✅ Inicializar cache si no existe
+    if (!commandExistsCache) {
+        commandExistsCache = new Map<string, boolean>();
+    }
+
     const proposal = proposals[currentIndex];
-    const isNewCommand = !(await customManager.commandExists(interaction.guild!.id, proposal.commandName));
+
+    // ✅ Verificar cache antes de consultar Firebase
+    let isNewCommand: boolean;
+    if (commandExistsCache.has(proposal.commandName)) {
+        isNewCommand = !commandExistsCache.get(proposal.commandName)!;
+    } else {
+        isNewCommand = !(await customManager.commandExists(interaction.guild!.id, proposal.commandName));
+        commandExistsCache.set(proposal.commandName, !isNewCommand);
+    }
 
     const embed = createProposalManagementEmbed(
         proposal,
@@ -397,14 +423,13 @@ async function showProposalNavigation(
         components: [buttons]
     });
 
-    // Collector de botones
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000 // 10 minutos
+        time: 600000,
+        max: 1
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
-        // Verificar que sea el mismo usuario
         if (buttonInteraction.user.id !== interaction.user.id) {
             await buttonInteraction.reply({
                 content: '❌ Solo el moderador que abrió el menú puede usarlo.',
@@ -416,25 +441,33 @@ async function showProposalNavigation(
         await buttonInteraction.deferUpdate();
 
         try {
+            collector.stop('action_taken');
+
             if (buttonInteraction.customId === 'proposal_prev') {
-                await showProposalNavigation(interaction, proposals, currentIndex - 1, customManager);
+                await showProposalNavigation(interaction, proposals, currentIndex - 1, customManager, commandExistsCache);
             } else if (buttonInteraction.customId === 'proposal_next') {
-                await showProposalNavigation(interaction, proposals, currentIndex + 1, customManager);
+                await showProposalNavigation(interaction, proposals, currentIndex + 1, customManager, commandExistsCache);
             } else if (buttonInteraction.customId === 'proposal_accept') {
-                await processProposalAction(interaction, proposal, true, customManager, proposals);
+                await processProposalAction(interaction, proposal, true, customManager, proposals, commandExistsCache);
             } else if (buttonInteraction.customId === 'proposal_reject') {
-                await processProposalAction(interaction, proposal, false, customManager, proposals);
+                await processProposalAction(interaction, proposal, false, customManager, proposals, commandExistsCache);
             }
         } catch (error) {
             console.error('Error en collector:', error);
+            collector.stop('error');
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await interaction.editReply({ components: [] });
-        } catch {
-            // Ignorar si el mensaje fue eliminado
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await interaction.editReply({
+                    content: '⏰ El menú de gestión expiró por inactividad.',
+                    components: []
+                });
+            } catch {
+                // Mensaje eliminado
+            }
         }
     });
 }
@@ -444,7 +477,8 @@ async function processProposalAction(
     proposal: any,
     accept: boolean,
     customManager: any,
-    allProposals: any[]
+    allProposals: any[],
+    commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
     try {
         await customManager.processProposal(
@@ -454,16 +488,22 @@ async function processProposalAction(
             interaction.user
         );
 
-        // Notificar al usuario
-        await customManager.notifyUser(
+        // ✅ Actualizar cache si se aceptó
+        if (accept && commandExistsCache) {
+            commandExistsCache.set(proposal.commandName, true);
+        }
+
+        // ⚡ Notificación asíncrona (no bloqueante)
+        customManager.notifyUser(
             proposal.authorId,
             interaction.guild!,
             proposal,
             accept,
             interaction.channel as any
-        );
+        ).catch((err: any) => {
+            console.error('Error enviando notificación (no crítico):', err);
+        });
 
-        // Actualizar lista
         const remainingProposals = allProposals.filter(p => p.id !== proposal.id);
 
         if (remainingProposals.length === 0) {
@@ -482,9 +522,8 @@ async function processProposalAction(
                 components: []
             });
         } else {
-            // Mostrar siguiente propuesta
             const nextIndex = Math.min(0, remainingProposals.length - 1);
-            await showProposalNavigation(interaction, remainingProposals, nextIndex, customManager);
+            await showProposalNavigation(interaction, remainingProposals, nextIndex, customManager, commandExistsCache);
         }
     } catch (error) {
         throw new CommandError(
@@ -499,7 +538,10 @@ async function showProposalNavigationPrefix(
     message: Message,
     proposals: any[],
     currentIndex: number,
-    customManager: any
+    customManager: any,
+    moderatorId: string,  // ✅ REQUERIDO, no opcional
+    commandExistsCache?: Map<string, boolean>
+
 ): Promise<void> {
     const proposal = proposals[currentIndex];
     const isNewCommand = !(await customManager.commandExists(message.guild!.id, proposal.commandName));
@@ -541,13 +583,24 @@ async function showProposalNavigationPrefix(
         components: [buttons]
     });
 
+    // ✅ Los collectors previos se detienen automáticamente al editar el mensaje
+    // No necesitamos verificación manual ya que usamos max: 1
+
     const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000
+        time: 600000, // 10 minutos
+        max: 1 // ✅ CRÍTICO: Solo aceptar 1 interacción antes de recrear el collector
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
-        if (buttonInteraction.user.id !== message.author.id) {
+        // 🔍 DEBUG: Log para verificar IDs
+        console.log('🔍 DEBUG - Verificación de moderador:');
+        console.log('  buttonInteraction.user.id:', buttonInteraction.user.id);
+        console.log('  moderatorId esperado:', moderatorId);
+        console.log('  ¿Coinciden?', buttonInteraction.user.id === moderatorId);
+
+        // ✅ Verificar contra el moderador correcto
+        if (buttonInteraction.user.id !== moderatorId) {
             await buttonInteraction.reply({
                 content: '❌ Solo el moderador que abrió el menú puede usarlo.',
                 flags: MessageFlags.Ephemeral
@@ -558,25 +611,36 @@ async function showProposalNavigationPrefix(
         await buttonInteraction.deferUpdate();
 
         try {
+            // ✅ CRÍTICO: Detener el collector inmediatamente después de procesar
+            collector.stop('action_taken');
+
             if (buttonInteraction.customId === 'proposal_prev') {
-                await showProposalNavigationPrefix(message, proposals, currentIndex - 1, customManager);
+                await showProposalNavigationPrefix(message, proposals, currentIndex - 1, customManager, moderatorId);
             } else if (buttonInteraction.customId === 'proposal_next') {
-                await showProposalNavigationPrefix(message, proposals, currentIndex + 1, customManager);
+                await showProposalNavigationPrefix(message, proposals, currentIndex + 1, customManager, moderatorId);
             } else if (buttonInteraction.customId === 'proposal_accept') {
-                await processProposalActionPrefix(message, proposal, true, customManager, proposals);
+                await processProposalActionPrefix(message, proposal, true, customManager, proposals, moderatorId);
             } else if (buttonInteraction.customId === 'proposal_reject') {
-                await processProposalActionPrefix(message, proposal, false, customManager, proposals);
+                await processProposalActionPrefix(message, proposal, false, customManager, proposals, moderatorId);
             }
         } catch (error) {
             console.error('Error en collector:', error);
+            // ✅ Asegurar que el collector se detenga incluso si hay error
+            collector.stop('error');
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await message.edit({ components: [] });
-        } catch {
-            // Ignorar
+    collector.on('end', async (collected, reason) => {
+        // ✅ Solo limpiar componentes si expiró por timeout (no por acción)
+        if (reason === 'time') {
+            try {
+                await message.edit({
+                    content: '⏰ El menú de gestión expiró por inactividad.',
+                    components: []
+                });
+            } catch {
+                // Ignorar si el mensaje fue eliminado
+            }
         }
     });
 }
@@ -586,23 +650,37 @@ async function processProposalActionPrefix(
     proposal: any,
     accept: boolean,
     customManager: any,
-    allProposals: any[]
+    allProposals: any[],
+    moderatorId: string,
+    commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
+    console.log('🔍 DEBUG - processProposalActionPrefix');
+    console.log('  moderatorId recibido:', moderatorId);
+    console.log('  message.author.id:', message.author.id);
+
     try {
         await customManager.processProposal(
             message.guild!.id,
             proposal.id,
             accept,
-            message.author
+            { id: moderatorId, tag: message.author.tag }
         );
 
-        await customManager.notifyUser(
+        // ✅ Actualizar cache si se aceptó
+        if (accept && commandExistsCache) {
+            commandExistsCache.set(proposal.commandName, true);
+        }
+
+        // ⚡ Notificación asíncrona (no bloqueante)
+        customManager.notifyUser(
             proposal.authorId,
             message.guild!,
             proposal,
             accept,
             message.channel as any
-        );
+        ).catch((err: any) => {
+            console.error('Error enviando notificación (no crítico):', err);
+        });
 
         const remainingProposals = allProposals.filter(p => p.id !== proposal.id);
 
@@ -623,7 +701,7 @@ async function processProposalActionPrefix(
             });
         } else {
             const nextIndex = Math.min(0, remainingProposals.length - 1);
-            await showProposalNavigationPrefix(message, remainingProposals, nextIndex, customManager);
+            await showProposalNavigationPrefix(message, remainingProposals, nextIndex, customManager, moderatorId, commandExistsCache);
         }
     } catch (error) {
         await message.reply('❌ No se pudo procesar la propuesta. Intenta de nuevo.');
@@ -691,7 +769,7 @@ async function handleEditarPrefix(message: Message, args: string[]): Promise<voi
     }
 
     const reply = await message.reply('🔄 Cargando editor...');
-    await showEditNavigationPrefix(reply, commandName, values, 0, customManager);
+    await showEditNavigationPrefix(reply, commandName, values, 0, customManager, message.author.id);
 }
 
 async function showEditNavigation(
@@ -740,7 +818,8 @@ async function showEditNavigation(
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000
+        time: 600000,
+        max: 1 // ✅ Solo 1 interacción
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -755,6 +834,8 @@ async function showEditNavigation(
         await buttonInteraction.deferUpdate();
 
         try {
+            collector.stop('action_taken');
+
             if (buttonInteraction.customId === 'edit_prev') {
                 await showEditNavigation(interaction, commandName, values, currentIndex - 1, customManager);
             } else if (buttonInteraction.customId === 'edit_next') {
@@ -769,14 +850,20 @@ async function showEditNavigation(
             }
         } catch (error) {
             console.error('Error en editor:', error);
+            collector.stop('error');
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await interaction.editReply({ components: [] });
-        } catch {
-            // Ignorar
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await interaction.editReply({
+                    content: '⏰ El editor expiró por inactividad.',
+                    components: []
+                });
+            } catch {
+                // Ignorar
+            }
         }
     });
 }
@@ -812,7 +899,8 @@ async function confirmDeleteValue(
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 30000
+        time: 30000,
+        max: 1 // ✅ Solo 1 interacción
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -825,6 +913,8 @@ async function confirmDeleteValue(
         }
 
         await buttonInteraction.deferUpdate();
+
+        collector.stop('action_taken');
 
         if (buttonInteraction.customId === 'confirm_delete_value') {
             const success = await customManager.deleteCommandValue(
@@ -855,11 +945,16 @@ async function confirmDeleteValue(
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await interaction.editReply({ components: [] });
-        } catch {
-            // Ignorar
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await interaction.editReply({
+                    content: '⏰ Confirmación expirada.',
+                    components: []
+                });
+            } catch {
+                // Ignorar
+            }
         }
     });
 }
@@ -869,10 +964,9 @@ async function showEditNavigationPrefix(
     commandName: string,
     values: Record<string, string>,
     currentIndex: number,
-    customManager: any
+    customManager: any,
+    moderatorId: string  // ✅ REQUERIDO
 ): Promise<void> {
-    // Implementación similar a showEditNavigation pero para prefix
-    // (código casi idéntico, solo cambia message por interaction)
     const entries = Object.entries(values);
 
     if (currentIndex >= entries.length) {
@@ -913,11 +1007,12 @@ async function showEditNavigationPrefix(
 
     const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000
+        time: 600000,
+        max: 1
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
-        if (buttonInteraction.user.id !== message.author.id) {
+        if (buttonInteraction.user.id !== moderatorId) {
             await buttonInteraction.reply({
                 content: '❌ Solo el moderador que abrió el editor puede usarlo.',
                 flags: MessageFlags.Ephemeral
@@ -928,12 +1023,14 @@ async function showEditNavigationPrefix(
         await buttonInteraction.deferUpdate();
 
         try {
+            collector.stop('action_taken');
+
             if (buttonInteraction.customId === 'edit_prev') {
-                await showEditNavigationPrefix(message, commandName, values, currentIndex - 1, customManager);
+                await showEditNavigationPrefix(message, commandName, values, currentIndex - 1, customManager, moderatorId);
             } else if (buttonInteraction.customId === 'edit_next') {
-                await showEditNavigationPrefix(message, commandName, values, currentIndex + 1, customManager);
+                await showEditNavigationPrefix(message, commandName, values, currentIndex + 1, customManager, moderatorId);
             } else if (buttonInteraction.customId === 'edit_delete') {
-                // Similar confirmación
+                // Confirmar y eliminar directamente
                 const success = await customManager.deleteCommandValue(
                     message.guild!.id,
                     commandName,
@@ -943,6 +1040,12 @@ async function showEditNavigationPrefix(
                 if (success) {
                     await message.edit({
                         content: `✅ Valor eliminado del comando **${commandName}**.`,
+                        embeds: [],
+                        components: []
+                    });
+                } else {
+                    await message.edit({
+                        content: '❌ No se pudo eliminar el valor.',
                         embeds: [],
                         components: []
                     });
@@ -956,14 +1059,20 @@ async function showEditNavigationPrefix(
             }
         } catch (error) {
             console.error('Error en editor:', error);
+            collector.stop('error');
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await message.edit({ components: [] });
-        } catch {
-            // Ignorar
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await message.edit({
+                    content: '⏰ El editor expiró por inactividad.',
+                    components: []
+                });
+            } catch {
+                // Ignorar
+            }
         }
     });
 }
@@ -1019,7 +1128,8 @@ async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Pr
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 30000
+        time: 30000,
+        max: 1
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -1032,6 +1142,8 @@ async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Pr
         }
 
         await buttonInteraction.deferUpdate();
+
+        collector.stop('action_taken');
 
         if (buttonInteraction.customId === 'confirm_delete_command') {
             const success = await customManager.deleteCommand(interaction.guild!.id, commandName);
@@ -1058,11 +1170,16 @@ async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Pr
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await interaction.editReply({ components: [] });
-        } catch {
-            // Ignorar
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await interaction.editReply({
+                    content: '⏰ Confirmación expirada.',
+                    components: []
+                });
+            } catch {
+                // Ignorar
+            }
         }
     });
 }
@@ -1119,7 +1236,8 @@ async function handleEliminarPrefix(message: Message, args: string[]): Promise<v
 
     const collector = reply.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 30000
+        time: 30000,
+        max: 1
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -1132,6 +1250,8 @@ async function handleEliminarPrefix(message: Message, args: string[]): Promise<v
         }
 
         await buttonInteraction.deferUpdate();
+
+        collector.stop('action_taken');
 
         if (buttonInteraction.customId === 'confirm_delete_command') {
             const success = await customManager.deleteCommand(message.guild!.id, commandName);
@@ -1158,11 +1278,16 @@ async function handleEliminarPrefix(message: Message, args: string[]): Promise<v
         }
     });
 
-    collector.on('end', async () => {
-        try {
-            await reply.edit({ components: [] });
-        } catch {
-            // Ignorar
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await reply.edit({
+                    content: '⏰ Confirmación expirada.',
+                    components: []
+                });
+            } catch {
+                // Ignorar
+            }
         }
     });
 }
