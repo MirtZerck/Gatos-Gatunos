@@ -6,7 +6,7 @@
   
     "scripts": {
       "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
-      "build": "npm run build",
+      "build": "tsc",
       "start": "npm run build && node dist/index.js",
       "deploy:dev": "node --loader ts-node/esm src/deploy-slash-commands.ts",
       "deploy:prod": "node dist/deploy-slash-commands.js",
