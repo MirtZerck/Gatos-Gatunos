@@ -161,6 +161,76 @@ export class InteractionStatsManager {
     }
 
     /**
+     * 🆕 Obtiene el conteo específico de un tipo de interacción.
+     * 
+     * @async
+     * @param {string} userId1 - ID del primer usuario
+     * @param {string} userId2 - ID del segundo usuario
+     * @param {string} interactionType - Tipo de interacción específico
+     * @returns {Promise<number>} Cantidad de veces que han tenido esa interacción
+     * 
+     * @example
+     * ```typescript
+     * const hugCount = await statsManager.getSpecificCount('user123', 'user456', 'hug');
+     * // Retorna: 15 (solo abrazos, no incluye besos, etc.)
+     * ```
+     */
+    async getSpecificCount(
+        userId1: string,
+        userId2: string,
+        interactionType: string
+    ): Promise<number> {
+        try {
+            const rawStats = await this.firebaseAdminManager.getInteractionStats(userId1, userId2);
+
+            if (!rawStats || !rawStats.byType) {
+                return 0;
+            }
+
+            return rawStats.byType[interactionType] || 0;
+        } catch (error) {
+            logger.error('InteractionStats', 'Error obteniendo conteo específico', error);
+            return 0;
+        }
+    }
+
+    /**
+     * 🆕 Genera una línea de estadísticas específica para UN tipo de interacción.
+     * 
+     * @async
+     * @param {string} userId1 - ID del primer usuario
+     * @param {string} userId2 - ID del segundo usuario
+     * @param {string} interactionType - Tipo de interacción
+     * @returns {Promise<string | null>} Línea breve con emoji o null
+     * 
+     * @example
+     * ```typescript
+     * const briefHug = await statsManager.getSpecificBriefStats('user123', 'user456', 'hug');
+     * // Retorna: "🤗 15 abrazos compartidos"
+     * ```
+     */
+    async getSpecificBriefStats(
+        userId1: string,
+        userId2: string,
+        interactionType: string
+    ): Promise<string | null> {
+        if (!this.shouldTrack(interactionType)) {
+            return null;
+        }
+
+        const count = await this.getSpecificCount(userId1, userId2, interactionType);
+
+        if (count === 0) {
+            return null;
+        }
+
+        const emoji = this.INTERACTION_EMOJIS[interactionType as TrackedInteractionType];
+        const name = this.INTERACTION_NAMES[interactionType as TrackedInteractionType];
+
+        return `${emoji} **${count}** ${name} ${count === 1 ? 'compartido' : 'compartidos'}`;
+    }
+
+    /**
      * Obtiene estadísticas formateadas entre dos usuarios.
      * 
      * @async

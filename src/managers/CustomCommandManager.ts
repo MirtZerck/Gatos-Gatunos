@@ -181,8 +181,21 @@ export class CustomCommandManager {
     }
 
     /**
-     * Procesa una propuesta (acepta o rechaza)
-     */
+      * Procesa una propuesta (acepta o rechaza) y ELIMINA la propuesta de Firebase.
+      * 
+      * @async
+      * @param {string} guildId - ID del servidor
+      * @param {string} proposalId - ID de la propuesta
+      * @param {boolean} accept - true para aceptar, false para rechazar
+      * @param {User} moderator - Usuario moderador que procesa
+      * @returns {Promise<boolean>} true si se procesó correctamente
+      * 
+      * @example
+      * ```typescript
+      * await manager.processProposal(guildId, proposalId, true, moderator);
+      * // La propuesta se acepta y se ELIMINA de Firebase
+      * ```
+      */
     async processProposal(
         guildId: string,
         proposalId: string,
@@ -205,7 +218,7 @@ export class CustomCommandManager {
             const db = this.firebaseManager['database'];
 
             if (accept) {
-                // Añadir al comando
+                // ✅ Añadir al comando
                 const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${proposal.commandName}`);
                 const snapshot = await commandRef.get();
 
@@ -224,18 +237,13 @@ export class CustomCommandManager {
                 );
             }
 
-            // Actualizar propuesta
+            // 🗑️ ELIMINAR la propuesta de Firebase (aceptada o rechazada)
             const proposalRef = db!.ref(`servers/${guildId}/proposals/${proposalId}`);
-            await proposalRef.update({
-                status: accept ? ProposalStatus.ACCEPTED : ProposalStatus.REJECTED,
-                processedBy: moderator.id,
-                processedByTag: moderator.tag,
-                processedAt: Date.now()
-            });
+            await proposalRef.remove();
 
             logger.info(
                 'CustomCommandManager',
-                `Propuesta ${accept ? 'aceptada' : 'rechazada'} por ${moderator.tag}`
+                `Propuesta ${accept ? 'aceptada' : 'rechazada'} y ELIMINADA por ${moderator.tag}`
             );
 
             return true;
