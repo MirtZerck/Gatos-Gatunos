@@ -15,6 +15,7 @@ import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHa
 import { config } from '../../config.js';
 import { BotClient } from '../../types/BotClient.js';
 import { logger } from '../../utils/logger.js';
+import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 
 const ACTION_QUERIES = {
     dance: 'anime dance',
@@ -135,9 +136,9 @@ export const act: HybridCommand = {
                     Validators.validateNotBot(target);
                 } catch (error) {
                     if (error instanceof CommandError) {
-                        await interaction.reply({ 
+                        await interaction.reply({
                             content: error.userMessage || '❌ Validación fallida',
-                            ephemeral: true 
+                            ephemeral: true
                         });
                         return;
                     }
@@ -179,7 +180,19 @@ export const act: HybridCommand = {
                 return;
             }
 
-            const target = message.mentions.users.first();
+            const query = args[1] || message.mentions.users.first()?.id;
+            if (!query) {
+                await message.reply('❌ Menciona a un usuario o usa su ID.');
+                return;
+            }
+
+            const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+            if (!targetMember) {
+                await message.reply(`❌ No se encontró al usuario: **${query}**`);
+                return;
+            }
+
+            const target = targetMember.user;
 
             if (target) {
                 Validators.validateNotSelf(message.author, target);
@@ -265,15 +278,15 @@ async function handleRequestAction(
     target: any
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
-    
+
     // ✅ Verificar si ya tiene una solicitud pendiente CON ESTE USUARIO ESPECÍFICO
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
-        
+
         await interaction.editReply({
             content: `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
-                    `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
+                `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
         });
         return;
     }
@@ -282,7 +295,7 @@ async function handleRequestAction(
     if (requestManager && requestManager.hasPendingRequest(author.id)) {
         const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
         const otherRequests = allRequests.filter(r => r.targetId !== target.id);
-        
+
         if (otherRequests.length > 0) {
             // Mostrar aviso informativo pero permitir continuar
             logger.debug(
@@ -372,12 +385,12 @@ async function handleRequestActionPrefix(
     target: any
 ): Promise<void> {
     const requestManager = (message.client as BotClient).requestManager;
-    
+
     // ✅ Verificar solicitud pendiente CON ESTE USUARIO ESPECÍFICO
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
-        
+
         await message.reply(
             `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
             `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
@@ -389,7 +402,7 @@ async function handleRequestActionPrefix(
     if (requestManager && requestManager.hasPendingRequest(author.id)) {
         const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
         const otherRequests = allRequests.filter(r => r.targetId !== target.id);
-        
+
         if (otherRequests.length > 0) {
             logger.debug(
                 'interact',

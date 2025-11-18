@@ -3,13 +3,16 @@ import {
     ChatInputCommandInteraction,
     Message,
     EmbedBuilder,
-    MessageFlags
+    MessageFlags,
+    User
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 import { handleCommandError } from '../../utils/errorHandler.js';
 import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
+import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
+import { Validators } from '../../utils/validators.js';
 
 export const stats: HybridCommand = {
     type: 'hybrid',
@@ -33,7 +36,7 @@ export const stats: HybridCommand = {
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
             await interaction.deferReply();
-            
+
             const statsManager = (interaction.client as BotClient).interactionStatsManager;
 
             if (!statsManager) {
@@ -82,17 +85,44 @@ export const stats: HybridCommand = {
                 return;
             }
 
-            const targetUser = message.mentions.users.first() || null;
             const author = message.author;
 
-            if (targetUser) {
-                if (targetUser.id === author.id) {
-                    await message.reply('❌ No puedes ver estadísticas contigo mismo.');
-                    return;
-                }
+            let targetUser: User | null = null;
 
-                if (targetUser.bot) {
-                    await message.reply('❌ No hay estadísticas con bots.');
+            if (args.length > 0) {
+                // Prioridad 1: Usuario mencionado
+                targetUser = message.mentions.users.first() || null;
+
+                // Prioridad 2: Búsqueda manual por ID/nombre
+                if (!targetUser) {
+                    const foundUser = await UserSearchHelper.findUser(
+                        message.guild!,
+                        args[0]
+                    );
+
+                    if (!foundUser) {
+                        await message.reply(
+                            `❌ No se encontró al usuario: **${args[0]}**\n\n` +
+                            `**Puedes usar:**\n` +
+                            `• Mención: \`@User\`\n` +
+                            `• Tag: \`User#1234\`\n` +
+                            `• ID: \`123456789012345678\`\n` +
+                            `• Nombre: \`User\``
+                        );
+                        return;
+                    }
+
+                    targetUser = foundUser;
+                }
+            }
+
+            if (targetUser) {
+                // Validaciones
+                try {
+                    Validators.validateNotSelf(author, targetUser);
+                    Validators.validateNotBot(targetUser);
+                } catch (error: any) {
+                    await message.reply(error.userMessage || '❌ Validación fallida.');
                     return;
                 }
 
@@ -134,9 +164,9 @@ async function showPairStats(
         .setDescription(description)
         .setColor(COLORS.INFO)
         .setThumbnail(user2.displayAvatarURL())
-        .setFooter({ 
+        .setFooter({
             text: `Consultado por ${user1.tag}`,
-            iconURL: user1.displayAvatarURL() 
+            iconURL: user1.displayAvatarURL()
         })
         .setTimestamp();
 
@@ -168,9 +198,9 @@ async function showPairStatsPrefix(
         .setDescription(description)
         .setColor(COLORS.INFO)
         .setThumbnail(user2.displayAvatarURL())
-        .setFooter({ 
+        .setFooter({
             text: `Consultado por ${user1.tag}`,
-            iconURL: user1.displayAvatarURL() 
+            iconURL: user1.displayAvatarURL()
         })
         .setTimestamp();
 
@@ -183,7 +213,7 @@ async function showGeneralInfo(
 ): Promise<void> {
     const trackedInteractions = statsManager.getTrackedInteractionsList();
 
-    const description = 
+    const description =
         '**Estadísticas de Interacciones**\n\n' +
         'Este sistema rastrea interacciones positivas entre usuarios:\n\n' +
         '**Interacciones rastreadas:**\n' +
@@ -209,7 +239,7 @@ async function showGeneralInfoPrefix(
 ): Promise<void> {
     const trackedInteractions = statsManager.getTrackedInteractionsList();
 
-    const description = 
+    const description =
         '**Estadísticas de Interacciones**\n\n' +
         'Este sistema rastrea interacciones positivas entre usuarios:\n\n' +
         '**Interacciones rastreadas:**\n' +

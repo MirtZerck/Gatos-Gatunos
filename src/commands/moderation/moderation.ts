@@ -1,3 +1,4 @@
+// src/commands/moderation/moderation.ts
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
@@ -10,6 +11,8 @@ import { HybridCommand } from '../../types/Command.js';
 import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS, EMOJIS } from '../../utils/constants.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
+import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
+import { config } from '../../config.js';
 
 export const moderation: HybridCommand = {
     type: 'hybrid',
@@ -138,20 +141,34 @@ export const moderation: HybridCommand = {
         try {
             Validators.validateInGuild(message);
             const subcommand = args[0]?.toLowerCase();
-            const validSubcommands = ['kick', 'ban', 'timeout'];
+            const validSubcommands = ['kick', 'ban', 'timeout', 'expulsar', 'banear', 'silenciar', 'mute'];
 
             if (!subcommand || !validSubcommands.includes(subcommand)) {
                 await message.reply(
-                    `❌ **Uso:** \`!moderation <acción> @usuario [opciones]\`\n\n` +
+                    `❌ **Uso:** \`${config.prefix}moderation <acción> <usuario> [opciones]\`\n\n` +
                     `**Acciones disponibles:**\n` +
-                    `• \`kick @usuario [razón]\` - Expulsar usuario\n` +
-                    `• \`ban @usuario [días] [razón]\` - Banear usuario\n` +
-                    `• \`timeout @usuario <minutos> [razón]\` - Silenciar temporalmente`
+                    `• \`kick\` (\`expulsar\`) <usuario> [razón] - Expulsar usuario\n` +
+                    `• \`ban\` (\`banear\`) <usuario> [días] [razón] - Banear usuario\n` +
+                    `• \`timeout\` (\`silenciar\`, \`mute\`) <usuario> <minutos> [razón] - Silenciar temporalmente\n\n` +
+                    `**Ejemplos:**\n` +
+                    `\`${config.prefix}kick @User spam\`\n` +
+                    `\`${config.prefix}ban User#1234 7 toxicidad\`\n` +
+                    `\`${config.prefix}timeout 123456789 30 flood\``
                 );
                 return;
             }
 
-            switch (subcommand) {
+            // Mapear aliases
+            const commandMap: Record<string, string> = {
+                'expulsar': 'kick',
+                'banear': 'ban',
+                'silenciar': 'timeout',
+                'mute': 'timeout'
+            };
+
+            const normalizedCommand = commandMap[subcommand] || subcommand;
+
+            switch (normalizedCommand) {
                 case 'kick':
                     await handleKickPrefix(message, args.slice(1));
                     break;
@@ -193,31 +210,81 @@ async function handleTimeoutSlash(interaction: ChatInputCommandInteraction): Pro
 // ==================== HANDLERS PARA PREFIX COMMANDS ====================
 
 async function handleKickPrefix(message: Message, args: string[]): Promise<void> {
-    const target = message.mentions.members?.first();
-    const reason = args.slice(1).join(' ') || 'Sin razón especificada';
-
-    if (!target) {
-        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod kick @usuario spam`');
+    if (args.length === 0) {
+        await message.reply(
+            `❌ **Uso:** \`${config.prefix}kick <usuario> [razón]\`\n\n` +
+            `**Ejemplos:**\n` +
+            `\`${config.prefix}kick @User spam\`\n` +
+            `\`${config.prefix}kick User#1234 comportamiento inapropiado\`\n` +
+            `\`${config.prefix}kick 123456789012345678 flood\``
+        );
         return;
     }
+
+    // ✅ Buscar miembro con UserSearchHelper
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
+
+    if (!target) {
+        await message.reply(
+            `❌ No se encontró al usuario: **${args[0]}**\n\n` +
+            `**Puedes usar:**\n` +
+            `• Mención: \`@User\`\n` +
+            `• Tag: \`User#1234\`\n` +
+            `• ID: \`123456789012345678\`\n` +
+            `• Nombre: \`User\``
+        );
+        return;
+    }
+
+    // Determinar índice de inicio de razón
+    const reasonStartIndex = message.mentions.members?.first() ? 1 : 1;
+    const reason = args.slice(reasonStartIndex).join(' ') || 'Sin razón especificada';
 
     await executeKick(message, target, reason);
 }
 
 async function handleBanPrefix(message: Message, args: string[]): Promise<void> {
-    const target = message.mentions.members?.first();
+    if (args.length === 0) {
+        await message.reply(
+            `❌ **Uso:** \`${config.prefix}ban <usuario> [días] [razón]\`\n\n` +
+            `**Ejemplos:**\n` +
+            `\`${config.prefix}ban @User 7 toxicidad\`\n` +
+            `\`${config.prefix}ban User#1234 comportamiento grave\`\n` +
+            `\`${config.prefix}ban 123456789012345678 0 spam\``
+        );
+        return;
+    }
+
+    // ✅ Buscar miembro con UserSearchHelper
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
 
     if (!target) {
-        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod ban @usuario 7 toxicidad`');
+        await message.reply(
+            `❌ No se encontró al usuario: **${args[0]}**\n\n` +
+            `**Puedes usar:**\n` +
+            `• Mención: \`@User\`\n` +
+            `• Tag: \`User#1234\`\n` +
+            `• ID: \`123456789012345678\`\n` +
+            `• Nombre: \`User\``
+        );
         return;
     }
 
     let deleteMessageDays = 0;
-    let reasonStartIndex = 1;
+    let reasonStartIndex = message.mentions.members?.first() ? 1 : 1;
 
-    if (args[1] && !isNaN(parseInt(args[1]))) {
-        deleteMessageDays = Math.min(Math.max(parseInt(args[1]), 0), 7);
-        reasonStartIndex = 2;
+    // Verificar si el siguiente arg es un número (días)
+    if (args[reasonStartIndex] && !isNaN(parseInt(args[reasonStartIndex]))) {
+        deleteMessageDays = Math.min(Math.max(parseInt(args[reasonStartIndex]), 0), 7);
+        reasonStartIndex++;
     }
 
     const reason = args.slice(reasonStartIndex).join(' ') || 'Sin razón especificada';
@@ -225,21 +292,46 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
 }
 
 async function handleTimeoutPrefix(message: Message, args: string[]): Promise<void> {
-    const target = message.mentions.members?.first();
+    if (args.length < 2) {
+        await message.reply(
+            `❌ **Uso:** \`${config.prefix}timeout <usuario> <minutos> [razón]\`\n\n` +
+            `**Ejemplos:**\n` +
+            `\`${config.prefix}timeout @User 30 flood\`\n` +
+            `\`${config.prefix}timeout User#1234 60 spam\`\n` +
+            `\`${config.prefix}timeout 123456789012345678 15 lenguaje inapropiado\``
+        );
+        return;
+    }
+
+    // ✅ Buscar miembro con UserSearchHelper
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
 
     if (!target) {
-        await message.reply('❌ Debes mencionar a un usuario. Ejemplo: `!mod timeout @usuario 30 flood`');
+        await message.reply(
+            `❌ No se encontró al usuario: **${args[0]}**\n\n` +
+            `**Puedes usar:**\n` +
+            `• Mención: \`@User\`\n` +
+            `• Tag: \`User#1234\`\n` +
+            `• ID: \`123456789012345678\`\n` +
+            `• Nombre: \`User\``
+        );
         return;
     }
 
-    const duration = parseInt(args[1]);
+    // Índice de duración
+    const durationIndex = message.mentions.members?.first() ? 1 : 1;
+    const duration = parseInt(args[durationIndex]);
 
     if (isNaN(duration) || duration < 1 || duration > 40320) {
-        await message.reply('❌ Debes especificar una duración válida (1-40320 minutos).');
+        await message.reply('❌ Duración inválida. Debe ser entre **1** y **40320** minutos (28 días).');
         return;
     }
 
-    const reason = args.slice(2).join(' ') || 'Sin razón especificada';
+    const reason = args.slice(durationIndex + 1).join(' ') || 'Sin razón especificada';
     await executeTimeout(message, target, duration, reason);
 }
 

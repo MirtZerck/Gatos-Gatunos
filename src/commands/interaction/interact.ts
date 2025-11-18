@@ -15,6 +15,7 @@ import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHa
 import { config } from '../../config.js';
 import { logger } from '../../utils/logger.js';
 import { BotClient } from '../../types/BotClient.js';
+import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 
 const ACTION_QUERIES = {
     hug: 'anime hug',
@@ -155,8 +156,21 @@ export const interact: HybridCommand = {
                 return;
             }
 
-            const target = message.mentions.users.first();
-            Validators.validateUserProvided(target);
+            // 🆕 Búsqueda avanzada de usuario
+            const query = args[1] || message.mentions.users.first()?.id;
+            if (!query) {
+                await message.reply('❌ Menciona a un usuario o usa su ID.');
+                return;
+            }
+
+            const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+            if (!targetMember) {
+                await message.reply(`❌ No se encontró al usuario: **${query}**`);
+                return;
+            }
+
+            const target = targetMember.user;
+
             Validators.validateNotSelf(message.author, target);
             Validators.validateNotBot(target);
 
@@ -228,15 +242,15 @@ async function handleRequestAction(
     target: any
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
-    
+
     // ✅ Verificar solicitud pendiente
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
-        
+
         await interaction.editReply({
             content: `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
-                    `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
+                `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
         });
         return;
     }
@@ -254,9 +268,9 @@ async function handleRequestAction(
             `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
         .setColor(COLORS.INFO)
-        .setFooter({ 
+        .setFooter({
             text: `De: ${author.tag} | Responde antes de que expire`,
-            iconURL: author.displayAvatarURL() 
+            iconURL: author.displayAvatarURL()
         })
         .setTimestamp();
 
@@ -331,11 +345,11 @@ async function handleRequestActionPrefix(
     target: any
 ): Promise<void> {
     const requestManager = (message.client as BotClient).requestManager;
-    
+
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
-        
+
         await message.reply(
             `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
             `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
@@ -354,9 +368,9 @@ async function handleRequestActionPrefix(
             `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
         .setColor(COLORS.INFO)
-        .setFooter({ 
+        .setFooter({
             text: `De: ${author.tag} | Responde antes de que expire`,
-            iconURL: author.displayAvatarURL() 
+            iconURL: author.displayAvatarURL()
         })
         .setTimestamp();
 

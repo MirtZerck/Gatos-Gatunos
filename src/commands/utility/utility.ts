@@ -4,7 +4,8 @@ import {
     Message,
     EmbedBuilder,
     PermissionFlagsBits,
-    MessageFlags
+    MessageFlags,
+    GuildMember
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -12,6 +13,7 @@ import { handleCommandError } from '../../utils/errorHandler.js';
 import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
 import { Validators } from '../../utils/validators.js';
+import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 
 export const utility: HybridCommand = {
     type: 'hybrid',
@@ -338,7 +340,27 @@ async function handlePingPrefix(message: Message): Promise<void> {
 }
 
 async function handleAvatarPrefix(message: Message, args: string[]): Promise<void> {
-    const user = message.mentions.users.first() || message.author;
+    const query = args[0] || message.mentions.users.first()?.id;
+    
+    // Si no hay argumentos ni menciones, usar el autor del mensaje
+    if (!query) {
+        const user = message.author;
+        const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
+
+        await message.reply({
+            content: `Avatar de **${user.displayName}**:`,
+            files: [avatarURL]
+        });
+        return;
+    }
+
+    const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+    if (!targetMember) {
+        await message.reply(`❌ No se encontró al usuario: **${query}**`);
+        return;
+    }
+
+    const user = targetMember.user;
     const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
 
     await message.reply({

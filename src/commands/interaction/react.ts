@@ -10,6 +10,7 @@ import { getRandomGif } from '../../utils/tenor.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
+import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 
 const ACTION_QUERIES = {
     smile: 'anime smile',
@@ -140,9 +141,9 @@ export const react: HybridCommand = {
                     Validators.validateNotBot(target);
                 } catch (error) {
                     if (error instanceof CommandError) {
-                        await interaction.reply({ 
+                        await interaction.reply({
                             content: error.userMessage || '❌ Validación fallida',
-                            ephemeral: true 
+                            ephemeral: true
                         });
                         return;
                     }
@@ -179,7 +180,19 @@ export const react: HybridCommand = {
                 return;
             }
 
-            const target = message.mentions.users.first();
+            const query = args[1] || message.mentions.users.first()?.id;
+            if (!query) {
+                await message.reply('❌ Menciona a un usuario o usa su ID.');
+                return;
+            }
+
+            const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+            if (!targetMember) {
+                await message.reply(`❌ No se encontró al usuario: **${query}**`);
+                return;
+            }
+
+            const target = targetMember.user;
 
             if (target) {
                 Validators.validateNotSelf(message.author, target);
