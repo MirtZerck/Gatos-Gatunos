@@ -341,8 +341,7 @@ async function handlePingPrefix(message: Message): Promise<void> {
 
 async function handleAvatarPrefix(message: Message, args: string[]): Promise<void> {
     const query = args[0] || message.mentions.users.first()?.id;
-    
-    // Si no hay argumentos ni menciones, usar el autor del mensaje
+
     if (!query) {
         const user = message.author;
         const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
