@@ -16,6 +16,7 @@ const configSchema = z.object({
 
     // Danbooru
     danbooruApiKey: z.string().min(1, 'DANBOORU_API_KEY es requerido'),
+    danbooruUsername: z.string().optional(),
 
     // Firebase Admin SDK
     firebaseAdminSdk: z.string().min(1, 'FIREBASE_ADMIN_SDK es requerido'),
@@ -38,6 +39,7 @@ function loadConfig() {
 
             //Danbooru
             danbooruApiKey: process.env.DANBOORU_API_KEY,
+            danbooruUsername: process.env.DANBOORU_USERNAME,
 
             // Firebase Admin SDK
             firebaseAdminSdk: process.env.FIREBASE_ADMIN_SDK,
