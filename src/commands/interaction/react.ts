@@ -32,40 +32,135 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-const MESSAGES_WITH_TARGET: Record<ActionType, (author: string, target: string) => string> = {
-    smile: (author, target) => `**${author}** sonríe gracias a **${target}** 😊`,
-    laugh: (author, target) => `**${author}** se ríe por **${target}** 😂`,
-    cry: (author, target) => `**${author}** llora por **${target}** 😢`,
-    blush: (author, target) => `**${author}** se sonroja por **${target}** 😳`,
-    pout: (author, target) => `**${author}** le hace pucheros a **${target}** 🥺`,
-    angry: (author, target) => `**${author}** está enojado con **${target}** 😠`,
-    confused: (author, target) => `**${author}** está confundido por **${target}** 😕`,
-    shocked: (author, target) => `**${author}** está sorprendido por **${target}** 😱`,
-    happy: (author, target) => `**${author}** está feliz con **${target}** 😄`,
-    sad: (author, target) => `**${author}** está triste por **${target}** 😔`,
-    sleep: (author, target) => `**${author}** se duerme pensando en **${target}** 😴`,
-    yawn: (author, target) => `**${author}** bosteza frente a **${target}** 🥱`,
-    shrug: (author, target) => `**${author}** se encoge de hombros ante **${target}** 🤷`,
-    think: (author, target) => `**${author}** piensa en **${target}** 🤔`,
-    stare: (author, target) => `**${author}** mira fijamente a **${target}** 👀`,
-};
-
-const MESSAGES_SOLO: Record<ActionType, (author: string) => string> = {
-    smile: (author) => `**${author}** está sonriendo 😊`,
-    laugh: (author) => `**${author}** se está riendo 😂`,
-    cry: (author) => `**${author}** está llorando 😢`,
-    blush: (author) => `**${author}** se está sonrojando 😳`,
-    pout: (author) => `**${author}** está haciendo pucheros 🥺`,
-    angry: (author) => `**${author}** está enojado 😠`,
-    confused: (author) => `**${author}** está confundido 😕`,
-    shocked: (author) => `**${author}** está sorprendido 😱`,
-    happy: (author) => `**${author}** está feliz 😄`,
-    sad: (author) => `**${author}** está triste 😔`,
-    sleep: (author) => `**${author}** se fue a dormir 😴`,
-    yawn: (author) => `**${author}** está bostezando 🥱`,
-    shrug: (author) => `**${author}** se encoge de hombros 🤷`,
-    think: (author) => `**${author}** está pensando 🤔`,
-    stare: (author) => `**${author}** está mirando fijamente 👀`,
+// 🎨 Configuración mejorada por reacción
+const REACTION_CONFIG: Record<ActionType, {
+    emoji: string;
+    name: string;
+    color: number;
+    withTarget: (author: string, target: string) => string;
+    solo: (author: string) => string;
+    footer: string;
+}> = {
+    smile: {
+        emoji: '😊',
+        name: 'sonrisa',
+        color: 0xFFD700, // Dorado
+        withTarget: (a, t) => `**${a}** sonríe felizmente gracias a **${t}**`,
+        solo: (a) => `**${a}** está sonriendo radiante`,
+        footer: '☀️ Una sonrisa puede alegrar el día de alguien'
+    },
+    laugh: {
+        emoji: '😂',
+        name: 'risa',
+        color: 0xFF6B35, // Naranja vibrante
+        withTarget: (a, t) => `**${a}** se ríe a carcajadas por **${t}**`,
+        solo: (a) => `**${a}** está riéndose sin parar`,
+        footer: '🎭 La risa es el mejor medicamento'
+    },
+    cry: {
+        emoji: '😢',
+        name: 'llanto',
+        color: 0x4682B4, // Azul acero
+        withTarget: (a, t) => `**${a}** llora desconsoladamente por **${t}**`,
+        solo: (a) => `**${a}** está llorando`,
+        footer: '💧 Está bien mostrar tus emociones'
+    },
+    blush: {
+        emoji: '😳',
+        name: 'sonrojo',
+        color: 0xFF69B4, // Rosa intenso
+        withTarget: (a, t) => `**${a}** se sonroja completamente por **${t}**`,
+        solo: (a) => `**${a}** está sonrojado`,
+        footer: '🌸 ¡Qué tierno!'
+    },
+    pout: {
+        emoji: '🥺',
+        name: 'puchero',
+        color: 0xFFB6C1, // Rosa claro
+        withTarget: (a, t) => `**${a}** le hace unos pucheros adorables a **${t}**`,
+        solo: (a) => `**${a}** está haciendo pucheros`,
+        footer: '🥺 ¡Casi imposible de resistir!'
+    },
+    angry: {
+        emoji: '😠',
+        name: 'enojo',
+        color: 0xFF4444, // Rojo
+        withTarget: (a, t) => `**${a}** está muy enojado con **${t}**`,
+        solo: (a) => `**${a}** está furioso`,
+        footer: '💢 Respira hondo, todo estará bien'
+    },
+    confused: {
+        emoji: '😕',
+        name: 'confusión',
+        color: 0x9370DB, // Púrpura medio
+        withTarget: (a, t) => `**${a}** está completamente confundido por **${t}**`,
+        solo: (a) => `**${a}** está confundido`,
+        footer: '❓ ¿Qué está pasando aquí?'
+    },
+    shocked: {
+        emoji: '😱',
+        name: 'sorpresa',
+        color: 0xFFA500, // Naranja
+        withTarget: (a, t) => `**${a}** está totalmente sorprendido por **${t}**`,
+        solo: (a) => `**${a}** está en shock`,
+        footer: '⚡ ¡No lo puedo creer!'
+    },
+    happy: {
+        emoji: '😄',
+        name: 'felicidad',
+        color: 0xFFFF00, // Amarillo brillante
+        withTarget: (a, t) => `**${a}** está súper feliz con **${t}**`,
+        solo: (a) => `**${a}** está radiante de felicidad`,
+        footer: '🌟 ¡La felicidad es contagiosa!'
+    },
+    sad: {
+        emoji: '😔',
+        name: 'tristeza',
+        color: 0x708090, // Gris pizarra
+        withTarget: (a, t) => `**${a}** está triste por **${t}**`,
+        solo: (a) => `**${a}** está triste`,
+        footer: '🌧️ Mañana será un mejor día'
+    },
+    sleep: {
+        emoji: '😴',
+        name: 'sueño',
+        color: 0x191970, // Azul medianoche
+        withTarget: (a, t) => `**${a}** se queda dormido pensando en **${t}**`,
+        solo: (a) => `**${a}** se quedó profundamente dormido`,
+        footer: '🌙 Dulces sueños'
+    },
+    yawn: {
+        emoji: '🥱',
+        name: 'bostezo',
+        color: 0xB0C4DE, // Azul claro
+        withTarget: (a, t) => `**${a}** bosteza largo y tendido frente a **${t}**`,
+        solo: (a) => `**${a}** está bostezando sin parar`,
+        footer: '😴 El sueño es contagioso'
+    },
+    shrug: {
+        emoji: '🤷',
+        name: 'encogimiento',
+        color: 0xC0C0C0, // Plata
+        withTarget: (a, t) => `**${a}** se encoge de hombros ante **${t}**`,
+        solo: (a) => `**${a}** se encoge de hombros`,
+        footer: '¯\\_(ツ)_/¯ ¿Quién sabe?'
+    },
+    think: {
+        emoji: '🤔',
+        name: 'pensamiento',
+        color: 0x8A2BE2, // Violeta azul
+        withTarget: (a, t) => `**${a}** piensa profundamente en **${t}**`,
+        solo: (a) => `**${a}** está pensando intensamente`,
+        footer: '💭 Procesando información...'
+    },
+    stare: {
+        emoji: '👀',
+        name: 'mirada',
+        color: 0x00CED1, // Turquesa oscuro
+        withTarget: (a, t) => `**${a}** mira fijamente e intensamente a **${t}**`,
+        solo: (a) => `**${a}** está mirando fijamente`,
+        footer: '👁️ La mirada que lo dice todo'
+    }
 };
 
 export const react: HybridCommand = {
@@ -129,12 +224,10 @@ export const react: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            // ✅ PASO 1: Obtener datos (SÍNCRONO)
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
-            // ✅ PASO 2: Validaciones SÍNCRONAS (solo si hay target)
             if (target) {
                 try {
                     Validators.validateNotSelf(author, target);
@@ -151,10 +244,7 @@ export const react: HybridCommand = {
                 }
             }
 
-            // ✅ PASO 3: DEFER INMEDIATO (después de validaciones síncronas)
             await interaction.deferReply();
-
-            // ✅ PASO 4: Operación asíncrona (obtener GIF - ya tenemos 15 minutos)
             await handleReaction(interaction, subcommand, author, target);
 
         } catch (error) {
@@ -168,10 +258,40 @@ export const react: HybridCommand = {
             const validSubcommands = Object.keys(ACTION_QUERIES);
 
             if (!subcommand) {
-                await message.reply(
-                    `❌ **Uso:** \`${config.prefix}react <reacción> [@usuario]\`\n\n` +
-                    `**Reacciones disponibles:**\n${validSubcommands.map(cmd => `• \`${cmd}\``).join(', ')}`
-                );
+                const helpEmbed = new EmbedBuilder()
+                    .setTitle('💭 Comandos de Reacción')
+                    .setDescription(
+                        `Usa: \`${config.prefix}react <reacción> [@usuario]\`\n\n` +
+                        `El usuario es opcional. Si no lo especificas, mostrarás la reacción en solitario.\n\n` +
+                        `**Reacciones disponibles:**`
+                    )
+                    .addFields(
+                        {
+                            name: '😊 Emociones Positivas',
+                            value: ['smile', 'laugh', 'happy', 'blush'].map(cmd =>
+                                `${REACTION_CONFIG[cmd as ActionType].emoji} \`${cmd}\``
+                            ).join(' • '),
+                            inline: false
+                        },
+                        {
+                            name: '😢 Emociones Negativas',
+                            value: ['cry', 'sad', 'angry', 'pout'].map(cmd =>
+                                `${REACTION_CONFIG[cmd as ActionType].emoji} \`${cmd}\``
+                            ).join(' • '),
+                            inline: false
+                        },
+                        {
+                            name: '🤔 Otras Reacciones',
+                            value: ['confused', 'shocked', 'sleep', 'yawn', 'shrug', 'think', 'stare'].map(cmd =>
+                                `${REACTION_CONFIG[cmd as ActionType].emoji} \`${cmd}\``
+                            ).join(' • '),
+                            inline: false
+                        }
+                    )
+                    .setColor(COLORS.INTERACTION)
+                    .setFooter({ text: '¡Expresa tus emociones!' });
+
+                await message.reply({ embeds: [helpEmbed] });
                 return;
             }
 
@@ -180,23 +300,16 @@ export const react: HybridCommand = {
                 return;
             }
 
+            let target = undefined;
             const query = args[1] || message.mentions.users.first()?.id;
-            if (!query) {
-                await message.reply('❌ Menciona a un usuario o usa su ID.');
-                return;
-            }
 
-            const targetMember = await UserSearchHelper.findMember(message.guild!, query);
-            if (!targetMember) {
-                await message.reply(`❌ No se encontró al usuario: **${query}**`);
-                return;
-            }
-
-            const target = targetMember.user;
-
-            if (target) {
-                Validators.validateNotSelf(message.author, target);
-                Validators.validateNotBot(target);
+            if (query) {
+                const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+                if (targetMember) {
+                    target = targetMember.user;
+                    Validators.validateNotSelf(message.author, target);
+                    Validators.validateNotBot(target);
+                }
             }
 
             await handleReactionPrefix(message, subcommand, message.author, target);
@@ -216,20 +329,21 @@ async function handleReaction(
     target: any | null
 ): Promise<void> {
     try {
-        // ✅ Obtener GIF de Tenor (operación lenta, pero ya hicimos defer)
+        const reactionConfig = REACTION_CONFIG[action];
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
 
-        // ✅ Determinar mensaje según si hay target o no
         const message = target
-            ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
-            : MESSAGES_SOLO[action](author.displayName);
+            ? reactionConfig.withTarget(author.displayName, target.displayName)
+            : reactionConfig.solo(author.displayName);
 
         const embed = new EmbedBuilder()
-            .setDescription(message)
+            .setDescription(`${reactionConfig.emoji} ${message}`)
             .setImage(gifURL)
-            .setColor(COLORS.INTERACTION);
+            .setColor(reactionConfig.color)
+            .setFooter({ text: reactionConfig.footer })
+            .setTimestamp();
 
-        // ✅ Ya hicimos defer, usar editReply
+
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         throw new CommandError(
@@ -246,21 +360,22 @@ async function handleReactionPrefix(
     author: any,
     target: any | undefined
 ): Promise<void> {
-    const loadingMsg = await message.reply('🔄 Cargando GIF...');
+    const loadingMsg = await message.reply('🔄 Cargando...');
 
     try {
-        // ✅ Obtener GIF de Tenor
+        const reactionConfig = REACTION_CONFIG[action];
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
 
-        // ✅ Determinar mensaje según si hay target o no
         const messageText = target
-            ? MESSAGES_WITH_TARGET[action](author.displayName, target.displayName)
-            : MESSAGES_SOLO[action](author.displayName);
+            ? reactionConfig.withTarget(author.displayName, target.displayName)
+            : reactionConfig.solo(author.displayName);
 
         const embed = new EmbedBuilder()
-            .setDescription(messageText)
+            .setDescription(`${reactionConfig.emoji} ${messageText}`)
             .setImage(gifUrl)
-            .setColor(COLORS.INTERACTION);
+            .setColor(reactionConfig.color)
+            .setFooter({ text: reactionConfig.footer })
+            .setTimestamp();
 
         await loadingMsg.edit({ content: null, embeds: [embed] });
     } catch (error) {

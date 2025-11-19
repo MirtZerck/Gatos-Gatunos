@@ -37,35 +37,106 @@ const REQUIRE_REQUEST: ActionType[] = ['hug', 'kiss', 'pat', 'cuddle'];
 // Acciones directas sin solicitud
 const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'bite', 'tickle', 'bonk', 'boop'];
 
-const REQUEST_MESSAGES: Record<ActionType, (author: string, target: string) => string> = {
-    hug: (author, target) => `**${author}** quiere abrazar a **${target}** 🤗`,
-    kiss: (author, target) => `**${author}** quiere besar a **${target}** 😘`,
-    pat: (author, target) => `**${author}** quiere acariciar la cabeza de **${target}** 😊`,
-    cuddle: (author, target) => `**${author}** quiere acurrucarse con **${target}** 🥰`,
-    slap: (author, target) => `**${author}** abofetea a **${target}** 🖐️`,
-    poke: (author, target) => `**${author}** molesta a **${target}** 👉`,
-    bite: (author, target) => `**${author}** muerde a **${target}** 😬`,
-    tickle: (author, target) => `**${author}** le hace cosquillas a **${target}** 🤭`,
-    bonk: (author, target) => `**${author}** le da un golpe juguetón a **${target}** 🔨`,
-    boop: (author, target) => `**${author}** toca la nariz de **${target}** 👆`,
-};
-
-const ACTION_EMOJIS: Record<ActionType, string> = {
-    hug: '🤗', kiss: '😘', pat: '😊', cuddle: '🥰',
-    slap: '🖐️', poke: '👉', bite: '😬', tickle: '🤭', bonk: '🔨', boop: '👆',
-};
-
-const ACTION_NAMES: Record<ActionType, string> = {
-    hug: 'abrazo',
-    kiss: 'beso',
-    pat: 'caricia',
-    cuddle: 'acurrucada',
-    slap: 'bofetada',
-    poke: 'molestia',
-    bite: 'mordida',
-    tickle: 'cosquillas',
-    bonk: 'golpe juguetón',
-    boop: 'toque de nariz',
+// 🎨 Configuración mejorada por acción
+const ACTION_CONFIG: Record<ActionType, {
+    emoji: string;
+    name: string;
+    color: number;
+    requestTitle: string;
+    requestMessage: (author: string, target: string) => string;
+    successMessage: (author: string, target: string) => string;
+    footer: string;
+}> = {
+    hug: {
+        emoji: '🤗',
+        name: 'abrazo',
+        color: 0xFFB6C1, // Rosa claro
+        requestTitle: '¡Solicitud de Abrazo!',
+        requestMessage: (a, t) => `**${a}** quiere darte un cálido abrazo, **${t}**\n\n¿Aceptas este gesto de cariño?`,
+        successMessage: (a, t) => `**${a}** abraza cálidamente a **${t}**`,
+        footer: '💝 Los abrazos son gratis pero invaluables'
+    },
+    kiss: {
+        emoji: '😘',
+        name: 'beso',
+        color: 0xFF69B4, // Rosa fuerte
+        requestTitle: '¡Solicitud de Beso!',
+        requestMessage: (a, t) => `**${a}** quiere darte un beso, **${t}**\n\n¿Aceptas este gesto romántico?`,
+        successMessage: (a, t) => `**${a}** le da un tierno beso a **${t}**`,
+        footer: '💋 Con amor y cariño'
+    },
+    pat: {
+        emoji: '😊',
+        name: 'caricia',
+        color: 0xFFA500, // Naranja
+        requestTitle: '¡Solicitud de Caricia!',
+        requestMessage: (a, t) => `**${a}** quiere acariciar tu cabeza, **${t}**\n\n¿Te gustaría recibir esta muestra de afecto?`,
+        successMessage: (a, t) => `**${a}** acaricia suavemente la cabeza de **${t}**`,
+        footer: '✨ Mimitos que alegran el día'
+    },
+    cuddle: {
+        emoji: '🥰',
+        name: 'acurrucada',
+        color: 0xFFB6E1, // Rosa pastel
+        requestTitle: '¡Solicitud de Acurrucarse!',
+        requestMessage: (a, t) => `**${a}** quiere acurrucarse contigo, **${t}**\n\n¿Aceptas compartir este momento acogedor?`,
+        successMessage: (a, t) => `**${a}** se acurruca cómodamente con **${t}**`,
+        footer: '🛋️ Momentos cálidos y acogedores'
+    },
+    slap: {
+        emoji: '🖐️',
+        name: 'bofetada',
+        color: 0xFF4444, // Rojo
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** le da una bofetada a **${t}**`,
+        footer: '💢 ¡Eso dolió!'
+    },
+    poke: {
+        emoji: '👉',
+        name: 'molestia',
+        color: 0xFFD700, // Dorado
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** molesta juguetonamente a **${t}**`,
+        footer: '😏 ¡Ey, ey, ey!'
+    },
+    bite: {
+        emoji: '😬',
+        name: 'mordida',
+        color: 0xFF6347, // Tomate
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** le da un mordisco travieso a **${t}**`,
+        footer: '🦷 ¡Auch! Eso fue inesperado'
+    },
+    tickle: {
+        emoji: '🤭',
+        name: 'cosquillas',
+        color: 0x87CEEB, // Azul cielo
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** le hace cosquillas a **${t}**`,
+        footer: '😂 ¡Jajaja, para, para!'
+    },
+    bonk: {
+        emoji: '🔨',
+        name: 'golpe juguetón',
+        color: 0x8B4513, // Marrón
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** le da un golpecito juguetón en la cabeza a **${t}**`,
+        footer: '*bonk* ¡Ve a la cárcel de hornys!'
+    },
+    boop: {
+        emoji: '👆',
+        name: 'toque de nariz',
+        color: 0xFFC0CB, // Rosa
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** toca suavemente la nariz de **${t}**`,
+        footer: '*boop* 👃 ¡Qué adorable!'
+    }
 };
 
 export const interact: HybridCommand = {
@@ -118,14 +189,11 @@ export const interact: HybridCommand = {
             const target = interaction.options.getUser('usuario', true);
             const author = interaction.user;
 
-            // ✅ PASO 1: Validaciones rápidas
             Validators.validateNotSelf(author, target);
             Validators.validateNotBot(target);
 
-            // ✅ PASO 2: DEFER INMEDIATO
             await interaction.deferReply();
 
-            // ✅ PASO 3: Decidir flujo según tipo de acción
             if (REQUIRE_REQUEST.includes(subcommand)) {
                 await handleRequestAction(interaction, subcommand, author, target);
             } else {
@@ -143,11 +211,19 @@ export const interact: HybridCommand = {
             const validSubcommands = Object.keys(ACTION_QUERIES);
 
             if (!subcommand) {
-                await message.reply(
-                    `❌ **Uso:** \`${config.prefix}interact <acción> @usuario\`\n\n` +
-                    `**Con solicitud:** ${REQUIRE_REQUEST.join(', ')}\n` +
-                    `**Directas:** ${DIRECT_ACTIONS.join(', ')}`
-                );
+                const helpEmbed = new EmbedBuilder()
+                    .setTitle('💫 Comandos de Interacción')
+                    .setDescription(
+                        `Usa: \`${config.prefix}interact <acción> @usuario\`\n\n` +
+                        `**Con solicitud (requieren aceptación):**\n` +
+                        REQUIRE_REQUEST.map(cmd => `${ACTION_CONFIG[cmd].emoji} \`${cmd}\` - ${ACTION_CONFIG[cmd].name}`).join('\n') +
+                        `\n\n**Directas (sin solicitud):**\n` +
+                        DIRECT_ACTIONS.map(cmd => `${ACTION_CONFIG[cmd].emoji} \`${cmd}\` - ${ACTION_CONFIG[cmd].name}`).join('\n')
+                    )
+                    .setColor(COLORS.INTERACTION)
+                    .setFooter({ text: '¡Interactúa con tus amigos!' });
+
+                await message.reply({ embeds: [helpEmbed] });
                 return;
             }
 
@@ -156,7 +232,6 @@ export const interact: HybridCommand = {
                 return;
             }
 
-            // 🆕 Búsqueda avanzada de usuario
             const query = args[1] || message.mentions.users.first()?.id;
             if (!query) {
                 await message.reply('❌ Menciona a un usuario o usa su ID.');
@@ -195,15 +270,16 @@ async function handleDirectAction(
     target: any
 ): Promise<void> {
     try {
+        const config = ACTION_CONFIG[action];
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
-        const message = REQUEST_MESSAGES[action](author.displayName, target.displayName);
 
         const embed = new EmbedBuilder()
-            .setDescription(message)
+            .setDescription(`${config.emoji} ${config.successMessage(author.displayName, target.displayName)}`)
             .setImage(gifURL)
-            .setColor(COLORS.INTERACTION);
+            .setColor(config.color)
+            .setFooter({ text: config.footer })
+            .setTimestamp();
 
-        // Ya hicimos defer, usar editReply
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
         throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
@@ -216,16 +292,18 @@ async function handleDirectActionPrefix(
     author: any,
     target: any
 ): Promise<void> {
-    const loadingMsg = await message.reply('🔄 Cargando GIF...');
+    const loadingMsg = await message.reply('🔄 Cargando...');
 
     try {
+        const actionConfig = ACTION_CONFIG[action];
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
-        const messageText = REQUEST_MESSAGES[action](author.displayName, target.displayName);
 
         const embed = new EmbedBuilder()
-            .setDescription(messageText)
+            .setDescription(`${actionConfig.emoji} ${actionConfig.successMessage(author.displayName, target.displayName)}`)
             .setImage(gifUrl)
-            .setColor(COLORS.INTERACTION);
+            .setColor(actionConfig.color)
+            .setFooter({ text: actionConfig.footer })
+            .setTimestamp();
 
         await loadingMsg.edit({ content: null, embeds: [embed] });
     } catch (error) {
@@ -243,33 +321,36 @@ async function handleRequestAction(
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
 
-    // ✅ Verificar solicitud pendiente
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
 
-        await interaction.editReply({
-            content: `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
-                `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
-        });
+        const cooldownEmbed = new EmbedBuilder()
+            .setDescription(
+                `⏱️ Ya tienes una solicitud pendiente con **${target.displayName}**.\n\n` +
+                `Expira en **${minutes} minuto${minutes !== 1 ? 's' : ''}**.`
+            )
+            .setColor(COLORS.WARNING)
+            .setFooter({ text: '¡Paciencia! Espera la respuesta' });
+
+        await interaction.editReply({ embeds: [cooldownEmbed] });
         return;
     }
 
-    // ✅ Calcular timestamp de expiración (10 minutos desde ahora)
-    const expiresAt = Date.now() + 600000; // 10 minutos en ms
+    const actionConfig = ACTION_CONFIG[action];
+    const expiresAt = Date.now() + 600000;
     const expiresTimestamp = Math.floor(expiresAt / 1000);
 
-    // ✅ Crear embed de solicitud con tiempo de expiración visible
     const requestEmbed = new EmbedBuilder()
-        .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
+        .setTitle(`${actionConfig.emoji} ${actionConfig.requestTitle}`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n` +
-            `¿Aceptas?\n\n` +
+            `${actionConfig.requestMessage(author.displayName, target.displayName)}\n\n` +
             `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
-        .setColor(COLORS.INFO)
+        .setColor(actionConfig.color)
+        .setThumbnail(author.displayAvatarURL({ size: 128 }))
         .setFooter({
-            text: `De: ${author.tag} | Responde antes de que expire`,
+            text: `Solicitado por ${author.tag} • Responde con los botones`,
             iconURL: author.displayAvatarURL()
         })
         .setTimestamp();
@@ -293,7 +374,6 @@ async function handleRequestAction(
         components: [buttons]
     });
 
-    // ✅ Registrar en RequestManager
     if (requestManager) {
         try {
             requestManager.createRequest(
@@ -302,24 +382,25 @@ async function handleRequestAction(
                 action,
                 message.id,
                 interaction.id,
-                600000 // 10 minutos
+                600000
             );
         } catch (error) {
             logger.error('interact', 'Error creando solicitud', error);
         }
     }
 
-    // ✅ Timeout de 10 minutos
     setTimeout(async () => {
         try {
             const currentMessage = await interaction.fetchReply();
             if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
+                    .setTitle('⏰ Solicitud Expirada')
                     .setDescription(
-                        `⏰ ${target.displayName} no respondió a tiempo.\n\n` +
-                        `La solicitud de **${ACTION_NAMES[action]}** ha expirado.`
+                        `**${target.displayName}** no respondió a tiempo.\n\n` +
+                        `La solicitud de **${actionConfig.name}** ha expirado.`
                     )
                     .setColor(COLORS.WARNING)
+                    .setFooter({ text: '¡Inténtalo de nuevo cuando quieras!' })
                     .setTimestamp();
 
                 await interaction.editReply({
@@ -331,13 +412,10 @@ async function handleRequestAction(
                     requestManager.resolveRequestWith(author.id, target.id);
                 }
             }
-        } catch {
-            // Mensaje eliminado o error
-        }
+        } catch { }
     }, 600000);
 }
 
-// ✅ Versión para prefix con mismo formato
 async function handleRequestActionPrefix(
     message: Message,
     action: ActionType,
@@ -350,26 +428,32 @@ async function handleRequestActionPrefix(
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
 
-        await message.reply(
-            `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
-            `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
-        );
+        const cooldownEmbed = new EmbedBuilder()
+            .setDescription(
+                `⏱️ Ya tienes una solicitud pendiente con **${target.displayName}**.\n\n` +
+                `Expira en **${minutes} minuto${minutes !== 1 ? 's' : ''}**.`
+            )
+            .setColor(COLORS.WARNING)
+            .setFooter({ text: '¡Paciencia! Espera la respuesta' });
+
+        await message.reply({ embeds: [cooldownEmbed] });
         return;
     }
 
+    const actionConfig = ACTION_CONFIG[action];
     const expiresAt = Date.now() + 600000;
     const expiresTimestamp = Math.floor(expiresAt / 1000);
 
     const requestEmbed = new EmbedBuilder()
-        .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
+        .setTitle(`${actionConfig.emoji} ${actionConfig.requestTitle}`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n` +
-            `¿Aceptas?\n\n` +
+            `${actionConfig.requestMessage(author.displayName, target.displayName)}\n\n` +
             `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
-        .setColor(COLORS.INFO)
+        .setColor(actionConfig.color)
+        .setThumbnail(author.displayAvatarURL({ size: 128 }))
         .setFooter({
-            text: `De: ${author.tag} | Responde antes de que expire`,
+            text: `Solicitado por ${author.tag} • Responde con los botones`,
             iconURL: author.displayAvatarURL()
         })
         .setTimestamp();
@@ -413,11 +497,13 @@ async function handleRequestActionPrefix(
             const currentMessage = await message.channel.messages.fetch(requestMessage.id);
             if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
+                    .setTitle('⏰ Solicitud Expirada')
                     .setDescription(
-                        `⏰ ${target.displayName} no respondió a tiempo.\n\n` +
-                        `La solicitud de **${ACTION_NAMES[action]}** ha expirado.`
+                        `**${target.displayName}** no respondió a tiempo.\n\n` +
+                        `La solicitud de **${actionConfig.name}** ha expirado.`
                     )
                     .setColor(COLORS.WARNING)
+                    .setFooter({ text: '¡Inténtalo de nuevo cuando quieras!' })
                     .setTimestamp();
 
                 await requestMessage.edit({
@@ -429,8 +515,6 @@ async function handleRequestActionPrefix(
                     requestManager.resolveRequestWith(author.id, target.id);
                 }
             }
-        } catch {
-            // Ignorar
-        }
+        } catch { }
     }, 600000);
 }

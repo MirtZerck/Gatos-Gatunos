@@ -34,51 +34,107 @@ type ActionType = keyof typeof ACTION_QUERIES;
 const REQUIRE_REQUEST_WITH_TARGET: ActionType[] = ['dance', 'sing', 'highfive'];
 const NO_REQUEST: ActionType[] = ['wave', 'bow', 'clap', 'cheer', 'salute', 'nod'];
 
-const REQUEST_MESSAGES: Partial<Record<ActionType, (author: string, target: string) => string>> = {
-    dance: (author, target) => `**${author}** quiere bailar con **${target}** 💃`,
-    sing: (author, target) => `**${author}** quiere cantar con **${target}** 🎤`,
-    highfive: (author, target) => `**${author}** quiere chocar los cinco con **${target}** ✋`,
-};
-
-const MESSAGES_WITH_TARGET: Partial<Record<ActionType, (author: string, target: string) => string>> = {
-    dance: (author, target) => `**${author}** baila con **${target}** 💃`,
-    sing: (author, target) => `**${author}** canta con **${target}** 🎤`,
-    highfive: (author, target) => `**${author}** choca los cinco con **${target}** ✋`,
-    wave: (author, target) => `**${author}** saluda a **${target}** 👋`,
-    bow: (author, target) => `**${author}** hace una reverencia ante **${target}** 🙇`,
-    clap: (author, target) => `**${author}** aplaude a **${target}** 👏`,
-    cheer: (author, target) => `**${author}** anima a **${target}** 🎉`,
-    salute: (author, target) => `**${author}** saluda militarmente a **${target}** 🫡`,
-    nod: (author, target) => `**${author}** asiente ante **${target}** 👍`,
-};
-
-const MESSAGES_SOLO: Partial<Record<ActionType, (author: string) => string>> = {
-    dance: (author) => `**${author}** está bailando 💃`,
-    sing: (author) => `**${author}** está cantando 🎤`,
-    highfive: (author) => `**${author}** espera un choque de manos ✋`,
-    wave: (author) => `**${author}** saluda 👋`,
-    bow: (author) => `**${author}** hace una reverencia 🙇`,
-    clap: (author) => `**${author}** está aplaudiendo 👏`,
-    cheer: (author) => `**${author}** está animando 🎉`,
-    salute: (author) => `**${author}** hace un saludo militar 🫡`,
-    nod: (author) => `**${author}** asiente 👍`,
-};
-
-const ACTION_EMOJIS: Record<ActionType, string> = {
-    dance: '💃', sing: '🎤', highfive: '✋',
-    wave: '👋', bow: '🙇', clap: '👏', cheer: '🎉', salute: '🫡', nod: '👍',
-};
-
-const ACTION_NAMES: Record<ActionType, string> = {
-    dance: 'baile',
-    sing: 'canto',
-    highfive: 'choque de manos',
-    wave: 'saludo',
-    bow: 'reverencia',
-    clap: 'aplauso',
-    cheer: 'ánimo',
-    salute: 'saludo militar',
-    nod: 'asentimiento',
+// 🎨 Configuración mejorada por acción
+const ACTION_CONFIG: Record<ActionType, {
+    emoji: string;
+    name: string;
+    color: number;
+    requestTitle?: string;
+    requestMessage?: (author: string, target: string) => string;
+    withTarget: (author: string, target: string) => string;
+    solo: (author: string) => string;
+    footer: string;
+}> = {
+    dance: {
+        emoji: '💃',
+        name: 'baile',
+        color: 0xFF1493, // Rosa profundo
+        requestTitle: '¡Invitación a Bailar!',
+        requestMessage: (a, t) => `**${a}** te invita a bailar, **${t}**\n\n¿Te gustaría unirte a la pista de baile?`,
+        withTarget: (a, t) => `**${a}** baila animadamente con **${t}**`,
+        solo: (a) => `**${a}** está bailando como si nadie estuviera mirando`,
+        footer: '🎶 ¡A mover el esqueleto!'
+    },
+    sing: {
+        emoji: '🎤',
+        name: 'canto',
+        color: 0x9370DB, // Púrpura medio
+        requestTitle: '¡Invitación a Cantar!',
+        requestMessage: (a, t) => `**${a}** quiere hacer un dueto contigo, **${t}**\n\n¿Te animas a cantar juntos?`,
+        withTarget: (a, t) => `**${a}** canta a dúo con **${t}**`,
+        solo: (a) => `**${a}** está cantando a todo pulmón`,
+        footer: '🎵 ¡La música une corazones!'
+    },
+    highfive: {
+        emoji: '✋',
+        name: 'choque de manos',
+        color: 0xFFA500, // Naranja
+        requestTitle: '¡Choca esos cinco!',
+        requestMessage: (a, t) => `**${a}** levanta la mano esperando tu choque, **${t}**\n\n¿Le devuelves el gesto?`,
+        withTarget: (a, t) => `**${a}** choca los cinco energéticamente con **${t}**`,
+        solo: (a) => `**${a}** levanta la mano esperando un choque de manos`,
+        footer: '👏 ¡Excelente trabajo en equipo!'
+    },
+    wave: {
+        emoji: '👋',
+        name: 'saludo',
+        color: 0x87CEEB, // Azul cielo
+        requestTitle: '',
+        requestMessage: undefined,
+        withTarget: (a, t) => `**${a}** saluda amistosamente a **${t}**`,
+        solo: (a) => `**${a}** saluda con entusiasmo`,
+        footer: '👋 ¡Hola! ¿Cómo estás?'
+    },
+    bow: {
+        emoji: '🙇',
+        name: 'reverencia',
+        color: 0x4B0082, // Índigo
+        requestTitle: '',
+        requestMessage: undefined,
+        withTarget: (a, t) => `**${a}** hace una elegante reverencia ante **${t}**`,
+        solo: (a) => `**${a}** hace una reverencia respetuosa`,
+        footer: '🎩 Con respeto y admiración'
+    },
+    clap: {
+        emoji: '👏',
+        name: 'aplauso',
+        color: 0xFFD700, // Dorado
+        requestTitle: '',
+        requestMessage: undefined,
+        withTarget: (a, t) => `**${a}** aplaude entusiastamente a **${t}**`,
+        solo: (a) => `**${a}** está aplaudiendo con ganas`,
+        footer: '👏 ¡Bravo! ¡Impresionante!'
+    },
+    cheer: {
+        emoji: '🎉',
+        name: 'ánimo',
+        color: 0xFF6347, // Tomate
+        requestTitle: '',
+        requestMessage: undefined,
+        withTarget: (a, t) => `**${a}** anima con entusiasmo a **${t}**`,
+        solo: (a) => `**${a}** está celebrando y animando`,
+        footer: '🎊 ¡Tú puedes! ¡Vamos!'
+    },
+    salute: {
+        emoji: '🫡',
+        name: 'saludo militar',
+        color: 0x556B2F, // Verde oliva oscuro
+        requestTitle: '',
+        requestMessage: undefined,
+        withTarget: (a, t) => `**${a}** hace un saludo militar a **${t}**`,
+        solo: (a) => `**${a}** hace un saludo militar`,
+        footer: '🎖️ Con honor y disciplina'
+    },
+    nod: {
+        emoji: '👍',
+        name: 'asentimiento',
+        color: 0x32CD32, // Verde lima
+        requestTitle: '',
+        requestMessage: undefined,
+        withTarget: (a, t) => `**${a}** asiente aprobadoramente ante **${t}**`,
+        solo: (a) => `**${a}** asiente con la cabeza`,
+        footer: '✅ De acuerdo, entendido'
+    }
 };
 
 export const act: HybridCommand = {
@@ -124,12 +180,10 @@ export const act: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            // ✅ PASO 1: Obtener datos (SÍNCRONO)
             const subcommand = interaction.options.getSubcommand() as ActionType;
             const target = interaction.options.getUser('usuario');
             const author = interaction.user;
 
-            // ✅ PASO 2: Validaciones SÍNCRONAS (solo si hay target)
             if (target) {
                 try {
                     Validators.validateNotSelf(author, target);
@@ -146,10 +200,8 @@ export const act: HybridCommand = {
                 }
             }
 
-            // ✅ PASO 3: DEFER INMEDIATO
             await interaction.deferReply();
 
-            // ✅ PASO 4: Decidir flujo (ya tenemos 15 minutos)
             if (target && REQUIRE_REQUEST_WITH_TARGET.includes(subcommand)) {
                 await handleRequestAction(interaction, subcommand, author, target);
             } else {
@@ -167,11 +219,32 @@ export const act: HybridCommand = {
             const validSubcommands = Object.keys(ACTION_QUERIES);
 
             if (!subcommand) {
-                await message.reply(
-                    `❌ **Uso:** \`${config.prefix}act <acción> [@usuario]\`\n\n` +
-                    `**Con solicitud (si hay @usuario):** ${REQUIRE_REQUEST_WITH_TARGET.join(', ')}\n` +
-                    `**Sin solicitud:** ${NO_REQUEST.join(', ')}`
-                );
+                const helpEmbed = new EmbedBuilder()
+                    .setTitle('🎭 Comandos de Actuación')
+                    .setDescription(
+                        `Usa: \`${config.prefix}act <acción> [@usuario]\`\n\n` +
+                        `El usuario es opcional para la mayoría de acciones.`
+                    )
+                    .addFields(
+                        {
+                            name: '🎪 Con Solicitud (si hay @usuario)',
+                            value: REQUIRE_REQUEST_WITH_TARGET.map(cmd =>
+                                `${ACTION_CONFIG[cmd].emoji} \`${cmd}\` - ${ACTION_CONFIG[cmd].name}`
+                            ).join('\n'),
+                            inline: false
+                        },
+                        {
+                            name: '⚡ Acciones Directas',
+                            value: NO_REQUEST.map(cmd =>
+                                `${ACTION_CONFIG[cmd].emoji} \`${cmd}\` - ${ACTION_CONFIG[cmd].name}`
+                            ).join('\n'),
+                            inline: false
+                        }
+                    )
+                    .setColor(COLORS.INTERACTION)
+                    .setFooter({ text: '¡Expresa tus acciones!' });
+
+                await message.reply({ embeds: [helpEmbed] });
                 return;
             }
 
@@ -180,23 +253,16 @@ export const act: HybridCommand = {
                 return;
             }
 
+            let target = undefined;
             const query = args[1] || message.mentions.users.first()?.id;
-            if (!query) {
-                await message.reply('❌ Menciona a un usuario o usa su ID.');
-                return;
-            }
 
-            const targetMember = await UserSearchHelper.findMember(message.guild!, query);
-            if (!targetMember) {
-                await message.reply(`❌ No se encontró al usuario: **${query}**`);
-                return;
-            }
-
-            const target = targetMember.user;
-
-            if (target) {
-                Validators.validateNotSelf(message.author, target);
-                Validators.validateNotBot(target);
+            if (query) {
+                const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+                if (targetMember) {
+                    target = targetMember.user;
+                    Validators.validateNotSelf(message.author, target);
+                    Validators.validateNotBot(target);
+                }
             }
 
             if (target && REQUIRE_REQUEST_WITH_TARGET.includes(subcommand)) {
@@ -220,19 +286,19 @@ async function handleDirectAction(
     target: any | null
 ): Promise<void> {
     try {
+        const actionConfig = ACTION_CONFIG[action];
         const gifURL = await getRandomGif(ACTION_QUERIES[action]);
 
-        let message: string;
-        if (target) {
-            message = MESSAGES_WITH_TARGET[action]!(author.displayName, target.displayName);
-        } else {
-            message = MESSAGES_SOLO[action]!(author.displayName);
-        }
+        const message = target
+            ? actionConfig.withTarget(author.displayName, target.displayName)
+            : actionConfig.solo(author.displayName);
 
         const embed = new EmbedBuilder()
-            .setDescription(message)
+            .setDescription(`${actionConfig.emoji} ${message}`)
             .setImage(gifURL)
-            .setColor(COLORS.INTERACTION);
+            .setColor(actionConfig.color)
+            .setFooter({ text: actionConfig.footer })
+            .setTimestamp();
 
         await interaction.editReply({ embeds: [embed] });
     } catch (error) {
@@ -246,22 +312,22 @@ async function handleDirectActionPrefix(
     author: any,
     target: any | undefined
 ): Promise<void> {
-    const loadingMsg = await message.reply('🔄 Cargando GIF...');
+    const loadingMsg = await message.reply('🔄 Cargando...');
 
     try {
+        const actionConfig = ACTION_CONFIG[action];
         const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
 
-        let messageText: string;
-        if (target) {
-            messageText = MESSAGES_WITH_TARGET[action]!(author.displayName, target.displayName);
-        } else {
-            messageText = MESSAGES_SOLO[action]!(author.displayName);
-        }
+        const messageText = target
+            ? actionConfig.withTarget(author.displayName, target.displayName)
+            : actionConfig.solo(author.displayName);
 
         const embed = new EmbedBuilder()
-            .setDescription(messageText)
+            .setDescription(`${actionConfig.emoji} ${messageText}`)
             .setImage(gifUrl)
-            .setColor(COLORS.INTERACTION);
+            .setColor(actionConfig.color)
+            .setFooter({ text: actionConfig.footer })
+            .setTimestamp();
 
         await loadingMsg.edit({ content: null, embeds: [embed] });
     } catch (error) {
@@ -279,40 +345,38 @@ async function handleRequestAction(
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
 
-    // ✅ Verificar si ya tiene una solicitud pendiente CON ESTE USUARIO ESPECÍFICO
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
 
-        await interaction.editReply({
-            content: `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
-                `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
-        });
+        const cooldownEmbed = new EmbedBuilder()
+            .setDescription(
+                `⏱️ Ya tienes una solicitud pendiente con **${target.displayName}**.\n\n` +
+                `Expira en **${minutes} minuto${minutes !== 1 ? 's' : ''}**.`
+            )
+            .setColor(COLORS.WARNING)
+            .setFooter({ text: '¡Paciencia! Espera la respuesta' });
+
+        await interaction.editReply({ embeds: [cooldownEmbed] });
         return;
     }
 
-    // ✅ Mostrar lista de solicitudes activas si tiene otras (opcional - para informar al usuario)
-    if (requestManager && requestManager.hasPendingRequest(author.id)) {
-        const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
-        const otherRequests = allRequests.filter(r => r.targetId !== target.id);
+    const actionConfig = ACTION_CONFIG[action];
+    const expiresAt = Date.now() + 600000;
+    const expiresTimestamp = Math.floor(expiresAt / 1000);
 
-        if (otherRequests.length > 0) {
-            // Mostrar aviso informativo pero permitir continuar
-            logger.debug(
-                'interact',
-                `${author.tag} tiene ${otherRequests.length} solicitud(es) adicional(es) activa(s)`
-            );
-        }
-    }
-
-    // ✅ Crear embed de solicitud
     const requestEmbed = new EmbedBuilder()
-        .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
+        .setTitle(`${actionConfig.emoji} ${actionConfig.requestTitle}`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
+            `${actionConfig.requestMessage!(author.displayName, target.displayName)}\n\n` +
+            `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
-        .setColor(COLORS.INFO)
-        .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
+        .setColor(actionConfig.color)
+        .setThumbnail(author.displayAvatarURL({ size: 128 }))
+        .setFooter({
+            text: `Solicitado por ${author.tag} • Responde con los botones`,
+            iconURL: author.displayAvatarURL()
+        })
         .setTimestamp();
 
     const buttons = new ActionRowBuilder<ButtonBuilder>()
@@ -329,13 +393,11 @@ async function handleRequestAction(
                 .setEmoji('❌')
         );
 
-    // ✅ Enviar mensaje (ya tenemos defer, usamos editReply)
     const message = await interaction.editReply({
         embeds: [requestEmbed],
         components: [buttons]
     });
 
-    // ✅ Registrar en RequestManager (10 minutos = 600000ms)
     if (requestManager) {
         try {
             requestManager.createRequest(
@@ -344,22 +406,25 @@ async function handleRequestAction(
                 action,
                 message.id,
                 interaction.id,
-                600000 // 10 minutos
+                600000
             );
         } catch (error) {
-            logger.error('interact', 'Error creando solicitud en RequestManager', error);
+            logger.error('act', 'Error creando solicitud', error);
         }
     }
 
-    // ✅ Timeout manual de 10 minutos
     setTimeout(async () => {
         try {
-            // Verificar si el mensaje todavía tiene componentes (no fue respondido)
             const currentMessage = await interaction.fetchReply();
             if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
-                    .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                    .setTitle('⏰ Solicitud Expirada')
+                    .setDescription(
+                        `**${target.displayName}** no respondió a tiempo.\n\n` +
+                        `La solicitud de **${actionConfig.name}** ha expirado.`
+                    )
                     .setColor(COLORS.WARNING)
+                    .setFooter({ text: '¡Inténtalo de nuevo cuando quieras!' })
                     .setTimestamp();
 
                 await interaction.editReply({
@@ -367,15 +432,12 @@ async function handleRequestAction(
                     components: []
                 });
 
-                // Limpiar del RequestManager
                 if (requestManager) {
                     requestManager.resolveRequestWith(author.id, target.id);
                 }
             }
-        } catch {
-            // Ignorar errores (el mensaje pudo haber sido eliminado)
-        }
-    }, 600000); // 10 minutos
+        } catch { }
+    }, 600000);
 }
 
 async function handleRequestActionPrefix(
@@ -386,38 +448,38 @@ async function handleRequestActionPrefix(
 ): Promise<void> {
     const requestManager = (message.client as BotClient).requestManager;
 
-    // ✅ Verificar solicitud pendiente CON ESTE USUARIO ESPECÍFICO
     if (requestManager && requestManager.hasPendingRequestWith(author.id, target.id)) {
         const remainingTime = requestManager.getRemainingTimeWith(author.id, target.id);
         const minutes = Math.ceil(remainingTime / 60000);
 
-        await message.reply(
-            `⏱️ Ya tienes una solicitud pendiente de **${action}** con **${target.displayName}**.\n` +
-            `Expira en ${minutes} minuto${minutes !== 1 ? 's' : ''}.`
-        );
+        const cooldownEmbed = new EmbedBuilder()
+            .setDescription(
+                `⏱️ Ya tienes una solicitud pendiente con **${target.displayName}**.\n\n` +
+                `Expira en **${minutes} minuto${minutes !== 1 ? 's' : ''}**.`
+            )
+            .setColor(COLORS.WARNING)
+            .setFooter({ text: '¡Paciencia! Espera la respuesta' });
+
+        await message.reply({ embeds: [cooldownEmbed] });
         return;
     }
 
-    // ✅ Aviso informativo de otras solicitudes activas (opcional)
-    if (requestManager && requestManager.hasPendingRequest(author.id)) {
-        const allRequests = requestManager.getAllPendingRequestsByAuthor(author.id);
-        const otherRequests = allRequests.filter(r => r.targetId !== target.id);
-
-        if (otherRequests.length > 0) {
-            logger.debug(
-                'interact',
-                `${author.tag} tiene ${otherRequests.length} solicitud(es) adicional(es) activa(s)`
-            );
-        }
-    }
+    const actionConfig = ACTION_CONFIG[action];
+    const expiresAt = Date.now() + 600000;
+    const expiresTimestamp = Math.floor(expiresAt / 1000);
 
     const requestEmbed = new EmbedBuilder()
-        .setTitle(`${ACTION_EMOJIS[action]} Solicitud de Interacción`)
+        .setTitle(`${actionConfig.emoji} ${actionConfig.requestTitle}`)
         .setDescription(
-            `${target}, **${author.displayName}** quiere darte un **${ACTION_NAMES[action]}**.\n\n¿Aceptas?`
+            `${actionConfig.requestMessage!(author.displayName, target.displayName)}\n\n` +
+            `⏰ Expira: <t:${expiresTimestamp}:R>`
         )
-        .setColor(COLORS.INFO)
-        .setFooter({ text: `De: ${author.tag}`, iconURL: author.displayAvatarURL() })
+        .setColor(actionConfig.color)
+        .setThumbnail(author.displayAvatarURL({ size: 128 }))
+        .setFooter({
+            text: `Solicitado por ${author.tag} • Responde con los botones`,
+            iconURL: author.displayAvatarURL()
+        })
         .setTimestamp();
 
     const buttons = new ActionRowBuilder<ButtonBuilder>()
@@ -439,7 +501,6 @@ async function handleRequestActionPrefix(
         components: [buttons]
     });
 
-    // ✅ Registrar en RequestManager (10 minutos)
     if (requestManager) {
         try {
             requestManager.createRequest(
@@ -448,21 +509,25 @@ async function handleRequestActionPrefix(
                 action,
                 requestMessage.id,
                 message.id,
-                600000 // 10 minutos
+                600000
             );
         } catch (error) {
-            logger.error('interact', 'Error creando solicitud en RequestManager', error);
+            logger.error('act', 'Error creando solicitud', error);
         }
     }
 
-    // ✅ Timeout manual de 10 minutos
     setTimeout(async () => {
         try {
             const currentMessage = await message.channel.messages.fetch(requestMessage.id);
             if (currentMessage.components.length > 0) {
                 const timeoutEmbed = new EmbedBuilder()
-                    .setDescription(`${target.displayName} no respondió a tiempo. ⏰`)
+                    .setTitle('⏰ Solicitud Expirada')
+                    .setDescription(
+                        `**${target.displayName}** no respondió a tiempo.\n\n` +
+                        `La solicitud de **${actionConfig.name}** ha expirado.`
+                    )
                     .setColor(COLORS.WARNING)
+                    .setFooter({ text: '¡Inténtalo de nuevo cuando quieras!' })
                     .setTimestamp();
 
                 await requestMessage.edit({
@@ -474,8 +539,6 @@ async function handleRequestActionPrefix(
                     requestManager.resolveRequestWith(author.id, target.id);
                 }
             }
-        } catch {
-            // Ignorar
-        }
-    }, 600000); // 10 minutos
+        } catch { }
+    }, 600000);
 }
