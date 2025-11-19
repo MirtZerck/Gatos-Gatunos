@@ -1,4 +1,4 @@
-import { config } from '../config';
+import { config } from '../config.js';
 
 /**
  * *Niveles de logging disponibles.

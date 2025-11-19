@@ -2,22 +2,29 @@
   "name": "hikari-koizumi-2.0",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
+  "main": "dist/index.js",  
+  "scripts": {
+    "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "deploy:dev": "node --loader ts-node/esm src/deploy-slash-commands.ts",
+    "deploy:prod": "node dist/deploy-slash-commands.js",
+    "postbuild": "echo 'Build completado.'",
+    "prod": "npm run build && npm run start",
+    "docker:build": "docker build -t hikari-bot .",
+    "docker:run": "docker run --env-file .env hikari-bot"
+  },
   
-    "scripts": {
-      "dev": "nodemon --exec node --loader ts-node/esm src/index.ts",
-      "build": "tsc",
-      "start": "node dist/index.js",
-      "deploy:dev": "node --loader ts-node/esm src/deploy-slash-commands.ts",
-      "deploy:prod": "node dist/deploy-slash-commands.js",
-      "postbuild": "echo 'Build completado. Ejecuta npm run deploy:prod para registrar comandos.'",
-      "prod": "npm run build && npm run start"
-    },
+  "engines": {
+    "node": ">=22.0.0",
+    "npm": ">=10.0.0"
+  },
   
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+    "keywords": ["discord", "bot", "typescript"],
+    "author": "MirtZerck",
+    "license": "ISC",
+    "description": "Discord bot moderno con TypeScript",
+
   "dependencies": {
     "discord.js": "^14.24.2",
     "dotenv": "^17.2.3",
