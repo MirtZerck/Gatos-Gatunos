@@ -61,6 +61,8 @@ async function main() {
     cooldownManager.setCooldownConfig('act', 5000) // 5 segundos
     cooldownManager.setCooldownConfig('react', 5000) // 5 segundos
     cooldownManager.setCooldownConfig('moderation', 2000) // 2 segundos
+    cooldownManager.setCooldownConfig('custom', 5000) // 5 segundos
+    cooldownManager.setCooldownConfig('danbooru', 5000) // 5 segundos
 
     // Inicializar sistema de solicitudes
     logger.info('Bot', 'Inicializando sistema de solicitudes...');

@@ -14,6 +14,9 @@ const configSchema = z.object({
     // Tenor
     tenorApiKey: z.string().min(1, 'TENOR_API_KEY es requerido'),
 
+    // Danbooru
+    danbooruApiKey: z.string().min(1, 'DANBOORU_API_KEY es requerido'),
+
     // Firebase Admin SDK
     firebaseAdminSdk: z.string().min(1, 'FIREBASE_ADMIN_SDK es requerido'),
 
@@ -32,6 +35,9 @@ function loadConfig() {
 
             // Tenor
             tenorApiKey: process.env.TENOR_API_KEY,
+
+            //Danbooru
+            danbooruApiKey: process.env.DANBOORU_API_KEY,
 
             // Firebase Admin SDK
             firebaseAdminSdk: process.env.FIREBASE_ADMIN_SDK,
