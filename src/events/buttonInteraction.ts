@@ -50,7 +50,7 @@ export default {
         const buttonInteraction = interaction as ButtonInteraction;
 
         // ✅ Filtro 2: Solo botones de interact/act
-        if (!buttonInteraction.customId.startsWith('interact_') && 
+        if (!buttonInteraction.customId.startsWith('interact_') &&
             !buttonInteraction.customId.startsWith('act_')) {
             return;
         }
@@ -64,7 +64,7 @@ export default {
         }
 
         const requestManager = (client as BotClient).requestManager;
-        
+
         // ✅ Buscar solicitud registrada
         const request = requestManager?.findRequestByMessage(buttonInteraction.message.id);
 
@@ -76,7 +76,7 @@ export default {
             await buttonInteraction.editReply({
                 embeds: [expiredEmbed],
                 components: []
-            }).catch(() => {});
+            }).catch(() => { });
             return;
         }
 
@@ -89,7 +89,7 @@ export default {
             await buttonInteraction.followUp({
                 embeds: [wrongUserEmbed],
                 flags: MessageFlags.Ephemeral
-            }).catch(() => {});
+            }).catch(() => { });
             return;
         }
 
@@ -113,7 +113,7 @@ export default {
 
         } catch (error) {
             logger.error('ButtonInteraction', 'Error procesando respuesta', error);
-            
+
             try {
                 const errorEmbed = new EmbedBuilder()
                     .setDescription('❌ Hubo un error al procesar tu respuesta.')
@@ -157,9 +157,9 @@ async function handleAccept(
     if (statsManager && statsManager.shouldTrack(action)) {
         try {
             await statsManager.recordInteraction(author.id, target.id, action);
-            
-            // Obtener estadísticas breves
-            statsDescription = await statsManager.getBriefStats(author.id, target.id);
+
+            // 🆕 Obtener conteo ESPECÍFICO de esta interacción
+            statsDescription = await statsManager.getSpecificBriefStats(author.id, target.id, action);
         } catch (error) {
             logger.error('ButtonInteraction', 'Error registrando estadística', error);
             // Continuar sin estadísticas si falla

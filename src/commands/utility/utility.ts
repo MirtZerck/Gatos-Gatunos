@@ -1,3 +1,4 @@
+// src/commands/utility/utility.ts
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
@@ -5,7 +6,7 @@ import {
     EmbedBuilder,
     PermissionFlagsBits,
     MessageFlags,
-    GuildMember
+    User
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -23,6 +24,7 @@ export const utility: HybridCommand = {
     subcommands: [
         { name: 'ping', aliases: ['p', 'pong'], description: 'Responde con Pong!' },
         { name: 'avatar', aliases: ['av', 'pfp'], description: 'Muestra el avatar de un usuario' },
+        { name: 'stats', aliases: ['estadisticas', 'interacciones'], description: 'Ver estadísticas de interacciones' },
         { name: 'cooldown', aliases: [], description: 'Gestiona cooldowns (solo admins)' },
     ],
 
@@ -48,6 +50,17 @@ export const utility: HybridCommand = {
                 )
         )
 
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('stats')
+                .setDescription('Ver estadísticas de interacciones entre usuarios')
+                .addUserOption(option =>
+                    option
+                        .setName('usuario')
+                        .setDescription('Usuario con quien ver estadísticas (opcional)')
+                        .setRequired(false)
+                )
+        )
 
         .addSubcommand(subcommand =>
             subcommand
@@ -98,12 +111,20 @@ export const utility: HybridCommand = {
         try {
             const subcommand = interaction.options.getSubcommand();
 
+            // Defer según el tipo de comando
+            if (subcommand === 'stats') {
+                await interaction.deferReply();
+            }
+
             switch (subcommand) {
                 case 'ping':
                     await handlePing(interaction);
                     break;
                 case 'avatar':
                     await handleAvatar(interaction);
+                    break;
+                case 'stats':
+                    await handleStatsSlash(interaction);
                     break;
                 case 'cooldown-stats':
                     await handleCooldownStats(interaction);
@@ -130,6 +151,7 @@ export const utility: HybridCommand = {
                     `**Subcomandos disponibles:**\n` +
                     `• \`ping\` (\`p\`, \`pong\`) - Responde con Pong!\n` +
                     `• \`avatar\` (\`av\`, \`pfp\`) [@usuario] - Muestra avatar\n` +
+                    `• \`stats\` (\`estadisticas\`, \`interacciones\`) [@usuario] - Ver estadísticas\n` +
                     `• \`cooldown\` - Gestiona cooldowns (admin)`
                 );
                 return;
@@ -141,6 +163,9 @@ export const utility: HybridCommand = {
                     break;
                 case 'avatar':
                     await handleAvatarPrefix(message, args.slice(1));
+                    break;
+                case 'stats':
+                    await handleStatsPrefix(message, args.slice(1));
                     break;
                 case 'cooldown':
                     await handleCooldownPrefix(message, args.slice(1));
@@ -154,9 +179,17 @@ export const utility: HybridCommand = {
     },
 };
 
+// ==================== HANDLERS: PING ====================
+
 async function handlePing(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.reply('🏓 Pong!');
 }
+
+async function handlePingPrefix(message: Message): Promise<void> {
+    await message.reply('🏓 Pong!');
+}
+
+// ==================== HANDLERS: AVATAR ====================
 
 async function handleAvatar(interaction: ChatInputCommandInteraction): Promise<void> {
     const user = interaction.options.getUser('usuario') || interaction.user;
@@ -167,6 +200,249 @@ async function handleAvatar(interaction: ChatInputCommandInteraction): Promise<v
         files: [avatarURL]
     });
 }
+
+async function handleAvatarPrefix(message: Message, args: string[]): Promise<void> {
+    const query = args[0] || message.mentions.users.first()?.id;
+
+    if (!query) {
+        const user = message.author;
+        const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
+
+        await message.reply({
+            content: `Avatar de **${user.displayName}**:`,
+            files: [avatarURL]
+        });
+        return;
+    }
+
+    const targetMember = await UserSearchHelper.findMember(message.guild!, query);
+    if (!targetMember) {
+        await message.reply(`❌ No se encontró al usuario: **${query}**`);
+        return;
+    }
+
+    const user = targetMember.user;
+    const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
+
+    await message.reply({
+        content: `Avatar de **${user.displayName}**:`,
+        files: [avatarURL]
+    });
+}
+
+// ==================== HANDLERS: STATS ====================
+
+async function handleStatsSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+    const statsManager = (interaction.client as BotClient).interactionStatsManager;
+
+    if (!statsManager) {
+        await interaction.editReply({
+            content: '❌ El sistema de estadísticas no está disponible.'
+        });
+        return;
+    }
+
+    const targetUser = interaction.options.getUser('usuario') || null;
+    const author = interaction.user;
+
+    if (targetUser) {
+        // Estadísticas con un usuario específico
+        if (targetUser.id === author.id) {
+            await interaction.editReply({
+                content: '❌ No puedes ver estadísticas contigo mismo.'
+            });
+            return;
+        }
+
+        if (targetUser.bot) {
+            await interaction.editReply({
+                content: '❌ No hay estadísticas con bots.'
+            });
+            return;
+        }
+
+        await showPairStats(interaction, author, targetUser, statsManager);
+    } else {
+        // Mostrar información general
+        await showGeneralInfo(interaction, statsManager);
+    }
+}
+
+async function handleStatsPrefix(message: Message, args: string[]): Promise<void> {
+    const statsManager = (message.client as BotClient).interactionStatsManager;
+
+    if (!statsManager) {
+        await message.reply('❌ El sistema de estadísticas no está disponible.');
+        return;
+    }
+
+    const author = message.author;
+    let targetUser: User | null = null;
+
+    if (args.length > 0) {
+        // Prioridad 1: Usuario mencionado
+        targetUser = message.mentions.users.first() || null;
+
+        // Prioridad 2: Búsqueda manual por ID/nombre
+        if (!targetUser) {
+            const foundUser = await UserSearchHelper.findUser(
+                message.guild!,
+                args[0]
+            );
+
+            if (!foundUser) {
+                await message.reply(
+                    `❌ No se encontró al usuario: **${args[0]}**\n\n` +
+                    `**Puedes usar:**\n` +
+                    `• Mención: \`@User\`\n` +
+                    `• Tag: \`User#1234\`\n` +
+                    `• ID: \`123456789012345678\`\n` +
+                    `• Nombre: \`User\``
+                );
+                return;
+            }
+
+            targetUser = foundUser;
+        }
+    }
+
+    if (targetUser) {
+        // Validaciones
+        try {
+            Validators.validateNotSelf(author, targetUser);
+            Validators.validateNotBot(targetUser);
+        } catch (error: any) {
+            await message.reply(error.userMessage || '❌ Validación fallida.');
+            return;
+        }
+
+        await showPairStatsPrefix(message, author, targetUser, statsManager);
+    } else {
+        await showGeneralInfoPrefix(message, statsManager);
+    }
+}
+
+async function showPairStats(
+    interaction: ChatInputCommandInteraction,
+    user1: any,
+    user2: any,
+    statsManager: any
+): Promise<void> {
+    const description = await statsManager.getStatsDescription(
+        user1.id,
+        user2.id,
+        user1.displayName,
+        user2.displayName
+    );
+
+    if (!description) {
+        await interaction.editReply({
+            content: `📊 Aún no hay interacciones entre **${user1.displayName}** y **${user2.displayName}**.`
+        });
+        return;
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle('📊 Estadísticas de Interacciones')
+        .setDescription(description)
+        .setColor(COLORS.INFO)
+        .setThumbnail(user2.displayAvatarURL())
+        .setFooter({
+            text: `Consultado por ${user1.tag}`,
+            iconURL: user1.displayAvatarURL()
+        })
+        .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function showPairStatsPrefix(
+    message: Message,
+    user1: any,
+    user2: any,
+    statsManager: any
+): Promise<void> {
+    const description = await statsManager.getStatsDescription(
+        user1.id,
+        user2.id,
+        user1.displayName,
+        user2.displayName
+    );
+
+    if (!description) {
+        await message.reply(
+            `📊 Aún no hay interacciones entre **${user1.displayName}** y **${user2.displayName}**.`
+        );
+        return;
+    }
+
+    const embed = new EmbedBuilder()
+        .setTitle('📊 Estadísticas de Interacciones')
+        .setDescription(description)
+        .setColor(COLORS.INFO)
+        .setThumbnail(user2.displayAvatarURL())
+        .setFooter({
+            text: `Consultado por ${user1.tag}`,
+            iconURL: user1.displayAvatarURL()
+        })
+        .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+}
+
+async function showGeneralInfo(
+    interaction: ChatInputCommandInteraction,
+    statsManager: any
+): Promise<void> {
+    const trackedInteractions = statsManager.getTrackedInteractionsList();
+
+    const description =
+        '**Estadísticas de Interacciones**\n\n' +
+        'Este sistema rastrea interacciones positivas entre usuarios:\n\n' +
+        '**Interacciones rastreadas:**\n' +
+        trackedInteractions.map((i: any) => `${i.emoji} **${i.name}**`).join(' • ') +
+        '\n\n' +
+        '💡 **Uso:**\n' +
+        '`/utility stats @usuario` - Ver tus estadísticas con alguien\n' +
+        '`/utility stats` - Ver esta información';
+
+    const embed = new EmbedBuilder()
+        .setTitle('📊 Sistema de Estadísticas')
+        .setDescription(description)
+        .setColor(COLORS.INFO)
+        .setFooter({ text: 'Las estadísticas se guardan permanentemente' })
+        .setTimestamp();
+
+    await interaction.editReply({ embeds: [embed] });
+}
+
+async function showGeneralInfoPrefix(
+    message: Message,
+    statsManager: any
+): Promise<void> {
+    const trackedInteractions = statsManager.getTrackedInteractionsList();
+
+    const description =
+        '**Estadísticas de Interacciones**\n\n' +
+        'Este sistema rastrea interacciones positivas entre usuarios:\n\n' +
+        '**Interacciones rastreadas:**\n' +
+        trackedInteractions.map((i: any) => `${i.emoji} **${i.name}**`).join(' • ') +
+        '\n\n' +
+        '💡 **Uso:**\n' +
+        `\`${config.prefix}stats @usuario\` - Ver tus estadísticas con alguien\n` +
+        `\`${config.prefix}stats\` - Ver esta información`;
+
+    const embed = new EmbedBuilder()
+        .setTitle('📊 Sistema de Estadísticas')
+        .setDescription(description)
+        .setColor(COLORS.INFO)
+        .setFooter({ text: 'Las estadísticas se guardan permanentemente' })
+        .setTimestamp();
+
+    await message.reply({ embeds: [embed] });
+}
+
+// ==================== HANDLERS: COOLDOWN ====================
 
 async function handleCooldownStats(interaction: ChatInputCommandInteraction): Promise<void> {
     if (interaction.memberPermissions && !interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
@@ -332,40 +608,6 @@ async function handleCooldownCheck(interaction: ChatInputCommandInteraction): Pr
     }
 
     await interaction.reply({ embeds: [embed], flags: MessageFlags.Ephemeral });
-}
-
-
-async function handlePingPrefix(message: Message): Promise<void> {
-    await message.reply('🏓 Pong!');
-}
-
-async function handleAvatarPrefix(message: Message, args: string[]): Promise<void> {
-    const query = args[0] || message.mentions.users.first()?.id;
-
-    if (!query) {
-        const user = message.author;
-        const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
-
-        await message.reply({
-            content: `Avatar de **${user.displayName}**:`,
-            files: [avatarURL]
-        });
-        return;
-    }
-
-    const targetMember = await UserSearchHelper.findMember(message.guild!, query);
-    if (!targetMember) {
-        await message.reply(`❌ No se encontró al usuario: **${query}**`);
-        return;
-    }
-
-    const user = targetMember.user;
-    const avatarURL = user.displayAvatarURL({ size: 1024, extension: 'png' });
-
-    await message.reply({
-        content: `Avatar de **${user.displayName}**:`,
-        files: [avatarURL]
-    });
 }
 
 async function handleCooldownPrefix(message: Message, args: string[]): Promise<void> {
