@@ -1,4 +1,3 @@
-// src/commands/moderation/moderation.ts
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,

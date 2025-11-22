@@ -6,6 +6,7 @@ import { CooldownManager } from "./managers/CooldownManager.js";
 import { RequestManager } from "./managers/RequestManager.js";
 import { FirebaseAdminManager } from "./managers/FirebaseAdminManager.js";
 import { InteractionStatsManager } from "./managers/InteractionStatsManager.js";
+import { MusicManager } from "./managers/MusicManager.js";
 import { EventManager } from "./managers/EventManager.js";
 import { logger } from './utils/logger.js';
 
@@ -63,11 +64,17 @@ async function main() {
     cooldownManager.setCooldownConfig('moderation', 2000) // 2 segundos
     cooldownManager.setCooldownConfig('custom', 5000) // 5 segundos
     cooldownManager.setCooldownConfig('danbooru', 5000) // 5 segundos
+    cooldownManager.setCooldownConfig('music', 2000) // 2 segundos
 
     // Inicializar sistema de solicitudes
     logger.info('Bot', 'Inicializando sistema de solicitudes...');
     const requestManager = new RequestManager();
     client.requestManager = requestManager;
+
+    // Inicializar sistema de música
+    logger.info('Bot', 'Preparando sistema de música...');
+    const musicManager = new MusicManager(client);
+    client.musicManager = musicManager;
 
     // Cargar eventos
     logger.info('Bot', 'Cargando eventos...');
@@ -84,6 +91,9 @@ async function main() {
         requestManager.destroy();
         if (firebaseAdminManager) {
             firebaseAdminManager.destroy();
+        }
+        if (musicManager) {
+            musicManager.destroy();
         }
         client.destroy();
         process.exit(0);
