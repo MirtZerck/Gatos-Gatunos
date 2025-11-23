@@ -86,8 +86,7 @@ export class CustomCommandManager {
         };
 
         try {
-            const db = this.firebaseManager['database'];
-            const proposalRef = db!.ref(`servers/${guildId}/proposals/${proposalId}`);
+            const proposalRef = this.firebaseManager.getRef(`servers/${guildId}/proposals/${proposalId}`);
             await proposalRef.set(proposal);
 
             logger.info(
@@ -112,8 +111,7 @@ export class CustomCommandManager {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const proposalsRef = db!.ref(`servers/${guildId}/proposals`);
+            const proposalsRef = this.firebaseManager.getRef(`servers/${guildId}/proposals`);
             const snapshot = await proposalsRef.get();
 
             if (!snapshot.exists()) {
@@ -147,8 +145,7 @@ export class CustomCommandManager {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const proposalRef = db!.ref(`servers/${guildId}/proposals/${proposalId}`);
+            const proposalRef = this.firebaseManager.getRef(`servers/${guildId}/proposals/${proposalId}`);
             const snapshot = await proposalRef.get();
 
             if (snapshot.exists()) {
@@ -169,8 +166,7 @@ export class CustomCommandManager {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${commandName}`);
+            const commandRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${commandName}`);
             const snapshot = await commandRef.get();
 
             return snapshot.exists();
@@ -215,11 +211,8 @@ export class CustomCommandManager {
                 throw new Error('Esta propuesta ya fue procesada');
             }
 
-            const db = this.firebaseManager['database'];
-
             if (accept) {
-                // ✅ Añadir al comando
-                const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${proposal.commandName}`);
+                const commandRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${proposal.commandName}`);
                 const snapshot = await commandRef.get();
 
                 let nextIndex = 0;
@@ -237,8 +230,7 @@ export class CustomCommandManager {
                 );
             }
 
-            // 🗑️ ELIMINAR la propuesta de Firebase (aceptada o rechazada)
-            const proposalRef = db!.ref(`servers/${guildId}/proposals/${proposalId}`);
+            const proposalRef = this.firebaseManager.getRef(`servers/${guildId}/proposals/${proposalId}`);
             await proposalRef.remove();
 
             logger.info(
@@ -260,8 +252,7 @@ export class CustomCommandManager {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const commandsRef = db!.ref(`servers/${guildId}/commands/personalizados`);
+            const commandsRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados`);
             const snapshot = await commandsRef.get();
 
             if (!snapshot.exists()) {
@@ -281,7 +272,6 @@ export class CustomCommandManager {
                 });
             }
 
-            // Ordenar alfabéticamente
             commands.sort((a, b) => a.name.localeCompare(b.name));
 
             return commands;
@@ -292,14 +282,13 @@ export class CustomCommandManager {
     }
 
     /**
-     * Obtiene un valor aleatorio de un comando
+     * Obtiene un valor aleatorio de un comando.
      */
     async getRandomValue(guildId: string, commandName: string): Promise<string | null> {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${commandName}`);
+            const commandRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${commandName}`);
             const snapshot = await commandRef.get();
 
             if (!snapshot.exists()) {
@@ -322,14 +311,13 @@ export class CustomCommandManager {
     }
 
     /**
-     * Obtiene todos los valores de un comando
+     * Obtiene todos los valores de un comando.
      */
     async getCommandValues(guildId: string, commandName: string): Promise<Record<string, string> | null> {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${commandName}`);
+            const commandRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${commandName}`);
             const snapshot = await commandRef.get();
 
             if (snapshot.exists()) {
@@ -344,7 +332,7 @@ export class CustomCommandManager {
     }
 
     /**
-     * Elimina un valor específico de un comando
+     * Elimina un valor específico de un comando.
      */
     async deleteCommandValue(
         guildId: string,
@@ -354,12 +342,10 @@ export class CustomCommandManager {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const valueRef = db!.ref(`servers/${guildId}/commands/personalizados/${commandName}/${index}`);
+            const valueRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${commandName}/${index}`);
             await valueRef.remove();
 
-            // Verificar si quedan valores
-            const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${commandName}`);
+            const commandRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${commandName}`);
             const snapshot = await commandRef.get();
 
             if (!snapshot.exists() || Object.keys(snapshot.val()).length === 0) {
@@ -377,14 +363,13 @@ export class CustomCommandManager {
     }
 
     /**
-     * Elimina un comando completo
+     * Elimina un comando completo.
      */
     async deleteCommand(guildId: string, commandName: string): Promise<boolean> {
         this.ensureInitialized();
 
         try {
-            const db = this.firebaseManager['database'];
-            const commandRef = db!.ref(`servers/${guildId}/commands/personalizados/${commandName}`);
+            const commandRef = this.firebaseManager.getRef(`servers/${guildId}/commands/personalizados/${commandName}`);
             await commandRef.remove();
 
             logger.info('CustomCommandManager', `Comando ${commandName} eliminado completamente`);

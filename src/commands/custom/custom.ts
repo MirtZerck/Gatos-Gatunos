@@ -90,14 +90,10 @@ export const custom: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            // Validar que esté en servidor
             Validators.validateInGuild(interaction);
-
             const subcommand = interaction.options.getSubcommand();
 
-            // Defer según el tipo de comando
             if (['gestionar', 'editar'].includes(subcommand)) {
-                // Estos comandos usan componentes interactivos
                 await interaction.deferReply({ flags: MessageFlags.Ephemeral });
             } else {
                 await interaction.deferReply();
@@ -183,8 +179,6 @@ export const custom: HybridCommand = {
     },
 };
 
-// ==================== HANDLERS: PROPONER ====================
-
 async function handleProponerSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     const commandName = interaction.options.getString('comando', true).toLowerCase();
     const imageUrl = interaction.options.getString('imagen', true);
@@ -256,8 +250,6 @@ async function handleProponerPrefix(message: Message, args: string[]): Promise<v
     }
 }
 
-// ==================== HANDLERS: LISTA ====================
-
 async function handleListaSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     const customManager = (interaction.client as BotClient).customCommandManager;
 
@@ -288,10 +280,7 @@ async function handleListaPrefix(message: Message): Promise<void> {
     await message.reply({ embeds: [embed] });
 }
 
-// ==================== HANDLERS: GESTIONAR ====================
-
 async function handleGestionarSlash(interaction: ChatInputCommandInteraction): Promise<void> {
-    // Validar permisos
     Validators.validateUserPermissions(
         interaction.member as any,
         [PermissionFlagsBits.ManageMessages],
@@ -319,11 +308,9 @@ async function handleGestionarSlash(interaction: ChatInputCommandInteraction): P
         return;
     }
 
-    // ⚡ PRE-CARGAR: Verificar qué comandos existen (una sola consulta)
     const commandExistsCache = new Map<string, boolean>();
     const uniqueCommandNames = [...new Set(proposals.map(p => p.commandName))];
 
-    // Consultar todos los comandos en paralelo
     await Promise.all(
         uniqueCommandNames.map(async (cmdName) => {
             const exists = await customManager.commandExists(interaction.guild!.id, cmdName);
@@ -331,12 +318,10 @@ async function handleGestionarSlash(interaction: ChatInputCommandInteraction): P
         })
     );
 
-    // Iniciar navegación con cache pre-cargado
     await showProposalNavigation(interaction, proposals, 0, customManager, commandExistsCache);
 }
 
 async function handleGestionarPrefix(message: Message): Promise<void> {
-    // Validar permisos
     if (!message.member?.permissions.has(PermissionFlagsBits.ManageMessages)) {
         await message.reply('❌ Necesitas permisos de **Gestionar Mensajes** para usar este comando.');
         return;
@@ -359,7 +344,6 @@ async function handleGestionarPrefix(message: Message): Promise<void> {
         return;
     }
 
-    // ✅ Enviar mensaje y iniciar navegación pasando el ID del autor ORIGINAL
     const reply = await message.reply('🔄 Cargando propuestas...');
     await showProposalNavigationPrefix(reply, proposals, 0, customManager, message.author.id);
 }
@@ -369,16 +353,14 @@ async function showProposalNavigation(
     proposals: any[],
     currentIndex: number,
     customManager: any,
-    commandExistsCache?: Map<string, boolean>  // ✅ Cache para evitar consultas repetidas
+    commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
-    // ✅ Inicializar cache si no existe
     if (!commandExistsCache) {
         commandExistsCache = new Map<string, boolean>();
     }
 
     const proposal = proposals[currentIndex];
 
-    // ✅ Verificar cache antes de consultar Firebase
     let isNewCommand: boolean;
     if (commandExistsCache.has(proposal.commandName)) {
         isNewCommand = !commandExistsCache.get(proposal.commandName)!;
@@ -593,13 +575,6 @@ async function showProposalNavigationPrefix(
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
-        // 🔍 DEBUG: Log para verificar IDs
-        console.log('🔍 DEBUG - Verificación de moderador:');
-        console.log('  buttonInteraction.user.id:', buttonInteraction.user.id);
-        console.log('  moderatorId esperado:', moderatorId);
-        console.log('  ¿Coinciden?', buttonInteraction.user.id === moderatorId);
-
-        // ✅ Verificar contra el moderador correcto
         if (buttonInteraction.user.id !== moderatorId) {
             await buttonInteraction.reply({
                 content: '❌ Solo el moderador que abrió el menú puede usarlo.',
@@ -654,10 +629,6 @@ async function processProposalActionPrefix(
     moderatorId: string,
     commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
-    console.log('🔍 DEBUG - processProposalActionPrefix');
-    console.log('  moderatorId recibido:', moderatorId);
-    console.log('  message.author.id:', message.author.id);
-
     try {
         await customManager.processProposal(
             message.guild!.id,
@@ -707,8 +678,6 @@ async function processProposalActionPrefix(
         await message.reply('❌ No se pudo procesar la propuesta. Intenta de nuevo.');
     }
 }
-
-// ==================== HANDLERS: EDITAR ====================
 
 async function handleEditarSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     Validators.validateUserPermissions(
@@ -1076,8 +1045,6 @@ async function showEditNavigationPrefix(
         }
     });
 }
-
-// ==================== HANDLERS: ELIMINAR ====================
 
 async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     Validators.validateUserPermissions(

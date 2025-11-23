@@ -43,30 +43,33 @@ Sistema completo de comandos personalizados por servidor con sistema de propuest
 
 ### 1. Verificar Dependencias
 
-El sistema ya está integrado con Firebase Admin SDK. Verifica que tengas configurado:
+El sistema ya está integrado con Firebase Admin SDK. Verifica que tengas configurado en tu `.env`:
 
 ```env
-FIREBASE_ADMIN_SDK={"type":"service_account","project_id":"..."}
+FIREBASE_ADMIN_SDK={"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
 ```
+
+⚠️ **Importante:** El JSON debe estar en una sola línea o con `\n` correctamente escapados. Ver `FIREBASE_SETUP.md` para más detalles.
 
 ### 2. Estructura de Archivos
 
-Archivos creados:
+Archivos del sistema:
 
 ```
 src/
 ├── commands/
 │   └── custom/
-│       └── custom.ts                    ✅ Comando principal
+│       └── custom.ts                    ✅ Comando principal (slash + prefijo)
 ├── events/
-│   └── customCommandHandler.ts          ✅ Event handler
+│   └── customCommandHandler.ts          ✅ Event handler para comandos personalizados
 ├── managers/
-│   └── CustomCommandManager.ts          ✅ Gestor principal
+│   ├── CustomCommandManager.ts          ✅ Gestor principal
+│   └── FirebaseAdminManager.ts          ✅ Gestor de Firebase
 ├── types/
-│   ├── CustomCommand.ts                 ✅ Tipos
-│   └── BotClient.ts                     ✅ Actualizado
+│   ├── CustomCommand.ts                 ✅ Tipos e interfaces
+│   └── BotClient.ts                     ✅ Cliente extendido
 └── utils/
-    └── customCommandHelpers.ts          ✅ Helpers
+    └── customCommandHelpers.ts          ✅ Helpers para embeds
 
 ```
 
@@ -75,7 +78,11 @@ src/
 El sistema se inicializa automáticamente en `src/index.ts`:
 
 ```typescript
-// Ya incluido en el index.ts actualizado
+// Firebase Admin Manager
+const firebaseAdminManager = new FirebaseAdminManager(firebaseAdminConfig);
+await firebaseAdminManager.initialize();
+
+// Custom Command Manager
 const customCommandManager = new CustomCommandManager(firebaseAdminManager);
 client.customCommandManager = customCommandManager;
 ```
@@ -92,6 +99,12 @@ O en desarrollo:
 ```bash
 npm run dev
 ```
+
+### 5. Verificar Funcionamiento
+
+1. Verifica en los logs que Firebase se conectó correctamente
+2. Prueba crear una propuesta: `*proponer test https://i.imgur.com/example.png`
+3. Verifica en Firebase Console que se creó la propuesta
 
 ## 🗄️ Estructura de Firebase
 
@@ -170,7 +183,7 @@ Comandos disponibles en Mi Servidor:
 
 ---
 
-#### `*<comando>` o `/custom <comando>`
+#### `*<comando>`
 
 Usa un comando personalizado y muestra una imagen aleatoria.
 
@@ -178,7 +191,7 @@ Usa un comando personalizado y muestra una imagen aleatoria.
 ```
 *gatito
 *perrito
-/custom gatito
+*meme
 ```
 
 **Resultado:**
@@ -186,8 +199,10 @@ Usa un comando personalizado y muestra una imagen aleatoria.
 🎨 gatito
 [IMAGEN ALEATORIA]
 
-Añadido por: User#1234 | Total de imágenes: 5
+Total de imágenes: 5
 ```
+
+⚠️ **Nota:** Los comandos personalizados **solo funcionan con prefijo** (`*comando`), no con slash commands. Esto es una limitación de Discord que no permite registrar comandos dinámicamente. Ver `CUSTOM_COMMANDS_LIMITATIONS.md` para más detalles.
 
 ---
 
@@ -324,8 +339,10 @@ Usuario: *gatito
 Bot: 🎨 gatito
      [IMAGEN ALEATORIA DE LAS 5 DISPONIBLES]
      
-     Añadido por: User#1234 | Total de imágenes: 5
+     Total de imágenes: 5
 ```
+
+**Nota:** El comando selecciona una imagen aleatoria de todas las disponibles cada vez que se ejecuta.
 
 ### Flujo 4: Editar Comando
 
@@ -454,18 +471,26 @@ Bot: ✅ Comando gatito eliminado completamente.
 
 ## 🐛 Troubleshooting
 
-### Error: "Sistema no disponible"
+### Error: "Sistema no disponible" o "El sistema de comandos personalizados no está disponible"
 
-**Causa:** Firebase Admin SDK no inicializado
+**Causa:** Firebase Admin SDK no inicializado o no configurado
 
 **Solución:**
 ```bash
 # Verificar .env
 cat .env | grep FIREBASE_ADMIN_SDK
 
+# Verificar que el JSON es válido
+node -e "console.log(JSON.parse(process.env.FIREBASE_ADMIN_SDK))"
+
 # Reiniciar bot
 npm run build && npm start
 ```
+
+**Si el error persiste:**
+- Verifica que Firebase Realtime Database esté habilitada
+- Revisa los logs del bot para ver el error específico de Firebase
+- Consulta `FIREBASE_SETUP.md` para configuración detallada
 
 ### Error: "Nombre de comando inválido"
 
@@ -496,7 +521,7 @@ npm run build && npm start
 
 ### Bot no responde al usar comando
 
-**Causa:** Comando no existe o está escrito mal
+**Causa:** Comando no existe, está escrito mal, o el sistema no está disponible
 
 **Solución:**
 ```bash
@@ -506,7 +531,12 @@ npm run build && npm start
 # Verificar ortografía
 *gatito  ✅
 *gatitp  ❌
+
+# Verificar que el sistema esté funcionando
+# Si no hay respuesta, revisa los logs del bot
 ```
+
+**Nota:** El comando debe ejecutarse con el prefijo configurado (por defecto `*`). Si usas otro prefijo, ajusta el comando.
 
 ### Imagen no se muestra
 
@@ -590,8 +620,12 @@ Firebase Console:
 https://console.firebase.google.com/
 → Tu Proyecto
 → Realtime Database
-→ servers/{guildId}/commands/personalizados
+→ servers/{guildId}/
+  ├── commands/personalizados/  (comandos activos)
+  └── proposals/                (propuestas pendientes)
 ```
+
+**Nota:** Las propuestas se eliminan automáticamente después de ser procesadas (aceptadas o rechazadas).
 
 ## 🚀 Próximas Mejoras (Opcionales)
 

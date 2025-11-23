@@ -1,4 +1,3 @@
-// src/commands/utility/utility.ts
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
@@ -111,7 +110,6 @@ export const utility: HybridCommand = {
         try {
             const subcommand = interaction.options.getSubcommand();
 
-            // Defer según el tipo de comando
             if (subcommand === 'stats') {
                 await interaction.deferReply();
             }
@@ -179,8 +177,6 @@ export const utility: HybridCommand = {
     },
 };
 
-// ==================== HANDLERS: PING ====================
-
 async function handlePing(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.reply('🏓 Pong!');
 }
@@ -188,8 +184,6 @@ async function handlePing(interaction: ChatInputCommandInteraction): Promise<voi
 async function handlePingPrefix(message: Message): Promise<void> {
     await message.reply('🏓 Pong!');
 }
-
-// ==================== HANDLERS: AVATAR ====================
 
 async function handleAvatar(interaction: ChatInputCommandInteraction): Promise<void> {
     const user = interaction.options.getUser('usuario') || interaction.user;
@@ -230,8 +224,6 @@ async function handleAvatarPrefix(message: Message, args: string[]): Promise<voi
     });
 }
 
-// ==================== HANDLERS: STATS ====================
-
 async function handleStatsSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     const statsManager = (interaction.client as BotClient).interactionStatsManager;
 
@@ -246,7 +238,6 @@ async function handleStatsSlash(interaction: ChatInputCommandInteraction): Promi
     const author = interaction.user;
 
     if (targetUser) {
-        // Estadísticas con un usuario específico
         if (targetUser.id === author.id) {
             await interaction.editReply({
                 content: '❌ No puedes ver estadísticas contigo mismo.'
@@ -263,7 +254,6 @@ async function handleStatsSlash(interaction: ChatInputCommandInteraction): Promi
 
         await showPairStats(interaction, author, targetUser, statsManager);
     } else {
-        // Mostrar información general
         await showGeneralInfo(interaction, statsManager);
     }
 }
@@ -280,10 +270,8 @@ async function handleStatsPrefix(message: Message, args: string[]): Promise<void
     let targetUser: User | null = null;
 
     if (args.length > 0) {
-        // Prioridad 1: Usuario mencionado
         targetUser = message.mentions.users.first() || null;
 
-        // Prioridad 2: Búsqueda manual por ID/nombre
         if (!targetUser) {
             const foundUser = await UserSearchHelper.findUser(
                 message.guild!,
@@ -441,8 +429,6 @@ async function showGeneralInfoPrefix(
 
     await message.reply({ embeds: [embed] });
 }
-
-// ==================== HANDLERS: COOLDOWN ====================
 
 async function handleCooldownStats(interaction: ChatInputCommandInteraction): Promise<void> {
     if (interaction.memberPermissions && !interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {

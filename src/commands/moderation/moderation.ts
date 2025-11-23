@@ -27,8 +27,7 @@ export const moderation: HybridCommand = {
     data: new SlashCommandBuilder()
         .setName('moderation')
         .setDescription('Comandos de moderación del servidor')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
-        .setDMPermission(false)
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)        
         .addSubcommand(subcommand =>
             subcommand
                 .setName('kick')
@@ -104,7 +103,6 @@ export const moderation: HybridCommand = {
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
         try {
-            // ✅ PASO 1: Verificación SÍNCRONA de servidor
             if (!interaction.guild) {
                 await interaction.reply({
                     content: '❌ Este comando solo funciona en servidores.',
@@ -113,13 +111,9 @@ export const moderation: HybridCommand = {
                 return;
             }
 
-            // ✅ PASO 2: Obtener datos (SÍNCRONO)
             const subcommand = interaction.options.getSubcommand();
-
-            // ✅ PASO 3: DEFER INMEDIATO (antes de validaciones asíncronas)
             await interaction.deferReply();
 
-            // ✅ PASO 4: Ejecutar comando correspondiente (ya tenemos 15 minutos)
             switch (subcommand) {
                 case 'kick':
                     await handleKickSlash(interaction);
@@ -157,7 +151,6 @@ export const moderation: HybridCommand = {
                 return;
             }
 
-            // Mapear aliases
             const commandMap: Record<string, string> = {
                 'expulsar': 'kick',
                 'banear': 'ban',
@@ -184,8 +177,6 @@ export const moderation: HybridCommand = {
     },
 };
 
-// ==================== HANDLERS PARA SLASH COMMANDS ====================
-
 async function handleKickSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     const target = interaction.options.getMember('usuario') as GuildMember | null;
     const reason = interaction.options.getString('razon') || 'Sin razón especificada';
@@ -206,8 +197,6 @@ async function handleTimeoutSlash(interaction: ChatInputCommandInteraction): Pro
     await executeTimeout(interaction, target, duration, reason);
 }
 
-// ==================== HANDLERS PARA PREFIX COMMANDS ====================
-
 async function handleKickPrefix(message: Message, args: string[]): Promise<void> {
     if (args.length === 0) {
         await message.reply(
@@ -220,7 +209,6 @@ async function handleKickPrefix(message: Message, args: string[]): Promise<void>
         return;
     }
 
-    // ✅ Buscar miembro con UserSearchHelper
     const target = await UserSearchHelper.findMemberFromMentionOrQuery(
         message.guild!,
         message.mentions.members?.first(),
@@ -239,7 +227,6 @@ async function handleKickPrefix(message: Message, args: string[]): Promise<void>
         return;
     }
 
-    // Determinar índice de inicio de razón
     const reasonStartIndex = message.mentions.members?.first() ? 1 : 1;
     const reason = args.slice(reasonStartIndex).join(' ') || 'Sin razón especificada';
 
@@ -258,7 +245,6 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
         return;
     }
 
-    // ✅ Buscar miembro con UserSearchHelper
     const target = await UserSearchHelper.findMemberFromMentionOrQuery(
         message.guild!,
         message.mentions.members?.first(),
@@ -280,7 +266,6 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
     let deleteMessageDays = 0;
     let reasonStartIndex = message.mentions.members?.first() ? 1 : 1;
 
-    // Verificar si el siguiente arg es un número (días)
     if (args[reasonStartIndex] && !isNaN(parseInt(args[reasonStartIndex]))) {
         deleteMessageDays = Math.min(Math.max(parseInt(args[reasonStartIndex]), 0), 7);
         reasonStartIndex++;
@@ -302,7 +287,6 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
         return;
     }
 
-    // ✅ Buscar miembro con UserSearchHelper
     const target = await UserSearchHelper.findMemberFromMentionOrQuery(
         message.guild!,
         message.mentions.members?.first(),
@@ -321,7 +305,6 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
         return;
     }
 
-    // Índice de duración
     const durationIndex = message.mentions.members?.first() ? 1 : 1;
     const duration = parseInt(args[durationIndex]);
 
@@ -334,8 +317,6 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
     await executeTimeout(message, target, duration, reason);
 }
 
-// ==================== FUNCIONES DE EJECUCIÓN ====================
-
 async function executeKick(
     context: ChatInputCommandInteraction | Message,
     target: GuildMember | null | undefined,
@@ -345,7 +326,6 @@ async function executeKick(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-    // ✅ VALIDACIONES (ya tenemos defer si es interacción)
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
@@ -358,9 +338,7 @@ async function executeKick(
         throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es kickable', '❌ No puedo expulsar a este usuario.');
     }
 
-    // ✅ Operaciones asíncronas (enviar DM, kick)
     try {
-        // Intentar notificar al usuario (puede fallar si tiene DMs cerrados)
         try {
             await target.send({
                 embeds: [
@@ -371,14 +349,10 @@ async function executeKick(
                         .setTimestamp()
                 ]
             });
-        } catch {
-            // Ignorar si no se puede enviar DM
-        }
+        } catch { }
 
-        // ✅ Ejecutar la acción de moderación
         await target.kick(reason);
 
-        // ✅ Responder con el resultado
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario expulsado`)
             .setDescription(
@@ -409,7 +383,6 @@ async function executeBan(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-    // ✅ VALIDACIONES
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
@@ -422,7 +395,6 @@ async function executeBan(
         throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es baneable', '❌ No puedo banear a este usuario.');
     }
 
-    // ✅ Operaciones asíncronas
     try {
         try {
             await target.send({
@@ -434,9 +406,7 @@ async function executeBan(
                         .setTimestamp()
                 ]
             });
-        } catch {
-            // Ignorar
-        }
+        } catch { }
 
         await target.ban({ reason, deleteMessageSeconds: deleteMessageDays * 24 * 60 * 60 });
 
@@ -471,7 +441,6 @@ async function executeTimeout(
     const author = isInteraction ? context.user : context.author;
     const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
 
-    // ✅ VALIDACIONES
     Validators.validateMemberProvided(target);
     Validators.validateNotSelf(author, target.user);
     Validators.validateNotBot(target.user);
@@ -484,7 +453,6 @@ async function executeTimeout(
         throw new CommandError(ErrorType.PERMISSION_ERROR, 'El objetivo no es silenciable', '❌ No puedo silenciar a este usuario.');
     }
 
-    // ✅ Operaciones asíncronas
     try {
         const timeoutUntil = new Date(Date.now() + duration * 60 * 1000);
         await target.timeout(duration * 60 * 1000, reason);
@@ -504,9 +472,7 @@ async function executeTimeout(
                         .setTimestamp()
                 ]
             });
-        } catch {
-            // Ignorar
-        }
+        } catch { }
 
         const embed = new EmbedBuilder()
             .setTitle(`${EMOJIS.SUCCESS} Usuario silenciado`)

@@ -32,7 +32,6 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-// 🎨 Configuración mejorada por reacción
 const REACTION_CONFIG: Record<ActionType, {
     emoji: string;
     name: string;
@@ -319,8 +318,6 @@ export const react: HybridCommand = {
         }
     },
 };
-
-// ==================== FUNCIONES AUXILIARES ====================
 
 async function handleReaction(
     interaction: ChatInputCommandInteraction,

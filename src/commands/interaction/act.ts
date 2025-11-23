@@ -34,7 +34,6 @@ type ActionType = keyof typeof ACTION_QUERIES;
 const REQUIRE_REQUEST_WITH_TARGET: ActionType[] = ['dance', 'sing', 'highfive'];
 const NO_REQUEST: ActionType[] = ['wave', 'bow', 'clap', 'cheer', 'salute', 'nod'];
 
-// 🎨 Configuración mejorada por acción
 const ACTION_CONFIG: Record<ActionType, {
     emoji: string;
     name: string;
@@ -277,8 +276,6 @@ export const act: HybridCommand = {
     },
 };
 
-// ==================== ACCIONES DIRECTAS ====================
-
 async function handleDirectAction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
@@ -334,8 +331,6 @@ async function handleDirectActionPrefix(
         throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
     }
 }
-
-// ==================== SOLICITUDES CON BOTONES ====================
 
 async function handleRequestAction(
     interaction: ChatInputCommandInteraction,

@@ -1,7 +1,6 @@
-// diagnostic-voice.ts
 import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
 import { SlashOnlyCommand } from '../../types/Command.js';
-import { CATEGORIES, COLORS } from '../../utils/constants.js';
+import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 
 export const diagnosticVoice: SlashOnlyCommand = {
     type: 'slash-only',
@@ -12,7 +11,8 @@ export const diagnosticVoice: SlashOnlyCommand = {
     data: new SlashCommandBuilder()
         .setName('diagnostic-voice')
         .setDescription('Verifica los permisos de voz del bot')
-        .setDMPermission(false),
+        .setContexts(CONTEXTS.GUILD_ONLY)
+        .setIntegrationTypes(INTEGRATION_TYPES.GUILD_ONLY),
 
     async execute(interaction: ChatInputCommandInteraction) {
         if (!interaction.guild) return;

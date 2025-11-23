@@ -7,21 +7,26 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 - **Comandos Slash y Prefijo**: Soporte para ambos tipos de comandos con conversión automática
 - **Sistema de Comandos Modular**: Arquitectura escalable y fácil de extender
 - **Subcomandos con Aliases**: Sistema avanzado de subcomandos con soporte para múltiples aliases
+- **Comandos Personalizados por Servidor**: Sistema completo de comandos personalizados con propuestas y gestión de moderadores
 - **Interacciones con GIFs**: Más de 30 comandos de interacción con usuarios usando Tenor API
 - **Sistema de Solicitudes**: Gestión de solicitudes de interacción con botones de aceptar/rechazar
 - **Sistema de Cooldowns**: Prevención de spam con cooldowns configurables por comando
+- **Estadísticas de Interacciones**: Registro y seguimiento de interacciones entre usuarios usando Firebase
 - **Gestión de Eventos**: Sistema de eventos completamente modular
 - **Sistema de Logging**: Logger configurable con niveles (debug, info, warn, error)
 - **Manejo de Errores Robusto**: Sistema de manejo de errores con mensajes personalizados y logging
 - **TypeScript**: Código type-safe y mantenible con tipado completo
 - **Optimización de Interacciones**: Manejo inteligente de deferReply para evitar timeouts
+- **Firebase Integration**: Integración con Firebase Realtime Database para almacenamiento persistente
 
 ## 📋 Requisitos
 
 - Node.js 18.0.0 o superior
 - npm o yarn
 - Un bot de Discord (creado en [Discord Developer Portal](https://discord.com/developers/applications))
-- Una API Key de Tenor (opcional, para comandos de interacción)
+- Una API Key de Tenor (para comandos de interacción)
+- Una cuenta de Firebase con Realtime Database habilitada (para comandos personalizados y estadísticas)
+- Credenciales de Firebase Admin SDK (Service Account)
 
 ## 🛠️ Instalación
 
@@ -42,7 +47,13 @@ TOKEN=tu_token_del_bot
 APPLICATION_ID=tu_application_id
 PREFIX=*
 TENOR_API_KEY=tu_tenor_api_key
+DANBOORU_API_KEY=tu_danbooru_api_key
+FIREBASE_ADMIN_SDK={"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
 ```
+
+⚠️ **Importante:** 
+- `FIREBASE_ADMIN_SDK` debe ser un JSON válido en una sola línea
+- Consulta `FIREBASE_SETUP.md` para obtener las credenciales de Firebase
 
 4. Compila el proyecto:
 ```bash
@@ -70,6 +81,8 @@ npm run dev
 Hikari-Koizumi-2.0/
 ├── src/
 │   ├── commands/           # Comandos del bot
+│   │   ├── custom/         # Comandos personalizados
+│   │   │   └── custom.ts   # Sistema de comandos personalizados
 │   │   ├── interaction/    # Comandos de interacción
 │   │   │   ├── react.ts    # Reacciones emocionales
 │   │   │   ├── act.ts      # Acciones expresivas
@@ -84,10 +97,13 @@ Hikari-Koizumi-2.0/
 │   │   ├── messageCreate.ts      # Mensajes
 │   │   └── ready.ts              # Bot listo
 │   ├── managers/           # Gestores del sistema
-│   │   ├── CommandManager.ts     # Gestor de comandos
-│   │   ├── EventManager.ts       # Gestor de eventos
-│   │   ├── CooldownManager.ts    # Sistema de cooldowns
-│   │   └── RequestManager.ts     # Sistema de solicitudes
+│   │   ├── CommandManager.ts          # Gestor de comandos
+│   │   ├── EventManager.ts            # Gestor de eventos
+│   │   ├── CooldownManager.ts         # Sistema de cooldowns
+│   │   ├── RequestManager.ts          # Sistema de solicitudes
+│   │   ├── FirebaseAdminManager.ts    # Gestor de Firebase
+│   │   ├── CustomCommandManager.ts    # Gestor de comandos personalizados
+│   │   └── InteractionStatsManager.ts # Gestor de estadísticas
 │   ├── types/              # Tipos TypeScript
 │   │   ├── BotClient.ts
 │   │   ├── Command.ts
@@ -179,10 +195,28 @@ Interacciones íntimas/románticas o juguetonas/agresivas:
 
 - **`ping`** (`p`, `pong`) - Responde con Pong! - Verifica la latencia del bot
 - **`avatar`** (`av`, `pfp`) `[@usuario]` - Muestra el avatar de un usuario
+- **`stats`** `[@usuario]` - Muestra estadísticas de interacciones con un usuario
 - **`cooldown-stats`** - Muestra estadísticas del sistema de cooldowns (Solo Admin)
 - **`cooldown-clear`** `[comando]` `[@usuario]` - Limpia cooldowns (Solo Admin)
 
 **Uso:** `/utility ping` o `*ping`
+
+### 🎨 Comandos Personalizados
+
+Sistema completo de comandos personalizados por servidor. Los usuarios pueden proponer comandos con imágenes que los moderadores revisan y aprueban.
+
+- **`/custom proponer <comando> <imagen>`** - Propone un nuevo comando o añade imagen a uno existente
+- **`/custom lista`** - Muestra todos los comandos personalizados disponibles
+- **`/custom gestionar`** - Gestiona propuestas pendientes (Moderadores)
+- **`/custom editar <comando>`** - Edita un comando existente (Moderadores)
+- **`/custom eliminar <comando>`** - Elimina un comando completo (Moderadores)
+- **`*<comando>`** - Usa un comando personalizado (muestra imagen aleatoria)
+
+**Uso:** `/custom proponer gatito https://i.imgur.com/example.png` o `*proponer gatito https://...`
+
+> **Nota:** Los comandos personalizados solo funcionan con prefijo (`*comando`), no con slash commands. Ver `CUSTOM_COMMANDS_LIMITATIONS.md` para más detalles.
+
+Para más información, consulta `CUSTOM_COMMANDS_GUIDE.md`.
 
 ### ⚖️ Moderación
 
@@ -204,6 +238,8 @@ Interacciones íntimas/románticas o juguetonas/agresivas:
 | `APPLICATION_ID` | ID de la aplicación del bot | ✅ | - |
 | `PREFIX` | Prefijo para comandos de prefijo | ❌ | `*` |
 | `TENOR_API_KEY` | API Key de Tenor para GIFs | ✅ | - |
+| `DANBOORU_API_KEY` | API Key de Danbooru | ✅ | - |
+| `FIREBASE_ADMIN_SDK` | Credenciales de Firebase Admin SDK (JSON) | ✅ | - |
 | `NODE_ENV` | Entorno de ejecución (`development` o `production`) | ❌ | `development` |
 | `LOG_LEVEL` | Nivel de logging (`debug`, `info`, `warn`, `error`) | ❌ | `info` |
 
@@ -214,6 +250,8 @@ TOKEN=tu_token_del_bot_aqui
 APPLICATION_ID=tu_application_id_aqui
 PREFIX=*
 TENOR_API_KEY=tu_tenor_api_key_aqui
+DANBOORU_API_KEY=tu_danbooru_api_key_aqui
+FIREBASE_ADMIN_SDK={"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
 NODE_ENV=development
 LOG_LEVEL=info
 ```
@@ -226,6 +264,18 @@ LOG_LEVEL=info
 4. Copia tu API Key y añádela al archivo `.env` como `TENOR_API_KEY`
 5. La API Key es gratuita con límites generosos para uso personal
 
+### Configurar Firebase
+
+Para usar comandos personalizados y estadísticas de interacciones, necesitas configurar Firebase:
+
+1. Consulta la guía completa en `FIREBASE_SETUP.md`
+2. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/)
+3. Habilita Realtime Database
+4. Crea una Service Account y descarga las credenciales JSON
+5. Añade el JSON completo a `.env` como `FIREBASE_ADMIN_SDK`
+
+⚠️ **Importante:** El JSON debe estar en una sola línea o con `\n` correctamente escapados.
+
 ## 📝 Scripts Disponibles
 
 | Script | Descripción |
@@ -237,6 +287,19 @@ LOG_LEVEL=info
 
 ## 🎯 Características Avanzadas
 
+### Sistema de Comandos Personalizados
+
+Sistema completo de comandos personalizados por servidor con:
+
+- ✅ Propuestas de usuarios con imágenes
+- ✅ Sistema de revisión y aprobación por moderadores
+- ✅ Almacenamiento persistente en Firebase
+- ✅ Selección aleatoria de imágenes al usar comandos
+- ✅ Gestión completa (editar, eliminar valores, eliminar comandos)
+- ✅ Notificaciones automáticas a usuarios sobre sus propuestas
+
+Para más información, consulta `CUSTOM_COMMANDS_GUIDE.md` y `CUSTOM_COMMANDS_LIMITATIONS.md`.
+
 ### Sistema de Solicitudes de Interacción
 
 Algunas interacciones (como `hug`, `kiss`, `pat`, `cuddle`, `dance`, `sing`, `highfive`) requieren que el usuario objetivo acepte la solicitud. El sistema:
@@ -245,6 +308,16 @@ Algunas interacciones (como `hug`, `kiss`, `pat`, `cuddle`, `dance`, `sing`, `hi
 - ✅ Expira automáticamente después de 10 minutos
 - ✅ Previene spam limitando una solicitud pendiente por usuario
 - ✅ Muestra GIFs animados al aceptar la interacción
+
+### Sistema de Estadísticas de Interacciones
+
+El bot registra y almacena estadísticas de interacciones entre usuarios:
+
+- 📊 Contador total de interacciones entre dos usuarios
+- 📈 Estadísticas por tipo de interacción
+- 🕐 Timestamp de primera y última interacción
+- 💾 Almacenamiento persistente en Firebase
+- 📋 Comando `/stats` para ver estadísticas
 
 ### Sistema de Cooldowns
 

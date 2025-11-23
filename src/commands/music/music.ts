@@ -222,8 +222,6 @@ export const music: HybridCommand = {
     }
 };
 
-// ==================== UTILIDADES ====================
-
 function getVoiceChannel(member: GuildMember): VoiceBasedChannel {
     if (!member.voice.channel) {
         throw new CommandError(
@@ -274,8 +272,6 @@ async function showHelp(message: Message): Promise<void> {
 
     await message.reply({ embeds: [embed] });
 }
-
-// ==================== HANDLERS SLASH ====================
 
 async function handlePlay(interaction: ChatInputCommandInteraction): Promise<void> {
     await interaction.deferReply();
@@ -581,8 +577,6 @@ async function handleLeave(interaction: ChatInputCommandInteraction): Promise<vo
         ]
     });
 }
-
-// ==================== HANDLERS PREFIX ====================
 
 async function handlePlayPrefix(message: Message, args: string[]): Promise<void> {
     if (args.length === 0) {

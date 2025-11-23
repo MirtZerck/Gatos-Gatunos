@@ -1,6 +1,6 @@
-# 🔥 Guía de Configuración de Firebase
+# 🔥 Guía de Configuración de Firebase Admin SDK
 
-Esta guía te ayudará a configurar Firebase Realtime Database para el sistema de estadísticas de interacciones.
+Esta guía te ayudará a configurar Firebase Realtime Database usando Firebase Admin SDK para el sistema de comandos personalizados y estadísticas de interacciones.
 
 ## 📋 Requisitos Previos
 
@@ -12,7 +12,7 @@ Esta guía te ayudará a configurar Firebase Realtime Database para el sistema d
 
 1. Ve a [Firebase Console](https://console.firebase.google.com/)
 2. Click en **"Agregar proyecto"** (Add project)
-3. Ingresa un nombre para tu proyecto (ej: `hikari-bot-stats`)
+3. Ingresa un nombre para tu proyecto (ej: `hikari-bot`)
 4. Deshabilita Google Analytics si no lo necesitas (opcional)
 5. Click en **"Crear proyecto"**
 
@@ -33,6 +33,10 @@ Por defecto, Firebase bloquea todo acceso. Necesitas configurar reglas para que 
 ```json
 {
   "rules": {
+    "servers": {
+      ".read": true,
+      ".write": true
+    },
     "interactions": {
       ".read": true,
       ".write": true,
@@ -48,45 +52,55 @@ Por defecto, Firebase bloquea todo acceso. Necesitas configurar reglas para que 
 
 2. Click en **"Publicar"** (Publish)
 
-## 🔑 Paso 4: Obtener Credenciales
+## 🔑 Paso 4: Obtener Credenciales de Service Account
+
+Para usar Firebase Admin SDK, necesitas crear una Service Account:
 
 1. En el menú lateral, click en el ⚙️ **"Configuración del proyecto"**
-2. Baja hasta la sección **"Tus apps"**
-3. Si no tienes una app web, click en el ícono **`</>`** (Web)
-4. Dale un nombre (ej: `Hikari Bot`) y click **"Registrar app"**
-5. Copia las credenciales que se muestran:
+2. Ve a la pestaña **"Cuentas de servicio"** (Service accounts)
+3. Click en **"Generar nueva clave privada"** (Generate new private key)
+4. Se descargará un archivo JSON con las credenciales
+5. **IMPORTANTE:** Guarda este archivo de forma segura, contiene credenciales sensibles
 
-```javascript
-const firebaseConfig = {
-  apiKey: "AIza...",
-  authDomain: "tu-proyecto.firebaseapp.com",
-  databaseURL: "https://tu-proyecto.firebaseio.com",
-  projectId: "tu-proyecto",
-  storageBucket: "tu-proyecto.appspot.com",
-  messagingSenderId: "123456789",
-  appId: "1:123456789:web:abcdef"
-};
+El archivo JSON tiene esta estructura:
+
+```json
+{
+  "type": "service_account",
+  "project_id": "tu-proyecto",
+  "private_key_id": "...",
+  "private_key": "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n",
+  "client_email": "firebase-adminsdk-xxxxx@tu-proyecto.iam.gserviceaccount.com",
+  "client_id": "...",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "..."
+}
 ```
 
 ## 📝 Paso 5: Configurar Variables de Entorno
 
-Copia las credenciales a tu archivo `.env`:
+Copia el contenido completo del archivo JSON a tu archivo `.env` como una cadena JSON:
 
 ```env
-# Firebase Realtime Database
-FIREBASE_API_KEY=AIza...
-FIREBASE_AUTH_DOMAIN=tu-proyecto.firebaseapp.com
-FIREBASE_DATABASE_URL=https://tu-proyecto.firebaseio.com
-FIREBASE_PROJECT_ID=tu-proyecto
-FIREBASE_STORAGE_BUCKET=tu-proyecto.appspot.com
-FIREBASE_MESSAGING_SENDER_ID=123456789
-FIREBASE_APP_ID=1:123456789:web:abcdef
+# Firebase Admin SDK (debe ser un JSON válido en una sola línea o con \n)
+FIREBASE_ADMIN_SDK={"type":"service_account","project_id":"tu-proyecto","private_key_id":"...","private_key":"-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n","client_email":"firebase-adminsdk-xxxxx@tu-proyecto.iam.gserviceaccount.com","client_id":"...","auth_uri":"https://accounts.google.com/o/oauth2/auth","token_uri":"https://oauth2.googleapis.com/token","auth_provider_x509_cert_url":"https://www.googleapis.com/oauth2/v1/certs","client_x509_cert_url":"..."}
 ```
 
-## 📦 Paso 6: Instalar Dependencias
+**Alternativa (más legible):** Si prefieres mantener el JSON formateado, puedes usar un archivo separado y cargarlo en el código, pero el método actual usa una variable de entorno.
+
+⚠️ **IMPORTANTE:** 
+- El JSON debe estar en una sola línea o usar `\n` para saltos de línea
+- No incluyas espacios extra o comillas adicionales
+- Asegúrate de escapar correctamente las comillas dentro del JSON
+
+## 📦 Paso 6: Verificar Dependencias
+
+El proyecto ya incluye `firebase-admin` como dependencia. Verifica que esté instalado:
 
 ```bash
-npm install firebase
+npm install
 ```
 
 ## ✅ Paso 7: Probar Conexión
@@ -98,9 +112,11 @@ npm run dev
 
 2. Busca en los logs:
 ```
-[INFO] [Bot] 🔥 Conectando con Firebase...
-[INFO] [FirebaseManager] ✅ Conexión con Firebase establecida
-[INFO] [Bot] ✅ Sistema de estadísticas de interacciones listo
+[INFO] [Bot] Conectando con Firebase Admin SDK...
+[INFO] [FirebaseAdminManager] Firebase Admin SDK inicializado
+[INFO] [FirebaseAdminManager] ✅ Conexión con Firebase Admin establecida
+[INFO] [Bot] Sistema de estadísticas listo
+[INFO] [Bot] Sistema de comandos personalizados listo
 ```
 
 3. Prueba una interacción:
@@ -108,11 +124,19 @@ npm run dev
 /interact hug @usuario
 ```
 
-4. Verifica en Firebase Console que se creó el registro en `interactions/`
+4. Prueba un comando personalizado:
+```
+*proponer gatito https://i.imgur.com/example.png
+```
+
+5. Verifica en Firebase Console que se crearon los registros:
+   - `interactions/` para estadísticas
+   - `servers/{guildId}/commands/personalizados/` para comandos personalizados
+   - `servers/{guildId}/proposals/` para propuestas
 
 ## 📊 Estructura de Datos
 
-Los datos se almacenan así:
+### Estadísticas de Interacciones
 
 ```
 interactions/
@@ -131,6 +155,32 @@ interactions/
 - `userId1_userId2` es la misma que `userId2_userId1`
 - Timestamps en milisegundos
 
+### Comandos Personalizados
+
+```
+servers/
+  └── {guildId}/
+      ├── commands/
+      │   └── personalizados/
+      │       └── {commandName}/           # Ej: "gatito"
+      │           ├── 0: "https://..."     # Valores auto-indexados
+      │           ├── 1: "https://..."
+      │           └── 2: "https://..."
+      │
+      └── proposals/
+          └── {proposalId}/                # UUID
+              ├── commandName: "gatito"
+              ├── imageUrl: "https://..."
+              ├── authorId: "123..."
+              ├── authorTag: "User#1234"
+              ├── status: "pending"        # pending|accepted|rejected
+              ├── timestamp: 1699999999
+              ├── processedBy: null
+              ├── processedByTag: null
+              ├── processedAt: null
+              └── guildId: "456..."
+```
+
 ## 🔍 Ver Estadísticas
 
 ```bash
@@ -145,50 +195,21 @@ interactions/
 
 ### Para Producción:
 
-1. **Habilitar Firebase Authentication:**
-```json
-{
-  "rules": {
-    "interactions": {
-      ".read": "auth != null",
-      ".write": "auth != null"
-    }
-  }
-}
-```
+1. **Restringir acceso por IP (si es posible):**
+   - Configura reglas de firewall en Firebase
+   - Limita acceso solo desde tu servidor
 
-2. **Limitar por usuario:**
-```json
-{
-  "rules": {
-    "interactions": {
-      "$pairKey": {
-        ".read": "auth != null",
-        ".write": "auth != null && $pairKey.contains(auth.uid)"
-      }
-    }
-  }
-}
-```
+2. **Usar variables de entorno seguras:**
+   - Nunca commits el archivo JSON de Service Account
+   - Usa un gestor de secretos (AWS Secrets Manager, Google Secret Manager, etc.)
 
 3. **Validar estructura de datos:**
-```json
-{
-  "rules": {
-    "interactions": {
-      "$pairKey": {
-        ".validate": "newData.hasChildren(['total', 'byType', 'lastInteraction', 'firstInteraction'])",
-        "total": {
-          ".validate": "newData.isNumber() && newData.val() >= 0"
-        },
-        "byType": {
-          ".validate": "newData.hasChildren()"
-        }
-      }
-    }
-  }
-}
-```
+   - Las reglas de Firebase ya validan la estructura básica
+   - El código también valida antes de escribir
+
+4. **Monitorear uso:**
+   - Revisa los logs de Firebase regularmente
+   - Configura alertas para uso inusual
 
 ## 💰 Costos
 
@@ -201,36 +222,89 @@ Firebase Realtime Database tiene un plan gratuito generoso:
 
 Para un bot de Discord, esto es **más que suficiente** para miles de usuarios.
 
+**Blaze Plan (Pay as you go):**
+- Mismo límite de almacenamiento
+- $5 por GB adicional de transferencia
+- Sin límite de conexiones
+
 ## 🔧 Troubleshooting
 
-### Error: "PERMISSION_DENIED"
-- Verifica que las reglas de Firebase permitan lectura/escritura
-- Revisa que `databaseURL` sea correcta
+### Error: "FIREBASE_ADMIN_SDK es requerido"
 
-### Error: "Failed to get document"
-- Verifica que `FIREBASE_DATABASE_URL` termine en `.firebaseio.com`
-- Asegúrate de que la base de datos esté habilitada
+**Causa:** Variable de entorno no configurada o JSON inválido
+
+**Solución:**
+```bash
+# Verificar que existe en .env
+cat .env | grep FIREBASE_ADMIN_SDK
+
+# Verificar que el JSON es válido
+node -e "console.log(JSON.parse(process.env.FIREBASE_ADMIN_SDK))"
+```
+
+### Error: "PERMISSION_DENIED"
+
+**Causa:** Reglas de Firebase bloquean el acceso
+
+**Solución:**
+- Verifica que las reglas permitan lectura/escritura
+- Asegúrate de que la Service Account tenga permisos correctos
+- Revisa que el `project_id` en el JSON coincida con tu proyecto
+
+### Error: "Failed to get document" o "Database not found"
+
+**Causa:** URL de base de datos incorrecta o base de datos no habilitada
+
+**Solución:**
+- Verifica que Realtime Database esté habilitada
+- El código usa automáticamente: `https://{project_id}-default-rtdb.firebaseio.com`
+- Si usas una base de datos con nombre personalizado, modifica `FirebaseAdminManager.ts`
 
 ### Bot funciona sin Firebase
-- El bot continuará funcionando sin estadísticas
-- Verifica logs para ver el error específico
+
+**Causa:** El bot continúa funcionando sin estadísticas si Firebase falla
+
+**Solución:**
+- Revisa los logs para ver el error específico
+- Verifica la conexión a internet
+- Asegúrate de que las credenciales sean correctas
+
+### Error: "Invalid private key"
+
+**Causa:** La clave privada en el JSON está mal formateada
+
+**Solución:**
+- Asegúrate de que los `\n` en `private_key` estén correctamente escapados
+- El formato debe ser: `"-----BEGIN PRIVATE KEY-----\\n...\\n-----END PRIVATE KEY-----\\n"`
+- O usa el JSON tal como se descargó sin modificar
 
 ## 📚 Recursos Adicionales
 
-- [Documentación oficial de Firebase](https://firebase.google.com/docs/database)
+- [Documentación oficial de Firebase Admin SDK](https://firebase.google.com/docs/admin/setup)
+- [Documentación de Realtime Database](https://firebase.google.com/docs/database)
 - [Reglas de Seguridad](https://firebase.google.com/docs/database/security)
 - [Límites y Cuotas](https://firebase.google.com/docs/database/usage/limits)
 
 ## ❓ Preguntas Frecuentes
 
 **P: ¿Puedo usar otra base de datos?**
-R: Sí, puedes modificar `FirebaseManager.ts` para usar MongoDB, PostgreSQL, etc.
+R: Sí, puedes modificar `FirebaseAdminManager.ts` y `CustomCommandManager.ts` para usar MongoDB, PostgreSQL, etc.
 
 **P: ¿Los datos se pierden al reiniciar el bot?**
 R: No, Firebase almacena todo permanentemente en la nube.
 
-**P: ¿Puedo borrar estadísticas?**
-R: Sí, el bot no tiene comando implementado, pero puedes hacerlo manualmente en Firebase Console.
+**P: ¿Puedo borrar estadísticas o comandos?**
+R: Sí, puedes hacerlo manualmente en Firebase Console o implementar comandos de administración.
 
 **P: ¿Es seguro para producción?**
-R: Con las reglas adecuadas sí, pero considera usar Firebase Authentication para mayor seguridad.
+R: Con las reglas adecuadas y credenciales seguras sí. Considera usar Google Secret Manager para las credenciales.
+
+**P: ¿Por qué usar Admin SDK en lugar del cliente web?**
+R: Admin SDK proporciona acceso completo sin restricciones de seguridad, perfecto para bots que necesitan control total sobre los datos.
+
+**P: ¿Necesito configurar autenticación?**
+R: No para el bot, pero si quieres que usuarios externos accedan a Firebase, necesitarías configurar Firebase Authentication.
+
+---
+
+**Sistema desarrollado por MirtZerck para Hikari Koizumi 2.0** 🌸

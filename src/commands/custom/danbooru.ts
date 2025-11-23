@@ -44,7 +44,6 @@ export const danbooru: SlashOnlyCommand = {
     ],
 
     async execute(interaction: ChatInputCommandInteraction) {
-        // Verificar si es un DM o canal NSFW
         const isDM = !interaction.guild;
         let isNSFW = false;
 
@@ -79,15 +78,9 @@ export const danbooru: SlashOnlyCommand = {
         await interaction.deferReply();
 
         try {
-            // Obtener GIF aleatorio con todos los ratings
             const { post, imageUrl } = await getRandomGif('animated_gif rating:g,s,q,e');
-
-            // Obtener información del rating
             const rating = getRatingInfo(post.rating);
 
-            console.log(imageUrl);
-            
-            // Crear embed con el GIF
             const embed = new EmbedBuilder()
                 .setTitle('🎨 GIF Aleatorio de Danbooru')
                 .setDescription(`[Ver en Danbooru](https://danbooru.donmai.us/posts/${post.id})`)

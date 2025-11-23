@@ -3,26 +3,29 @@ import {
     ButtonInteraction,
     EmbedBuilder,
     MessageFlags,
-    GuildMember
+    GuildMember,
+    Interaction
 } from 'discord.js';
 import { Event } from '../types/Events.js';
 import { BotClient } from '../types/BotClient.js';
 import { logger } from '../utils/logger.js';
-import { COLORS, EMOJIS } from '../utils/constants.js';
+import { EMOJIS } from '../utils/constants.js';
 import { LoopMode } from '../managers/MusicManager.js';
 
+/**
+ * Handler de botones para controles del reproductor de música.
+ */
 export default {
     name: Events.InteractionCreate,
 
-    async execute(client, interaction) {
+    async execute(client: BotClient, interaction: Interaction) {
         if (!interaction.isButton()) return;
 
         const buttonInteraction = interaction as ButtonInteraction;
 
         if (!buttonInteraction.customId.startsWith('music_')) return;
 
-        const botClient = client as BotClient;
-        const musicManager = botClient.musicManager;
+        const musicManager = client.musicManager;
 
         if (!musicManager) {
             await buttonInteraction.reply({

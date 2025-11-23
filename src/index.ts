@@ -1,5 +1,5 @@
 import { GatewayIntentBits } from "discord.js";
-import { config, firebaseAdminConfig } from './config.js'
+import { config, firebaseAdminConfig } from './config.js';
 import { BotClient } from "./types/BotClient.js";
 import { CommandManager } from "./managers/CommandManager.js";
 import { CooldownManager } from "./managers/CooldownManager.js";
@@ -10,6 +10,10 @@ import { MusicManager } from "./managers/MusicManager.js";
 import { EventManager } from "./managers/EventManager.js";
 import { logger } from './utils/logger.js';
 
+/**
+ * Punto de entrada principal del bot.
+ * Inicializa todos los sistemas y conecta con Discord.
+ */
 async function main() {
     const client = new BotClient({
         intents: [
@@ -22,66 +26,65 @@ async function main() {
         ]
     });
 
-    // ✅ Inicializar Firebase Admin SDK PRIMERO
-    logger.info('Bot', '🔥 Conectando con Firebase Admin SDK...');
+    // Firebase y sistemas dependientes
+    logger.info('Bot', 'Conectando con Firebase Admin SDK...');
     const firebaseAdminManager = new FirebaseAdminManager(firebaseAdminConfig);
+
     try {
         await firebaseAdminManager.initialize();
         client.firebaseAdminManager = firebaseAdminManager;
 
-        // Inicializar InteractionStatsManager
         const interactionStatsManager = new InteractionStatsManager(firebaseAdminManager);
         client.interactionStatsManager = interactionStatsManager;
-        logger.info('Bot', '✅ Sistema de estadísticas de interacciones listo');
+        logger.info('Bot', 'Sistema de estadísticas listo');
 
-        // Inicializar CustomCommandManager
         const { CustomCommandManager } = await import('./managers/CustomCommandManager.js');
         const customCommandManager = new CustomCommandManager(firebaseAdminManager);
         client.customCommandManager = customCommandManager;
-        logger.info('Bot', '✅ Sistema de comandos personalizados listo');
-
+        logger.info('Bot', 'Sistema de comandos personalizados listo');
     } catch (error) {
-        logger.error('Bot', '❌ Error conectando con Firebase Admin SDK', error);
-        logger.warn('Bot', '⚠️ El bot continuará sin estadísticas de interacciones');
+        logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
+        logger.warn('Bot', 'El bot continuará sin estadísticas de interacciones');
     }
 
-    // Cargar comandos
+    // Sistema de comandos
     logger.info('Bot', 'Cargando comandos...');
     const commandManager = new CommandManager();
     await commandManager.loadCommands();
     client.commands = commandManager.commands;
     client.commandManager = commandManager;
 
-    // Inicializar sistema de cooldowns
+    // Sistema de cooldowns
     logger.info('Bot', 'Inicializando sistema de cooldowns...');
     const cooldownManager = new CooldownManager();
-    client.cooldownManager = cooldownManager
+    client.cooldownManager = cooldownManager;
 
-    cooldownManager.setCooldownConfig('utility', 3000); // 3 segundos
-    cooldownManager.setCooldownConfig('interact', 5000) // 5 segundos
-    cooldownManager.setCooldownConfig('act', 5000) // 5 segundos
-    cooldownManager.setCooldownConfig('react', 5000) // 5 segundos
-    cooldownManager.setCooldownConfig('moderation', 2000) // 2 segundos
-    cooldownManager.setCooldownConfig('custom', 5000) // 5 segundos
-    cooldownManager.setCooldownConfig('danbooru', 5000) // 5 segundos
-    cooldownManager.setCooldownConfig('music', 2000) // 2 segundos
+    cooldownManager.setCooldownConfig('utility', 3000);
+    cooldownManager.setCooldownConfig('interact', 5000);
+    cooldownManager.setCooldownConfig('act', 5000);
+    cooldownManager.setCooldownConfig('react', 5000);
+    cooldownManager.setCooldownConfig('moderation', 2000);
+    cooldownManager.setCooldownConfig('custom', 5000);
+    cooldownManager.setCooldownConfig('danbooru', 5000);
+    cooldownManager.setCooldownConfig('music', 2000);
 
-    // Inicializar sistema de solicitudes
+    // Sistema de solicitudes
     logger.info('Bot', 'Inicializando sistema de solicitudes...');
     const requestManager = new RequestManager();
     client.requestManager = requestManager;
 
-    // Inicializar sistema de música
+    // Sistema de música
     logger.info('Bot', 'Preparando sistema de música...');
     const musicManager = new MusicManager(client);
     client.musicManager = musicManager;
 
-    // Cargar eventos
+    // Eventos
     logger.info('Bot', 'Cargando eventos...');
-    const commandEvents = new EventManager(client);
-    await commandEvents.loadEvents();
+    const eventManager = new EventManager(client);
+    await eventManager.loadEvents();
 
-    logger.info('Bot', '\n🔌 Conectando al bot...\n');
+    // Conexión
+    logger.info('Bot', 'Conectando al bot...');
     await client.login(config.token);
 
     // Manejo de cierre
@@ -89,12 +92,8 @@ async function main() {
         logger.info('Bot', 'Cerrando bot...');
         cooldownManager.destroy();
         requestManager.destroy();
-        if (firebaseAdminManager) {
-            firebaseAdminManager.destroy();
-        }
-        if (musicManager) {
-            musicManager.destroy();
-        }
+        firebaseAdminManager?.destroy();
+        musicManager?.destroy();
         client.destroy();
         process.exit(0);
     });

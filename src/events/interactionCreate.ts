@@ -1,11 +1,16 @@
-import { Events, MessageFlags } from "discord.js";
+import { Events, MessageFlags, ChatInputCommandInteraction } from "discord.js";
 import { Event } from "../types/Events.js";
 import { logger } from "../utils/logger.js";
+import { BotClient } from "../types/BotClient.js";
 
+/**
+ * Handler del evento InteractionCreate.
+ * Procesa comandos slash, verifica cooldowns y ejecuta el comando correspondiente.
+ */
 export default {
     name: Events.InteractionCreate,
 
-    async execute(client, interaction) {
+    async execute(client: BotClient, interaction: ChatInputCommandInteraction) {
         if (!interaction.isChatInputCommand()) return;
 
         const command = client.commands.get(interaction.commandName);
@@ -45,7 +50,7 @@ export default {
                 interaction.user.tag,
                 interaction.commandName,
                 interaction.guild?.name
-            )
+            );
 
             if (command.type === 'slash-only' || command.type === 'unified') {
                 await command.execute(interaction);
@@ -59,21 +64,19 @@ export default {
                     interaction.user.id
                 );
             }
-
         } catch (error) {
             logger.error('InteractionCreate', `Error ejecutando ${interaction.commandName}`, error);
 
-            const errorMensaje = {
+            const replyOptions = {
                 content: 'Hubo un error al ejecutar este comando.',
-                flags: MessageFlags.Ephemeral
+                ephemeral: true
             };
 
             if (interaction.replied || interaction.deferred) {
-                await interaction.followUp(errorMensaje);
+                await interaction.followUp(replyOptions);
             } else {
-                await interaction.reply(errorMensaje);
+                await interaction.reply(replyOptions);
             }
-
         }
     }
-} as Event
+} as Event;

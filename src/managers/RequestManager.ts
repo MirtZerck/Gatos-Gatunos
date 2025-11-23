@@ -116,12 +116,12 @@ export class RequestManager {
             interactionId
         };
 
-        // ✅ Obtener o crear el mapa de solicitudes del autor
+        /* Obtener o crear el mapa de solicitudes del autor */
         if (!this.pendingRequests.has(authorId)) {
             this.pendingRequests.set(authorId, new Map());
         }
 
-        // ✅ Agregar la solicitud indexada por targetId
+        /* Agregar la solicitud indexada por targetId */
         this.pendingRequests.get(authorId)!.set(targetId, request);
 
         logger.debug(
@@ -147,7 +147,7 @@ export class RequestManager {
      *   return;
      * }
      * 
-     * // ✅ Si no tiene, crear nueva solicitud
+     * // Si no tiene, crear nueva solicitud
      * requestManager.createRequest(userId, michiId, 'hug', msgId, intId);
      * ```
      */

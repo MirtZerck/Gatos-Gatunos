@@ -220,7 +220,26 @@ export class FirebaseAdminManager {
     }
 
     /**
-     * Cierra la conexión con Firebase
+     * Obtiene una referencia a una ruta específica en la base de datos.
+     * Método público para acceso controlado a Firebase Realtime Database.
+     *
+     * @param {string} path - Ruta en la base de datos
+     * @returns {admin.database.Reference} Referencia a la ruta especificada
+     * @throws {Error} Si Firebase no está inicializado
+     *
+     * @example
+     * ```typescript
+     * const ref = firebaseManager.getRef('servers/guild123/commands');
+     * const snapshot = await ref.get();
+     * ```
+     */
+    getRef(path: string): admin.database.Reference {
+        this.ensureInitialized();
+        return this.database!.ref(path);
+    }
+
+    /**
+     * Cierra la conexión con Firebase.
      */
     destroy(): void {
         if (this.isInitialized) {

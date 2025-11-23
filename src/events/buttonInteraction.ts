@@ -5,7 +5,7 @@ import { COLORS } from "../utils/constants.js";
 import { getRandomGif } from "../utils/tenor.js";
 import { BotClient } from "../types/BotClient.js";
 
-// ✅ Configuración completa por acción (igual que en los comandos directos)
+/** Configuración de acciones de interacción */
 const ACTION_CONFIG: Record<string, {
     emoji: string;
     name: string;
@@ -14,7 +14,6 @@ const ACTION_CONFIG: Record<string, {
     successMessage: (author: string, target: string) => string;
     footer: string;
 }> = {
-    // INTERACT - Con solicitud
     hug: {
         emoji: '🤗',
         name: 'abrazo',
@@ -47,7 +46,6 @@ const ACTION_CONFIG: Record<string, {
         successMessage: (a, t) => `**${a}** se acurruca cómodamente con **${t}**`,
         footer: '🛋️ Momentos cálidos y acogedores'
     },
-    // ACT - Con solicitud
     dance: {
         emoji: '💃',
         name: 'baile',
@@ -74,22 +72,23 @@ const ACTION_CONFIG: Record<string, {
     }
 };
 
+/**
+ * Handler de botones para solicitudes de interacción.
+ * Procesa las respuestas de aceptar/rechazar en solicitudes de interact/act.
+ */
 export default {
     name: Events.InteractionCreate,
 
-    async execute(client, interaction) {
-        // ✅ Filtro 1: Solo botones
+    async execute(client: BotClient, interaction: ButtonInteraction) {
         if (!interaction.isButton()) return;
 
         const buttonInteraction = interaction as ButtonInteraction;
 
-        // ✅ Filtro 2: Solo botones de interact/act
         if (!buttonInteraction.customId.startsWith('interact_') &&
             !buttonInteraction.customId.startsWith('act_')) {
             return;
         }
 
-        // ✅ DEFER INMEDIATO (antes de cualquier operación)
         try {
             await buttonInteraction.deferUpdate();
         } catch (error) {
@@ -97,9 +96,7 @@ export default {
             return;
         }
 
-        const requestManager = (client as BotClient).requestManager;
-
-        // ✅ Buscar solicitud registrada
+        const requestManager = client.requestManager;
         const request = requestManager?.findRequestByMessage(buttonInteraction.message.id);
 
         if (!request) {
@@ -114,7 +111,6 @@ export default {
             return;
         }
 
-        // ✅ Verificar que quien responde es el usuario correcto
         if (buttonInteraction.user.id !== request.targetId) {
             const wrongUserEmbed = new EmbedBuilder()
                 .setDescription('❌ Esta solicitud no es para ti.')
@@ -127,24 +123,18 @@ export default {
             return;
         }
 
-        // ✅ Extraer información del customId
         const parts = buttonInteraction.customId.split('_');
-        const actionType = parts[1]; // 'accept' o 'reject'
+        const actionType = parts[1];
         const action = parts[2] || request.action;
 
-        // ✅ Procesar respuesta
         try {
             if (actionType === 'accept') {
-                await handleAccept(buttonInteraction, request, action, client as BotClient);
+                await handleAccept(buttonInteraction, request, action, client);
             } else if (actionType === 'reject') {
-                await handleReject(buttonInteraction, request, action, client as BotClient);
+                await handleReject(buttonInteraction, request, action, client);
             }
 
-            // ✅ Limpiar solicitud ESPECÍFICA del RequestManager
-            if (requestManager) {
-                requestManager.resolveRequestWith(request.authorId, request.targetId);
-            }
-
+            requestManager?.resolveRequestWith(request.authorId, request.targetId);
         } catch (error) {
             logger.error('ButtonInteraction', 'Error procesando respuesta', error);
 
@@ -164,8 +154,9 @@ export default {
     }
 } as Event;
 
-// ==================== HANDLERS ====================
-
+/**
+ * Procesa la aceptación de una solicitud de interacción.
+ */
 async function handleAccept(
     interaction: ButtonInteraction,
     request: any,
@@ -177,11 +168,9 @@ async function handleAccept(
         throw new Error(`Acción no válida: ${action}`);
     }
 
-    // ✅ Obtener usuarios
     const author = await client.users.fetch(request.authorId);
     const target = interaction.user;
 
-    // ✅ Editar mensaje original para mostrar que fue aceptado (sin botones)
     const acceptedEmbed = new EmbedBuilder()
         .setDescription(`${config.emoji} **${target.displayName}** aceptó la solicitud de **${config.name}** de **${author.displayName}**`)
         .setColor(config.color)
@@ -192,11 +181,9 @@ async function handleAccept(
         components: []
     });
 
-    // ✅ Obtener GIF
     const gifUrl = await getRandomGif(config.query);
     const message = config.successMessage(author.displayName, target.displayName);
 
-    // ✅ Registrar estadística (si está disponible y debe trackearse)
     const statsManager = client.interactionStatsManager;
     let statsText: string | null = null;
 
@@ -209,21 +196,18 @@ async function handleAccept(
         }
     }
 
-    // ✅ Construir embed bonito (igual que los directos)
     const successEmbed = new EmbedBuilder()
         .setImage(gifUrl)
         .setColor(config.color)
         .setTimestamp()
         .setFooter({ text: config.footer });
 
-    // Footer con estadísticas o mensaje bonito
     if (statsText) {
         successEmbed.setDescription(`${config.emoji} ${message} \n${statsText}`);
     } else {
         successEmbed.setDescription(`${config.emoji} ${message}`);
     }
 
-    // ✅ Enviar NUEVO mensaje con el resultado
     const channel = interaction.channel as TextChannel;
     if (channel) {
         await channel.send({
@@ -232,12 +216,12 @@ async function handleAccept(
         });
     }
 
-    logger.info(
-        'ButtonInteraction',
-        `✅ Aceptado: ${author.tag} → ${action} → ${target.tag}`
-    );
+    logger.info('ButtonInteraction', `Aceptado: ${author.tag} -> ${action} -> ${target.tag}`);
 }
 
+/**
+ * Procesa el rechazo de una solicitud de interacción.
+ */
 async function handleReject(
     interaction: ButtonInteraction,
     request: any,
@@ -249,7 +233,6 @@ async function handleReject(
     const target = interaction.user;
     const actionName = config?.name || action;
 
-    // ✅ Editar mensaje original para mostrar que fue rechazado (sin botones)
     const rejectedEmbed = new EmbedBuilder()
         .setDescription(`❌ **${target.displayName}** rechazó la solicitud de **${actionName}** de **${author.displayName}**`)
         .setColor(COLORS.DANGER)
@@ -260,7 +243,6 @@ async function handleReject(
         components: []
     });
 
-    // ✅ Enviar NUEVO mensaje notificando el rechazo
     const rejectEmbed = new EmbedBuilder()
         .setDescription(
             `💔 **${target.displayName}** rechazó la solicitud de **${actionName}** de **${author.displayName}**`
@@ -277,8 +259,5 @@ async function handleReject(
         });
     }
 
-    logger.info(
-        'ButtonInteraction',
-        `❌ Rechazado: ${author.tag} → ${action} → ${target.tag}`
-    );
+    logger.info('ButtonInteraction', `Rechazado: ${author.tag} -> ${action} -> ${target.tag}`);
 }

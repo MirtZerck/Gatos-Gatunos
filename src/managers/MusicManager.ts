@@ -15,7 +15,7 @@ import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
 import { COLORS, EMOJIS } from '../utils/constants.js';
 
-// Nodos Lavalink publicos
+/** Nodos Lavalink públicos para conexión de audio */
 const LAVALINK_NODES = [
     {
         name: 'Lavalink1',
@@ -37,8 +37,8 @@ export enum LoopMode {
     QUEUE = 'queue'
 }
 
-// Tiempo de inactividad antes de desconectar (en ms)
-const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos
+/** Tiempo de inactividad antes de desconectar (5 minutos) */
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000;
 
 export class MusicManager {
     public kazagumo: Kazagumo;
@@ -85,10 +85,9 @@ export class MusicManager {
             logger.warn('MusicManager', `Nodo ${name} desconectado, ${count} players afectados`);
         });
 
-        // Kazagumo player events
         this.kazagumo.on('playerStart', async (player, track) => {
             logger.info('MusicManager', `Reproduciendo: ${track.title}`);
-            // Solo limpiar timer si hay usuarios en el canal
+
             const guild = this.client.guilds.cache.get(player.guildId);
             const botVoiceChannel = guild?.members.me?.voice.channel;
             const usersInChannel = botVoiceChannel?.members.filter(m => !m.user.bot).size || 0;
@@ -96,14 +95,11 @@ export class MusicManager {
             if (usersInChannel > 0) {
                 this.clearInactivityTimer(player.guildId);
             }
-            // Si no hay usuarios, mantener el timer activo
 
             await this.sendPlayerEmbed(player, track);
         });
 
         this.kazagumo.on('playerEnd', async (player) => {
-            // Guardar la cancion en el historial antes de pasar a la siguiente
-            // Solo si no estamos reproduciendo una cancion anterior
             if (!this.skipHistorySave.has(player.guildId)) {
                 const currentTrack = player.queue.current;
                 if (currentTrack) {
@@ -123,7 +119,6 @@ export class MusicManager {
                 await channel.send({ embeds: [embed] });
             }
             await this.deletePlayerMessage(player.guildId);
-            // Iniciar timer de inactividad
             this.startInactivityTimer(player.guildId);
         });
 

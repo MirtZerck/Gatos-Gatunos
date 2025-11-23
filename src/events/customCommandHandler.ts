@@ -17,32 +17,31 @@ export default {
     name: Events.MessageCreate,
 
     async execute(client, message: Message) {
-        // Filtros básicos
         if (message.author.bot) return;
-        if (!message.guild) return; // Solo en servidores
+        if (!message.guild) return;
         if (!message.content.startsWith(config.prefix)) return;
 
         const customManager = (client as BotClient).customCommandManager;
         if (!customManager) return;
 
-        // Extraer nombre del comando
+        /* Extraer nombre del comando */
         const args = message.content.slice(config.prefix.length).trim().split(/ +/);
         const commandName = args.shift()?.toLowerCase();
 
         if (!commandName) return;
 
-        // Verificar si es un comando normal (ya procesado)
+        /* Verificar si es un comando normal (ya procesado) */
         const normalCommand = client.commands.get(commandName);
         if (normalCommand) return;
 
-        // Verificar si es un alias de comando normal
+        /* Verificar si es un alias de comando normal */
         const aliasCommand = client.commands.find(cmd => {
             if (cmd.type === 'slash-only') return false;
             return 'aliases' in cmd && cmd.aliases?.includes(commandName);
         });
         if (aliasCommand) return;
 
-        // Intentar ejecutar como comando personalizado
+        /* Intentar ejecutar como comando personalizado */
         try {
             const imageUrl = await customManager.getRandomValue(message.guild.id, commandName);
 

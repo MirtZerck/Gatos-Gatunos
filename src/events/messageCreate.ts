@@ -2,14 +2,17 @@ import { Events, Message } from "discord.js";
 import { Event } from "../types/Events.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
+import { BotClient } from "../types/BotClient.js";
 
+/**
+ * Handler del evento MessageCreate.
+ * Procesa comandos con prefijo, verifica cooldowns y ejecuta el comando correspondiente.
+ */
 export default {
     name: Events.MessageCreate,
 
-    async execute(client, message: Message) {
-
+    async execute(client: BotClient, message: Message) {
         if (message.author.bot) return;
-
         if (!message.content.startsWith(config.prefix)) return;
 
         const args = message.content.slice(config.prefix.length).trim().split(/ +/);
@@ -20,13 +23,13 @@ export default {
         const command = client.commands.get(commandName) ||
             client.commands.find(cmd => {
                 if (cmd.type === 'slash-only') return false;
-                return 'aliases' in cmd && cmd.aliases?.includes(commandName)
+                return 'aliases' in cmd && cmd.aliases?.includes(commandName);
             });
 
         if (!command) return;
 
         if (command.type === 'slash-only') {
-            await message.reply('❌ Este comando solo funciona como slash command (`/`).')
+            await message.reply('❌ Este comando solo funciona como slash command (`/`).');
             return;
         }
 
@@ -42,7 +45,6 @@ export default {
                     `⏱️ Debes esperar **${seconds}** segundo${seconds !== 1 ? 's' : ''} antes de usar este comando nuevamente.`
                 );
 
-                // Eliminar el mensaje después de 5 segundos
                 setTimeout(() => {
                     reply.delete().catch(() => { });
                 }, 5000);
@@ -57,7 +59,7 @@ export default {
                 message.author.tag,
                 commandName,
                 message.guild?.name
-            )
+            );
 
             let finalArgs = args;
 
@@ -89,7 +91,7 @@ export default {
             }
 
             if (command.type === 'prefix-only') {
-                await command.execute(message, finalArgs)
+                await command.execute(message, finalArgs);
             } else if (command.type === 'unified') {
                 await command.execute(message, finalArgs);
             } else if (command.type === 'hybrid') {
@@ -102,11 +104,9 @@ export default {
                     message.author.id
                 );
             }
-
         } catch (error) {
-            logger.error('MessageCreate', `Error ejecutando ${commandName}`, error)
-            await message.reply('Hubo un error al ejecutar este comando.')
-
+            logger.error('MessageCreate', `Error ejecutando ${commandName}`, error);
+            await message.reply('Hubo un error al ejecutar este comando.');
         }
     }
-} as Event
+} as Event;

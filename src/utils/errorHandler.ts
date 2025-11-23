@@ -119,11 +119,13 @@ export async function handleCommandError(
                 break;
 
             case ErrorType.NOT_FOUND:
-                logger.warn(commandName, 'No encontrado')
+                logger.warn(commandName, `Recurso no encontrado: ${error.message}`);
+                shouldLog = false;
+                break;
 
             case ErrorType.UNKNOWN:
-                logger.error(commandName, `Error desconocido: ${error.message}`)
-                break
+                logger.error(commandName, `Error desconocido: ${error.message}`);
+                break;
         }
     } else if (error instanceof Error) {
         logger.error(commandName, 'Error no manejado', error)

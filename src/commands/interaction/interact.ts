@@ -32,12 +32,9 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-// Acciones que requieren solicitud con botones
 const REQUIRE_REQUEST: ActionType[] = ['hug', 'kiss', 'pat', 'cuddle'];
-// Acciones directas sin solicitud
 const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'bite', 'tickle', 'bonk', 'boop'];
 
-// 🎨 Configuración mejorada por acción
 const ACTION_CONFIG: Record<ActionType, {
     emoji: string;
     name: string;
@@ -261,8 +258,6 @@ export const interact: HybridCommand = {
     },
 };
 
-// ==================== HANDLERS PARA ACCIONES DIRECTAS ====================
-
 async function handleDirectAction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
@@ -310,8 +305,6 @@ async function handleDirectActionPrefix(
         throw new CommandError(ErrorType.API_ERROR, 'Error obteniendo GIF', '❌ No se pudo obtener el GIF.');
     }
 }
-
-// ==================== HANDLERS PARA SOLICITUDES CON BOTONES ====================
 
 async function handleRequestAction(
     interaction: ChatInputCommandInteraction,

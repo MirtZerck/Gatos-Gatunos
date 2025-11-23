@@ -9,10 +9,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 /**
- * *Gestor centralizado de comandos del bot.
- * *Maneja la carga, registro y búsqueda de comandos desde el sistema de archivos.
- * 
+ * Gestor centralizado de comandos del bot.
+ * Maneja la carga, registro y búsqueda de comandos desde el sistema de archivos.
+ *
  * @class CommandManager
+ *
  * @example
  * ```typescript
  * const manager = new CommandManager();
@@ -27,35 +28,30 @@ export class CommandManager {
     /** Set de nombres de comandos originales (excluye aliases y wrappers) */
     private originalCommandNames: Set<string>;
 
-    /**
-     * Crea una nueva instancia del gestor de comandos
-     */
     constructor() {
         this.commands = new Collection();
         this.originalCommandNames = new Set();
     }
 
     /**
- * *Carga todos los comandos desde el directorio de comandos y sus subcarpetas.
- * *Registra comandos originales y sus aliases automáticamente.
- * 
- * @async
- * @throws {Error} Si hay un error crítico al cargar los archivos de comandos
- * @returns {Promise<void>}
- * 
- * @example
- * ```typescript
- * await commandManager.loadCommands();
- * console.log(`${commandManager.commands.size} comandos cargados`);
- * ```
- */
-
+     * Carga todos los comandos desde el directorio de comandos y sus subcarpetas.
+     * Registra comandos originales y sus aliases automáticamente.
+     *
+     * @async
+     * @returns {Promise<void>}
+     * @throws {Error} Si hay un error crítico al cargar los archivos de comandos
+     *
+     * @example
+     * ```typescript
+     * await commandManager.loadCommands();
+     * console.log(`${commandManager.commands.size} comandos cargados`);
+     * ```
+     */
     async loadCommands(): Promise<void> {
-        logger.info('CommandManager', '📦 Cargando comandos...')
+        logger.info('CommandManager', 'Cargando comandos...');
 
         const commandPath = join(__dirname, '../commands');
         await this.loadCommandsFromDirectory(commandPath);
-
         this.registerSubcommandAliases();
 
         const categories = new Map<string, string[]>();
@@ -70,8 +66,7 @@ export class CommandManager {
 
         logger.module('CommandManager', this.commands.size);
 
-        for (const [category, commandNames] of categories) {
-
+        for (const [, commandNames] of categories) {
             for (const cmdName of commandNames) {
                 const command = this.commands.get(cmdName)!;
 
@@ -86,22 +81,17 @@ export class CommandManager {
                     'unified': '🔗'
                 }[command.type];
 
-                logger.debug('CommandManager', `${typeIcon} ${cmdName} ${aliases}`);
+                logger.debug('CommandManager', `${typeIcon} ${cmdName}${aliases}`);
             }
         }
     }
 
     /**
-     * *Registra aliases de subcomandos como comandos independientes.
-     * *Permite que los aliases de subcomandos funcionen como comandos de prefijo directos.
-     * 
+     * Registra aliases de subcomandos como comandos independientes.
+     * Permite que los aliases de subcomandos funcionen como comandos de prefijo directos.
+     *
      * @private
-     * @returns {void}
-     * 
-     * @example
-     * * //Si 'interact hug' tiene alias 'abrazo', esto registra 'abrazo' como comando
      */
-
     private registerSubcommandAliases(): void {
         const commandsWithSubcommands = Array.from(this.commands.values()).filter(
             (cmd): cmd is Extract<Command, { subcommands?: SubcommandInfo[] }> =>
@@ -124,21 +114,18 @@ export class CommandManager {
     }
 
     /**
-     * *Registra un alias de subcomando como un wrapper del comando padre.
-     * 
+     * Registra un alias de subcomando como un wrapper del comando padre.
+     *
      * @private
-     * @param {Command} parentCommand - Comando padre que contiene el subcomando 
-     * @param {string} alias - Alias a registrar 
-     * @returns {void}
+     * @param {Command} parentCommand - Comando padre que contiene el subcomando
+     * @param {string} alias - Alias a registrar
      */
-
     private registerSubcommandAlias(parentCommand: Command, alias: string): void {
         if (this.commands.has(alias)) {
             logger.warn('CommandManager', `Alias "${alias}" ya existe, saltando`);
             return;
         }
 
-        // Los aliases de subcomandos solo tienen sentido para comandos de prefijo
         if (parentCommand.type === 'slash-only') {
             return;
         }
@@ -150,19 +137,18 @@ export class CommandManager {
         };
 
         this.commands.set(alias, subcommandWrapper);
-        logger.debug('CommandManager', `  ↳ Registrado alias: ${alias}`);
+        logger.debug('CommandManager', `Registrado alias: ${alias}`);
     }
 
-    /**   
-     * *Carga comandos recursivamente desde un directorio y sus subdirectorios.
-     * 
+    /**
+     * Carga comandos recursivamente desde un directorio y sus subdirectorios.
+     *
      * @private
      * @async
      * @param {string} dir - Ruta del directorio a escanear
-     * @returns {Promise<voi>}
+     * @returns {Promise<void>}
      * @throws {Error} Si hay un error al leer el directorio
-    */
-
+     */
     private async loadCommandsFromDirectory(dir: string): Promise<void> {
         const files = readdirSync(dir);
 
@@ -171,24 +157,21 @@ export class CommandManager {
             const stat = statSync(filePath);
 
             if (stat.isDirectory()) {
-                // Si es carpeta, cargar recursivamente
                 await this.loadCommandsFromDirectory(filePath);
             } else if (file.endsWith('.ts') || file.endsWith('js')) {
-                // Si es archivo .ts/.js, cargar como comando
                 await this.loadCommandFile(filePath);
             }
         }
     }
 
     /**
-     * *Carga un archivo de comando individual 
-     * 
+     * Carga un archivo de comando individual.
+     *
      * @private
      * @async
      * @param {string} filePath - Ruta completa al archivo del comando
      * @returns {Promise<void>}
      */
-
     private async loadCommandFile(filePath: string): Promise<void> {
         try {
             const fileURL = pathToFileURL(filePath).href;
@@ -213,11 +196,7 @@ export class CommandManager {
                 logger.warn('CommandManager', `Comando inválido: ${filePath}`);
             }
         } catch (error) {
-            logger.error(
-                'CommandManager',
-                `Error cargando comando desde ${filePath}:`,
-                error
-            );
+            logger.error('CommandManager', `Error cargando comando desde ${filePath}:`, error);
 
             if (error instanceof Error) {
                 logger.debug('CommandManager', `Detalles: ${error.message}`);
@@ -227,25 +206,22 @@ export class CommandManager {
     }
 
     /**
-     * *Obtiene un comando por nombre o alias 
-     * *Busca primero por nombre exacto, luego por alias.
-     * 
+     * Obtiene un comando por nombre o alias.
+     * Busca primero por nombre exacto, luego por alias.
+     *
      * @param {string} name - Nombre o alias del comando a buscar
      * @returns {Command | undefined} El comando encontrado o undefined
-     * 
+     *
      * @example
      * ```typescript
      * const command = manager.getCommand('ping');
-     * const sameCommand = manager.getCommand('p'); // usando alias
+     * const sameCommand = manager.getCommand('p');
      * ```
      */
-
     getCommand(name: string): Command | undefined {
-        // Buscar por nombre exacto
         const command = this.commands.get(name);
         if (command) return command;
 
-        // Buscar por alias (solo en comandos que soporten prefijo)
         return this.commands.find(cmd => {
             if (cmd.type === 'slash-only') return false;
             return 'aliases' in cmd && cmd.aliases?.includes(name);
@@ -253,40 +229,37 @@ export class CommandManager {
     }
 
     /**
-     *  *Verifica si un comando es original (no es un wrapper de alias).
-     * 
+     * Verifica si un comando es original (no es un wrapper de alias).
+     *
      * @param {string} name - Nombre del comando a verificar
      * @returns {boolean} true si es un comando original, false si es un alias
-     * 
+     *
      * @example
      * ```typescript
      * manager.isOriginalCommand('ping'); // true
-     * manager.isOriginalCommand('p') // false (es alias)
+     * manager.isOriginalCommand('p');    // false (es alias)
      * ```
-    */
-
+     */
     isOriginalCommand(name: string): boolean {
         return this.originalCommandNames.has(name);
     }
 
     /**
-    * *Registra todos los comandos slash en Discord a través de la API.
-    * *Solo registra comandos originales que soporten slash commands.
-    * 
-    * @async
-    * @param {string} token - Token del bot de Discord
-    * @param {string} clientId - ID de la aplicación del bot
-    * @returns {Promise <void>}
-    * @throws {Error} Si hay un error al comunicarse con la API de Discord
-    * 
-    * @example
-    * ```typescript
-    * await manager.deployCommands(config.token, config.clientId);
-    * ```    
-    */
-
+     * Registra todos los comandos slash en Discord a través de la API.
+     * Solo registra comandos originales que soporten slash commands.
+     *
+     * @async
+     * @param {string} token - Token del bot de Discord
+     * @param {string} clientId - ID de la aplicación del bot
+     * @returns {Promise<void>}
+     * @throws {Error} Si hay un error al comunicarse con la API de Discord
+     *
+     * @example
+     * ```typescript
+     * await manager.deployCommands(config.token, config.clientId);
+     * ```
+     */
     async deployCommands(token: string, clientId: string): Promise<void> {
-        // Filtrar solo comandos originales con data (excluir prefix-only y wrappers de aliases)
         const slashCommands = Array.from(this.commands.entries())
             .filter(([name, cmd]) =>
                 this.originalCommandNames.has(name) &&
@@ -298,42 +271,36 @@ export class CommandManager {
         const commandsData = slashCommands.map(cmd => cmd.data.toJSON());
 
         if (commandsData.length === 0) {
-            logger.warn('CommandManager', '⚠️ No hay comandos slash para registrar');
+            logger.warn('CommandManager', 'No hay comandos slash para registrar');
             return;
         }
 
-        logger.info('CommandManager', `🚀 Registrando ${commandsData.length} comandos slash`);
+        logger.info('CommandManager', `Registrando ${commandsData.length} comandos slash...`);
 
-        const rest = new REST().setToken(token)
+        const rest = new REST().setToken(token);
 
         await rest.put(
             Routes.applicationCommands(clientId),
             { body: commandsData }
         );
 
-        logger.info('CommandManager', '✅ Comandos registrados en Discord');
+        logger.info('CommandManager', 'Comandos registrados en Discord');
 
         const prefixOnlyCount = Array.from(this.commands.values())
             .filter(cmd => cmd.type === 'prefix-only').length;
 
         if (prefixOnlyCount > 0) {
-            logger.info('CommandManager', `ℹ️ ${prefixOnlyCount} comandos solo con prefijo`);
+            logger.info('CommandManager', `${prefixOnlyCount} comandos solo con prefijo`);
         }
     }
 
     /**
-     *  * Lista todos los comandos cargados organizados por categoría.
-     * *Imprime la información en la consola usando el logger.
-     * 
-     * @returns {void}
-     * 
-     * @deprecated Considera usar getStats() para obtener datos esctructurados
+     * Lista todos los comandos cargados organizados por categoría.
+     *
+     * @deprecated Usar getStats() para obtener datos estructurados
      */
-
     listCommands(): void {
         const categories = new Map<string, Command[]>();
-
-        /* Agrupar comandos por categoría */
 
         for (const command of this.commands.values()) {
             const category = command.category;
@@ -343,10 +310,11 @@ export class CommandManager {
             }
             categories.get(category)!.push(command);
         }
-        logger.info('CommandManager', '\n📋 Comandos disponibles:\n');
+
+        logger.info('CommandManager', '\nComandos disponibles:\n');
 
         for (const [category, cmds] of categories) {
-            logger.info('CommandManager', `\n📁 ${category}:`);
+            logger.info('CommandManager', `\n${category}:`);
             for (const cmd of cmds) {
                 const aliasesStr = (cmd.type !== 'slash-only' && 'aliases' in cmd && cmd.aliases)
                     ? ` (${cmd.aliases.join(', ')})`
@@ -355,29 +323,23 @@ export class CommandManager {
                 const typeIndicator = cmd.type === 'slash-only' ? '/' :
                     cmd.type === 'prefix-only' ? '!' : '/!';
 
-                logger.info('CommandManager', `  ├─ ${typeIndicator}${cmd.name}${aliasesStr}: ${cmd.description}`);
-
+                logger.info('CommandManager', `  ${typeIndicator}${cmd.name}${aliasesStr}: ${cmd.description}`);
             }
         }
     }
 
-    /** 
-     * * Obtiene estadísticas sobre los comandos cargados.
-     * 
-     * @returns {{
-     * total: number,
-     * byType: Record<Command['type'], number>,
-     * byCategory: Record<string, number>
-     * }}
-     * 
+    /**
+     * Obtiene estadísticas sobre los comandos cargados.
+     *
+     * @returns {Object} Estadísticas de comandos
+     *
      * @example
      * ```typescript
      * const stats = manager.getStats();
      * console.log(`Total: ${stats.total}`);
-     * console.log(`Slash-only: ${stats.byType['slash-only]}`);
+     * console.log(`Slash-only: ${stats.byType['slash-only']}`);
      * ```
      */
-
     getStats(): {
         total: number;
         byType: Record<Command['type'], number>;
@@ -402,6 +364,7 @@ export class CommandManager {
             }
             stats.byCategory[command.category]++;
         }
+
         return stats;
     }
 }
