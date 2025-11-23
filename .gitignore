@@ -31,6 +31,10 @@ Thumbs.db
 *.sublime-project
 *.sublime-workspace
 .cursor/
+.claude/
+
+# Temp ytdl files
+*-player-script.js
 
 # TypeScript
 *.tsbuildinfo
