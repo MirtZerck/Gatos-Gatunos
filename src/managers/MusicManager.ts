@@ -88,8 +88,16 @@ export class MusicManager {
         // Kazagumo player events
         this.kazagumo.on('playerStart', async (player, track) => {
             logger.info('MusicManager', `Reproduciendo: ${track.title}`);
-            // Limpiar timer de inactividad al reproducir
-            this.clearInactivityTimer(player.guildId);
+            // Solo limpiar timer si hay usuarios en el canal
+            const guild = this.client.guilds.cache.get(player.guildId);
+            const botVoiceChannel = guild?.members.me?.voice.channel;
+            const usersInChannel = botVoiceChannel?.members.filter(m => !m.user.bot).size || 0;
+
+            if (usersInChannel > 0) {
+                this.clearInactivityTimer(player.guildId);
+            }
+            // Si no hay usuarios, mantener el timer activo
+
             await this.sendPlayerEmbed(player, track);
         });
 
