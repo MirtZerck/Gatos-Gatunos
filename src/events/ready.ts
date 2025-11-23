@@ -25,14 +25,7 @@ export default {
         logger.ready(client.user.tag, guilds, users);
 
         if (client.musicManager) {
-            try {
-                logger.info('Bot', '🎵 Inicializando sistema de música...');
-                await client.musicManager.initialize();
-                logger.info('Bot', '✅ Sistema de música listo');
-            } catch (error) {
-                logger.error('Bot', '❌ Error inicializando sistema de música', error);
-                logger.warn('Bot', '⚠️ El bot continuará sin sistema de música');
-            }
+            logger.info('Bot', '✅ Sistema de música con Spotify listo');
         }
 
     }

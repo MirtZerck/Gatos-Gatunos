@@ -4,136 +4,104 @@ import {
     Message,
     EmbedBuilder,
     GuildMember,
-    MessageFlags
+    VoiceBasedChannel,
+    TextChannel
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
+import { BotClient } from '../../types/BotClient.js';
 import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS, EMOJIS } from '../../utils/constants.js';
-import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
-import { QueryType, Track } from 'discord-player';
+import { LoopMode } from '../../managers/MusicManager.js';
 
 export const music: HybridCommand = {
     type: 'hybrid',
     name: 'music',
-    description: 'Sistema de reproducción de música',
+    description: 'Sistema de musica con Lavalink',
     category: CATEGORIES.MUSIC,
     subcommands: [
-        { name: 'play', aliases: ['p', 'reproducir'], description: 'Reproduce una canción' },
-        { name: 'skip', aliases: ['s', 'saltar', 'next'], description: 'Salta la canción actual' },
-        { name: 'stop', aliases: ['detener', 'leave'], description: 'Detiene la música y desconecta' },
-        { name: 'pause', aliases: ['pausar'], description: 'Pausa la reproducción' },
-        { name: 'resume', aliases: ['continuar', 'reanudar'], description: 'Reanuda la reproducción' },
-        { name: 'queue', aliases: ['q', 'cola', 'list'], description: 'Muestra la cola de reproducción' },
-        { name: 'nowplaying', aliases: ['np', 'actual', 'current'], description: 'Muestra la canción actual' },
-        { name: 'shuffle', aliases: ['mezclar'], description: 'Mezcla la cola' },
-        { name: 'clear', aliases: ['limpiar'], description: 'Limpia la cola' },
+        { name: 'play', aliases: ['p', 'reproducir'], description: 'Reproduce una cancion' },
+        { name: 'pause', aliases: ['pausar'], description: 'Pausa la reproduccion' },
+        { name: 'resume', aliases: ['continuar', 'reanudar'], description: 'Reanuda la reproduccion' },
+        { name: 'skip', aliases: ['s', 'saltar', 'next'], description: 'Salta la cancion actual' },
+        { name: 'stop', aliases: ['detener', 'leave'], description: 'Detiene la musica y desconecta' },
+        { name: 'queue', aliases: ['q', 'cola'], description: 'Muestra la cola de reproduccion' },
+        { name: 'nowplaying', aliases: ['np', 'actual'], description: 'Muestra la cancion actual' },
         { name: 'volume', aliases: ['vol', 'volumen'], description: 'Ajusta el volumen' },
+        { name: 'shuffle', aliases: ['mezclar', 'aleatorio'], description: 'Mezcla la cola' },
+        { name: 'loop', aliases: ['repetir', 'repeat'], description: 'Cambia el modo de repeticion' },
     ],
 
     data: new SlashCommandBuilder()
         .setName('music')
-        .setDescription('Sistema de reproducción de música')
+        .setDescription('Sistema de musica con Lavalink')
         .addSubcommand(sub =>
             sub
                 .setName('play')
-                .setDescription('Reproduce una canción o playlist')
+                .setDescription('Reproduce una cancion')
                 .addStringOption(opt =>
                     opt
                         .setName('query')
-                        .setDescription('Nombre de la canción, URL de YouTube/Spotify o búsqueda')
+                        .setDescription('URL o nombre de la cancion')
                         .setRequired(true)
                 )
         )
         .addSubcommand(sub =>
-            sub
-                .setName('skip')
-                .setDescription('Salta la canción actual')
+            sub.setName('pause').setDescription('Pausa la reproduccion actual')
         )
         .addSubcommand(sub =>
-            sub
-                .setName('stop')
-                .setDescription('Detiene la música y desconecta el bot')
+            sub.setName('resume').setDescription('Reanuda la reproduccion pausada')
         )
         .addSubcommand(sub =>
-            sub
-                .setName('pause')
-                .setDescription('Pausa la reproducción actual')
+            sub.setName('skip').setDescription('Salta la cancion actual')
         )
         .addSubcommand(sub =>
-            sub
-                .setName('resume')
-                .setDescription('Reanuda la reproducción pausada')
+            sub.setName('stop').setDescription('Detiene la musica y desconecta el bot')
         )
         .addSubcommand(sub =>
             sub
                 .setName('queue')
-                .setDescription('Muestra la cola de reproducción')
+                .setDescription('Muestra la cola de reproduccion')
                 .addIntegerOption(opt =>
                     opt
                         .setName('page')
-                        .setDescription('Página de la cola a mostrar')
+                        .setDescription('Pagina de la cola')
                         .setMinValue(1)
                         .setRequired(false)
                 )
         )
         .addSubcommand(sub =>
-            sub
-                .setName('nowplaying')
-                .setDescription('Muestra la canción que está sonando actualmente')
-        )
-        .addSubcommand(sub =>
-            sub
-                .setName('shuffle')
-                .setDescription('Mezcla aleatoriamente la cola de reproducción')
-        )
-        .addSubcommand(sub =>
-            sub
-                .setName('clear')
-                .setDescription('Limpia todas las canciones de la cola')
+            sub.setName('nowplaying').setDescription('Muestra la cancion actual')
         )
         .addSubcommand(sub =>
             sub
                 .setName('volume')
-                .setDescription('Ajusta el volumen de reproducción')
+                .setDescription('Ajusta el volumen')
                 .addIntegerOption(opt =>
                     opt
                         .setName('level')
-                        .setDescription('Nivel de volumen (0-200)')
+                        .setDescription('Nivel de volumen (0-100)')
                         .setMinValue(0)
-                        .setMaxValue(200)
+                        .setMaxValue(100)
                         .setRequired(true)
                 )
+        )
+        .addSubcommand(sub =>
+            sub.setName('shuffle').setDescription('Mezcla la cola de reproduccion')
+        )
+        .addSubcommand(sub =>
+            sub.setName('loop').setDescription('Cambia el modo de repeticion (Off -> Cancion -> Cola)')
         )
         .setContexts(CONTEXTS.GUILD_ONLY)
         .setIntegrationTypes(INTEGRATION_TYPES.GUILD_ONLY),
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
+        const subcommand = interaction.options.getSubcommand();
+
         try {
-            if (!interaction.guild) {
-                await interaction.reply({
-                    content: '❌ Este comando solo funciona en servidores.',
-                    flags: MessageFlags.Ephemeral
-                });
-                return;
-            }
-
-            const subcommand = interaction.options.getSubcommand();
-
-            // Para 'play' hacemos defer inmediato porque puede tardar
-            if (subcommand === 'play') {
-                await interaction.deferReply();
-            }
-
             switch (subcommand) {
                 case 'play':
-                    await handlePlaySlash(interaction);
-                    break;
-                case 'skip':
-                    await handleSkip(interaction);
-                    break;
-                case 'stop':
-                    await handleStop(interaction);
+                    await handlePlay(interaction);
                     break;
                 case 'pause':
                     await handlePause(interaction);
@@ -141,20 +109,26 @@ export const music: HybridCommand = {
                 case 'resume':
                     await handleResume(interaction);
                     break;
+                case 'skip':
+                    await handleSkip(interaction);
+                    break;
+                case 'stop':
+                    await handleStop(interaction);
+                    break;
                 case 'queue':
-                    await handleQueueSlash(interaction);
+                    await handleQueue(interaction);
                     break;
                 case 'nowplaying':
                     await handleNowPlaying(interaction);
                     break;
+                case 'volume':
+                    await handleVolume(interaction);
+                    break;
                 case 'shuffle':
                     await handleShuffle(interaction);
                     break;
-                case 'clear':
-                    await handleClear(interaction);
-                    break;
-                case 'volume':
-                    await handleVolumeSlash(interaction);
+                case 'loop':
+                    await handleLoop(interaction);
                     break;
             }
         } catch (error) {
@@ -164,57 +138,24 @@ export const music: HybridCommand = {
 
     async executePrefix(message: Message, args: string[]) {
         try {
-            Validators.validateInGuild(message);
-
             const subcommand = args[0]?.toLowerCase();
-            const validSubcommands = [
-                'play', 'p', 'reproducir',
-                'skip', 's', 'saltar', 'next',
-                'stop', 'detener', 'leave',
-                'pause', 'pausar',
-                'resume', 'continuar', 'reanudar',
-                'queue', 'q', 'cola', 'list',
-                'nowplaying', 'np', 'actual', 'current',
-                'shuffle', 'mezclar',
-                'clear', 'limpiar',
-                'volume', 'vol', 'volumen'
-            ];
 
-            if (!subcommand || !validSubcommands.includes(subcommand)) {
-                await message.reply(
-                    `${EMOJIS.MUSIC} **Sistema de Música**\n\n` +
-                    `**Uso:** \`${config.prefix}music <acción> [opciones]\`\n\n` +
-                    `**Comandos disponibles:**\n` +
-                    `• \`play\` (\`p\`) <búsqueda/URL> - Reproduce música\n` +
-                    `• \`skip\` (\`s\`) - Salta la canción actual\n` +
-                    `• \`stop\` - Detiene la música\n` +
-                    `• \`pause\` - Pausa la reproducción\n` +
-                    `• \`resume\` - Reanuda la reproducción\n` +
-                    `• \`queue\` (\`q\`) [página] - Muestra la cola\n` +
-                    `• \`nowplaying\` (\`np\`) - Canción actual\n` +
-                    `• \`shuffle\` - Mezcla la cola\n` +
-                    `• \`clear\` - Limpia la cola\n` +
-                    `• \`volume\` (\`vol\`) <0-200> - Ajusta volumen\n\n` +
-                    `**Ejemplos:**\n` +
-                    `\`${config.prefix}play Never Gonna Give You Up\`\n` +
-                    `\`${config.prefix}p https://youtube.com/watch?v=...\`\n` +
-                    `\`${config.prefix}vol 80\``
-                );
+            if (!subcommand) {
+                await showHelp(message);
                 return;
             }
 
-            // Mapear aliases
             const commandMap: Record<string, string> = {
                 'p': 'play', 'reproducir': 'play',
-                's': 'skip', 'saltar': 'skip', 'next': 'skip',
-                'detener': 'stop', 'leave': 'stop',
                 'pausar': 'pause',
                 'continuar': 'resume', 'reanudar': 'resume',
-                'q': 'queue', 'cola': 'queue', 'list': 'queue',
-                'np': 'nowplaying', 'actual': 'nowplaying', 'current': 'nowplaying',
-                'mezclar': 'shuffle',
-                'limpiar': 'clear',
-                'vol': 'volume', 'volumen': 'volume'
+                's': 'skip', 'saltar': 'skip', 'next': 'skip',
+                'detener': 'stop', 'leave': 'stop',
+                'q': 'queue', 'cola': 'queue',
+                'np': 'nowplaying', 'actual': 'nowplaying',
+                'vol': 'volume', 'volumen': 'volume',
+                'mezclar': 'shuffle', 'aleatorio': 'shuffle',
+                'repetir': 'loop', 'repeat': 'loop'
             };
 
             const normalizedCommand = commandMap[subcommand] || subcommand;
@@ -223,531 +164,581 @@ export const music: HybridCommand = {
                 case 'play':
                     await handlePlayPrefix(message, args.slice(1));
                     break;
-                case 'skip':
-                    await handleSkip(message);
-                    break;
-                case 'stop':
-                    await handleStop(message);
-                    break;
                 case 'pause':
-                    await handlePause(message);
+                    await handlePausePrefix(message);
                     break;
                 case 'resume':
-                    await handleResume(message);
+                    await handleResumePrefix(message);
+                    break;
+                case 'skip':
+                    await handleSkipPrefix(message);
+                    break;
+                case 'stop':
+                    await handleStopPrefix(message);
                     break;
                 case 'queue':
                     await handleQueuePrefix(message, args.slice(1));
                     break;
                 case 'nowplaying':
-                    await handleNowPlaying(message);
-                    break;
-                case 'shuffle':
-                    await handleShuffle(message);
-                    break;
-                case 'clear':
-                    await handleClear(message);
+                    await handleNowPlayingPrefix(message);
                     break;
                 case 'volume':
                     await handleVolumePrefix(message, args.slice(1));
                     break;
+                case 'shuffle':
+                    await handleShufflePrefix(message);
+                    break;
+                case 'loop':
+                    await handleLoopPrefix(message);
+                    break;
+                default:
+                    await showHelp(message);
             }
         } catch (error) {
             await handleCommandError(error, message, 'music');
         }
-    },
+    }
 };
 
-// ==================== FUNCIONES AUXILIARES ====================
+// ==================== UTILIDADES ====================
 
-function validateVoiceChannel(context: ChatInputCommandInteraction | Message): void {
-    const member = context.member as GuildMember;
-
+function getVoiceChannel(member: GuildMember): VoiceBasedChannel {
     if (!member.voice.channel) {
         throw new CommandError(
             ErrorType.VALIDATION_ERROR,
-            'Usuario no está en un canal de voz',
-            '❌ Debes estar en un canal de voz para usar este comando.'
+            'Usuario no esta en canal de voz',
+            'Debes estar en un canal de voz para usar este comando.'
         );
     }
-
-    const botMember = context.guild!.members.me;
-    if (botMember?.voice.channel && botMember.voice.channel.id !== member.voice.channel.id) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'Usuario en diferente canal de voz',
-            '❌ Debes estar en el mismo canal de voz que el bot.'
-        );
-    }
+    return member.voice.channel;
 }
 
-function getQueue(context: ChatInputCommandInteraction | Message) {
-    const client = context.client as any;
+function getMusicManager(client: BotClient) {
     if (!client.musicManager) {
         throw new CommandError(
             ErrorType.UNKNOWN,
             'MusicManager no inicializado',
-            '❌ El sistema de música no está disponible.'
+            'El sistema de musica no esta disponible.'
         );
     }
-
-    const queue = client.musicManager.getQueue(context.guild!.id);
-    if (!queue) {
-        throw new CommandError(
-            ErrorType.NOT_FOUND,
-            'No hay cola activa',
-            '❌ No hay música reproduciéndose actualmente.'
-        );
-    }
-
-    return queue;
+    return client.musicManager;
 }
 
-// ==================== HANDLERS ====================
+async function showHelp(message: Message): Promise<void> {
+    const embed = new EmbedBuilder()
+        .setColor(0x1DB954)
+        .setTitle(`${EMOJIS.MUSIC} Sistema de Musica`)
+        .setDescription(
+            `**Uso:** \`${config.prefix}music <comando> [opciones]\`\n\n` +
+            `**Comandos disponibles:**\n` +
+            `\`play\` (\`p\`) <busqueda/URL> - Reproduce musica\n` +
+            `\`pause\` - Pausa la reproduccion\n` +
+            `\`resume\` - Reanuda la reproduccion\n` +
+            `\`skip\` (\`s\`) - Salta la cancion actual\n` +
+            `\`stop\` - Detiene y desconecta\n` +
+            `\`queue\` (\`q\`) [pagina] - Muestra la cola\n` +
+            `\`nowplaying\` (\`np\`) - Cancion actual\n` +
+            `\`volume\` (\`vol\`) <0-100> - Ajusta volumen\n` +
+            `\`shuffle\` - Mezcla la cola\n` +
+            `\`loop\` - Modo repeticion\n\n` +
+            `**Ejemplos:**\n` +
+            `\`${config.prefix}music play never gonna give you up\`\n` +
+            `\`${config.prefix}p https://youtube.com/watch?v=...\`\n` +
+            `\`${config.prefix}music vol 50\``
+        )
+        .setFooter({ text: 'Soporta YouTube, Spotify, SoundCloud y mas' });
 
-async function handlePlaySlash(interaction: ChatInputCommandInteraction): Promise<void> {
-    validateVoiceChannel(interaction);
+    await message.reply({ embeds: [embed] });
+}
 
+// ==================== HANDLERS SLASH ====================
+
+async function handlePlay(interaction: ChatInputCommandInteraction): Promise<void> {
+    await interaction.deferReply();
+
+    const member = interaction.member as GuildMember;
+    const voiceChannel = getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
     const query = interaction.options.getString('query', true);
-    await executePlay(interaction, query);
+
+    try {
+        await musicManager.play(
+            voiceChannel,
+            interaction.channel as TextChannel,
+            query,
+            member
+        );
+
+        await interaction.editReply({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(0x1DB954)
+                    .setDescription(`${EMOJIS.SEARCH} Buscando: **${query}**`)
+            ]
+        });
+    } catch (error: any) {
+        throw new CommandError(
+            ErrorType.UNKNOWN,
+            'Error reproduciendo',
+            error.message || `No se pudo reproducir: ${query}`
+        );
+    }
 }
+
+async function handlePause(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    if (player.paused) {
+        throw new CommandError(ErrorType.VALIDATION_ERROR, 'Ya pausado', 'La musica ya esta pausada.');
+    }
+
+    await player.pause(true);
+    await musicManager.refreshPlayerEmbed(player);
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.PAUSE} Reproduccion pausada`)
+        ]
+    });
+}
+
+async function handleResume(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    if (!player.paused) {
+        throw new CommandError(ErrorType.VALIDATION_ERROR, 'No pausado', 'La musica no esta pausada.');
+    }
+
+    await player.pause(false);
+    await musicManager.refreshPlayerEmbed(player);
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.PLAY} Reproduccion reanudada`)
+        ]
+    });
+}
+
+async function handleSkip(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    const currentTrack = player.queue.current;
+    await player.skip();
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.SKIP} Saltando: **${currentTrack?.title || 'Cancion'}**`)
+        ]
+    });
+}
+
+async function handleStop(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    await player.destroy();
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.DANGER)
+                .setDescription(`${EMOJIS.STOP} Musica detenida y bot desconectado`)
+        ]
+    });
+}
+
+async function handleQueue(interaction: ChatInputCommandInteraction): Promise<void> {
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+    const page = interaction.options.getInteger('page') || 1;
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player || !player.queue.current) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin cola', 'No hay musica reproduciendose.');
+    }
+
+    const current = player.queue.current;
+    const tracks = player.queue;
+    const itemsPerPage = 10;
+    const totalPages = Math.max(1, Math.ceil(tracks.length / itemsPerPage));
+    const currentPage = Math.min(page, totalPages);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = Math.min(start + itemsPerPage, tracks.length);
+
+    let description = `${EMOJIS.PLAY} **Ahora:** [${current.title}](${current.uri}) - \`${musicManager.formatTime(Math.floor((current.length || 0) / 1000))}\`\n\n`;
+
+    if (tracks.length > 0) {
+        description += '**Cola:**\n';
+        for (let i = start; i < end; i++) {
+            const track = tracks[i];
+            description += `**${i + 1}.** [${track.title}](${track.uri}) - \`${musicManager.formatTime(Math.floor((track.length || 0) / 1000))}\`\n`;
+        }
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(0x1DB954)
+        .setTitle(`${EMOJIS.MUSIC} Cola de reproduccion`)
+        .setDescription(description)
+        .setFooter({ text: `Pagina ${currentPage}/${totalPages} | ${tracks.length + 1} canciones` });
+
+    await interaction.reply({ embeds: [embed] });
+}
+
+async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promise<void> {
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player || !player.queue.current) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin cancion', 'No hay ninguna cancion reproduciendose.');
+    }
+
+    const embed = musicManager.createPlayerEmbed(player, player.queue.current);
+    await interaction.reply({ embeds: [embed] });
+}
+
+async function handleVolume(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+    const level = interaction.options.getInteger('level', true);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    await player.setVolume(level);
+    await musicManager.refreshPlayerEmbed(player);
+
+    const volumeEmoji = level === 0 ? EMOJIS.VOLUME : level < 50 ? EMOJIS.VOLUME : EMOJIS.VOLUME;
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${volumeEmoji} Volumen ajustado a **${level}%**`)
+        ]
+    });
+}
+
+async function handleShuffle(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    player.queue.shuffle();
+    await musicManager.refreshPlayerEmbed(player);
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.SHUFFLE} Cola mezclada aleatoriamente`)
+        ]
+    });
+}
+
+async function handleLoop(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    const nextMode = player.loop === LoopMode.NONE
+        ? LoopMode.TRACK
+        : player.loop === LoopMode.TRACK
+            ? LoopMode.QUEUE
+            : LoopMode.NONE;
+
+    player.setLoop(nextMode);
+    await musicManager.refreshPlayerEmbed(player);
+
+    const modeText = nextMode === LoopMode.NONE
+        ? 'Desactivado'
+        : nextMode === LoopMode.TRACK
+            ? 'Repetir cancion'
+            : 'Repetir cola';
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.REPEAT} Modo de repeticion: **${modeText}**`)
+        ]
+    });
+}
+
+// ==================== HANDLERS PREFIX ====================
 
 async function handlePlayPrefix(message: Message, args: string[]): Promise<void> {
     if (args.length === 0) {
-        await message.reply(
-            `❌ **Uso:** \`${config.prefix}play <búsqueda/URL>\`\n\n` +
-            `**Ejemplos:**\n` +
-            `\`${config.prefix}play Rick Astley - Never Gonna Give You Up\`\n` +
-            `\`${config.prefix}play https://youtube.com/watch?v=dQw4w9WgXcQ\`\n` +
-            `\`${config.prefix}p https://open.spotify.com/track/...\``
-        );
+        await message.reply(`Uso: \`${config.prefix}music play <URL o busqueda>\``);
         return;
     }
 
-    validateVoiceChannel(message);
-
+    const member = message.member as GuildMember;
+    const voiceChannel = getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
     const query = args.join(' ');
-    await executePlay(message, query);
-}
-
-async function executePlay(
-    context: ChatInputCommandInteraction | Message,
-    query: string
-): Promise<void> {
-    const isInteraction = context instanceof ChatInputCommandInteraction;
-    const member = context.member as GuildMember;
-    const client = context.client as any;
-
-    if (!client.musicManager) {
-        throw new CommandError(
-            ErrorType.UNKNOWN,
-            'MusicManager no inicializado',
-            '❌ El sistema de música no está disponible.'
-        );
-    }
 
     try {
-        const searchResult = await client.musicManager.player.search(query, {
-            requestedBy: context instanceof ChatInputCommandInteraction ? context.user : context.author,
-            searchEngine: QueryType.AUTO
-        });
-
-        if (!searchResult.hasTracks()) {
-            const embed = new EmbedBuilder()
-                .setDescription(`${EMOJIS.ERROR} No se encontraron resultados para: **${query}**`)
-                .setColor(COLORS.DANGER);
-
-            if (isInteraction) {
-                await context.editReply({ embeds: [embed] });
-            } else {
-                await context.reply({ embeds: [embed] });
-            }
-            return;
-        }
-
-        // ✅ Usar los métodos del MusicManager (más limpio)
-        let queue = client.musicManager.getQueue(context.guild!.id);
-
-        if (!queue) {
-            // ✅ Crear cola usando MusicManager.createQueue()
-            queue = client.musicManager.createQueue(context.guild!, {
-                metadata: {
-                    channel: context.channel,
-                    client: context.guild?.members.me,
-                    requestedBy: context instanceof ChatInputCommandInteraction ? context.user : context.author
-                },
-                selfDeaf: true,
-                volume: 80,
-                leaveOnEmpty: true,
-                leaveOnEmptyCooldown: 60000,
-                leaveOnEnd: false,
-                leaveOnStop: true,
-            });
-        }
-
-        try {
-            if (!queue.connection) {
-                await queue.connect(member.voice.channel!);
-            }
-        } catch (error) {
-            client.musicManager.deleteQueue(context.guild!.id);
-            throw new CommandError(
-                ErrorType.UNKNOWN,
-                'Error conectando al canal de voz',
-                '❌ No pude conectarme al canal de voz. Verifica mis permisos.'
-            );
-        }
-
-        const wasEmpty = queue.tracks.size === 0 && !queue.currentTrack;
-
-        if (searchResult.playlist) {
-            queue.addTrack(searchResult.tracks);
-            const embed = new EmbedBuilder()
-                .setTitle(`${EMOJIS.SUCCESS} Playlist añadida`)
-                .setDescription(
-                    `**Playlist:** ${searchResult.playlist.title}\n` +
-                    `**Canciones:** ${searchResult.tracks.length}\n` +
-                    `**Solicitado por:** ${member.user.tag}`
-                )
-                .setThumbnail(searchResult.playlist.thumbnail)
-                .setColor(COLORS.MUSIC);
-
-            if (isInteraction) {
-                await context.editReply({ embeds: [embed] });
-            } else {
-                await context.reply({ embeds: [embed] });
-            }
-        } else {
-            const track = searchResult.tracks[0];
-            queue.addTrack(track);
-
-            const embed = new EmbedBuilder()
-                .setTitle(wasEmpty ? `${EMOJIS.PLAY} Reproduciendo` : `${EMOJIS.SUCCESS} Añadido a la cola`)
-                .setDescription(
-                    `**[${track.title}](${track.url})**\n` +
-                    `**Duración:** ${track.duration}\n` +
-                    `**Solicitado por:** ${member.user.tag}`
-                )
-                .setThumbnail(track.thumbnail)
-                .setColor(COLORS.MUSIC);
-
-            if (!wasEmpty) {
-                embed.addFields({
-                    name: 'Posición en cola',
-                    value: `#${queue.tracks.size}`,
-                    inline: true
-                });
-            }
-
-            if (isInteraction) {
-                await context.editReply({ embeds: [embed] });
-            } else {
-                await context.reply({ embeds: [embed] });
-            }
-        }
-
-        if (wasEmpty) {
-            await queue.node.play();
-        }
-
-    } catch (error) {
+        await musicManager.play(
+            voiceChannel,
+            message.channel as TextChannel,
+            query,
+            member
+        );
+        await message.react(EMOJIS.MUSIC);
+    } catch (error: any) {
         throw new CommandError(
             ErrorType.UNKNOWN,
-            'Error buscando/reproduciendo música',
-            '❌ Hubo un error al buscar la música. Intenta de nuevo.'
+            'Error reproduciendo',
+            error.message || `No se pudo reproducir: ${query}`
         );
     }
 }
 
-async function handleSkip(context: ChatInputCommandInteraction | Message): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
+async function handlePausePrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
 
-    if (!queue.currentTrack) {
-        throw new CommandError(
-            ErrorType.NOT_FOUND,
-            'No hay canción actual',
-            '❌ No hay ninguna canción reproduciéndose.'
-        );
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
 
-    const currentTrack = queue.currentTrack;
-    queue.node.skip();
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${EMOJIS.SKIP} Saltando: **${currentTrack.title}**`)
-        .setColor(COLORS.INFO);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
+    if (player.paused) {
+        throw new CommandError(ErrorType.VALIDATION_ERROR, 'Ya pausado', 'La musica ya esta pausada.');
     }
+
+    await player.pause(true);
+    await musicManager.refreshPlayerEmbed(player);
+    await message.react(EMOJIS.PAUSE);
 }
 
-async function handleStop(context: ChatInputCommandInteraction | Message): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
+async function handleResumePrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
 
-    queue.delete();
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${EMOJIS.STOP} Música detenida y cola limpiada.`)
-        .setColor(COLORS.INFO);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
+
+    if (!player.paused) {
+        throw new CommandError(ErrorType.VALIDATION_ERROR, 'No pausado', 'La musica no esta pausada.');
+    }
+
+    await player.pause(false);
+    await musicManager.refreshPlayerEmbed(player);
+    await message.react(EMOJIS.PLAY);
 }
 
-async function handlePause(context: ChatInputCommandInteraction | Message): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
+async function handleSkipPrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
 
-    if (queue.node.isPaused()) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'Ya está pausado',
-            '❌ La reproducción ya está pausada.'
-        );
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
 
-    queue.node.pause();
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${EMOJIS.PAUSE} Reproducción pausada.`)
-        .setColor(COLORS.INFO);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
-    }
+    await player.skip();
+    await message.react(EMOJIS.SKIP);
 }
 
-async function handleResume(context: ChatInputCommandInteraction | Message): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
+async function handleStopPrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
 
-    if (!queue.node.isPaused()) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'No está pausado',
-            '❌ La reproducción no está pausada.'
-        );
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
 
-    queue.node.resume();
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${EMOJIS.PLAY} Reproducción reanudada.`)
-        .setColor(COLORS.INFO);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
-    }
-}
-
-async function handleQueueSlash(interaction: ChatInputCommandInteraction): Promise<void> {
-    const page = interaction.options.getInteger('page') || 1;
-    await executeQueue(interaction, page);
+    await player.destroy();
+    await message.react(EMOJIS.STOP);
 }
 
 async function handleQueuePrefix(message: Message, args: string[]): Promise<void> {
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
     const page = args[0] ? parseInt(args[0]) : 1;
-    if (isNaN(page) || page < 1) {
-        await message.reply('❌ El número de página debe ser un número positivo.');
-        return;
-    }
-    await executeQueue(message, page);
-}
 
-async function executeQueue(
-    context: ChatInputCommandInteraction | Message,
-    page: number
-): Promise<void> {
-    const queue = getQueue(context);
-
-    const tracksPerPage = 10;
-    const totalPages = Math.ceil(queue.tracks.size / tracksPerPage);
-
-    if (page > totalPages && totalPages > 0) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'Página fuera de rango',
-            `❌ Solo hay ${totalPages} página(s) en la cola.`
-        );
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player || !player.queue.current) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin cola', 'No hay musica reproduciendose.');
     }
 
-    const start = (page - 1) * tracksPerPage;
-    const end = start + tracksPerPage;
-    const tracks = queue.tracks.toArray().slice(start, end);
+    const current = player.queue.current;
+    const tracks = player.queue;
+    const itemsPerPage = 10;
+    const totalPages = Math.max(1, Math.ceil(tracks.length / itemsPerPage));
+    const currentPage = Math.min(Math.max(1, page), totalPages);
+    const start = (currentPage - 1) * itemsPerPage;
+    const end = Math.min(start + itemsPerPage, tracks.length);
 
-    const embed = new EmbedBuilder()
-        .setTitle(`${EMOJIS.MUSIC} Cola de reproducción`)
-        .setColor(COLORS.MUSIC);
-
-    if (queue.currentTrack) {
-        embed.addFields({
-            name: '🎵 Reproduciendo ahora',
-            value: `**[${queue.currentTrack.title}](${queue.currentTrack.url})**\n` +
-                `Duración: ${queue.currentTrack.duration} | Solicitado por: ${queue.currentTrack.requestedBy?.tag}`
-        });
-    }
+    let description = `${EMOJIS.PLAY} **Ahora:** [${current.title}](${current.uri}) - \`${musicManager.formatTime(Math.floor((current.length || 0) / 1000))}\`\n\n`;
 
     if (tracks.length > 0) {
-
-        const queueList = tracks.map((track: Track, i: number) => {
-            const position = start + i + 1;
-            return `**${position}.** [${track.title}](${track.url}) - \`${track.duration}\``;
-        }).join('\n');
-
-        embed.addFields({
-            name: `📋 Próximas canciones (${queue.tracks.size} total)`,
-            value: queueList
-        });
-
-        if (totalPages > 1) {
-            embed.setFooter({ text: `Página ${page}/${totalPages}` });
+        description += '**Cola:**\n';
+        for (let i = start; i < end; i++) {
+            const track = tracks[i];
+            description += `**${i + 1}.** [${track.title}](${track.uri}) - \`${musicManager.formatTime(Math.floor((track.length || 0) / 1000))}\`\n`;
         }
-    } else if (!queue.currentTrack) {
-        embed.setDescription('La cola está vacía.');
     }
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
-    }
-}
-
-async function handleNowPlaying(context: ChatInputCommandInteraction | Message): Promise<void> {
-    const queue = getQueue(context);
-
-    if (!queue.currentTrack) {
-        throw new CommandError(
-            ErrorType.NOT_FOUND,
-            'No hay canción actual',
-            '❌ No hay ninguna canción reproduciéndose.'
-        );
-    }
-
-    const track = queue.currentTrack;
-    const progress = queue.node.createProgressBar();
 
     const embed = new EmbedBuilder()
-        .setTitle(`${EMOJIS.MUSIC} Reproduciendo ahora`)
-        .setDescription(`**[${track.title}](${track.url})**`)
-        .addFields(
-            { name: 'Duración', value: track.duration, inline: true },
-            { name: 'Solicitado por', value: track.requestedBy?.tag || 'Desconocido', inline: true },
-            { name: 'Progreso', value: progress || 'N/A' }
-        )
-        .setThumbnail(track.thumbnail)
-        .setColor(COLORS.MUSIC);
+        .setColor(0x1DB954)
+        .setTitle(`${EMOJIS.MUSIC} Cola de reproduccion`)
+        .setDescription(description)
+        .setFooter({ text: `Pagina ${currentPage}/${totalPages} | ${tracks.length + 1} canciones` });
 
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
-    }
+    await message.reply({ embeds: [embed] });
 }
 
-async function handleShuffle(context: ChatInputCommandInteraction | Message): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
+async function handleNowPlayingPrefix(message: Message): Promise<void> {
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
 
-    if (queue.tracks.size === 0) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'Cola vacía',
-            '❌ No hay canciones en la cola para mezclar.'
-        );
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player || !player.queue.current) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin cancion', 'No hay ninguna cancion reproduciendose.');
     }
 
-    queue.tracks.shuffle();
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${EMOJIS.SHUFFLE} Cola mezclada (${queue.tracks.size} canciones).`)
-        .setColor(COLORS.INFO);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
-    }
-}
-
-async function handleClear(context: ChatInputCommandInteraction | Message): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
-
-    if (queue.tracks.size === 0) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'Cola vacía',
-            '❌ No hay canciones en la cola para limpiar.'
-        );
-    }
-
-    const count = queue.tracks.size;
-    queue.tracks.clear();
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${EMOJIS.SUCCESS} Cola limpiada (${count} canciones eliminadas).`)
-        .setColor(COLORS.SUCCESS);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
-    }
-}
-
-async function handleVolumeSlash(interaction: ChatInputCommandInteraction): Promise<void> {
-    const level = interaction.options.getInteger('level', true);
-    await executeVolume(interaction, level);
+    const embed = musicManager.createPlayerEmbed(player, player.queue.current);
+    await message.reply({ embeds: [embed] });
 }
 
 async function handleVolumePrefix(message: Message, args: string[]): Promise<void> {
     if (args.length === 0) {
-        await message.reply(
-            `❌ **Uso:** \`${config.prefix}volume <0-200>\`\n\n` +
-            `**Ejemplo:** \`${config.prefix}vol 80\``
-        );
+        await message.reply(`Uso: \`${config.prefix}music volume <0-100>\``);
         return;
     }
 
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
     const level = parseInt(args[0]);
-    if (isNaN(level) || level < 0 || level > 200) {
-        await message.reply('❌ El volumen debe ser un número entre 0 y 200.');
+
+    if (isNaN(level) || level < 0 || level > 100) {
+        await message.reply('El volumen debe ser un numero entre 0 y 100.');
         return;
     }
 
-    await executeVolume(message, level);
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    await player.setVolume(level);
+    await musicManager.refreshPlayerEmbed(player);
+
+    await message.reply(`${EMOJIS.VOLUME} Volumen: **${level}%**`);
 }
 
-async function executeVolume(
-    context: ChatInputCommandInteraction | Message,
-    level: number
-): Promise<void> {
-    validateVoiceChannel(context);
-    const queue = getQueue(context);
+async function handleShufflePrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
 
-    queue.node.setVolume(level);
-
-    const volumeEmoji = level === 0 ? '🔇' : level < 50 ? '🔉' : '🔊';
-
-    const embed = new EmbedBuilder()
-        .setDescription(`${volumeEmoji} Volumen ajustado a **${level}%**`)
-        .setColor(COLORS.INFO);
-
-    if (context instanceof ChatInputCommandInteraction) {
-        await context.reply({ embeds: [embed] });
-    } else {
-        await context.reply({ embeds: [embed] });
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
+
+    player.queue.shuffle();
+    await musicManager.refreshPlayerEmbed(player);
+    await message.react(EMOJIS.SHUFFLE);
+}
+
+async function handleLoopPrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    const nextMode = player.loop === LoopMode.NONE
+        ? LoopMode.TRACK
+        : player.loop === LoopMode.TRACK
+            ? LoopMode.QUEUE
+            : LoopMode.NONE;
+
+    player.setLoop(nextMode);
+    await musicManager.refreshPlayerEmbed(player);
+
+    const modeText = nextMode === LoopMode.NONE
+        ? 'Desactivado'
+        : nextMode === LoopMode.TRACK
+            ? 'Repetir cancion'
+            : 'Repetir cola';
+
+    await message.reply(`${EMOJIS.REPEAT} Modo de repeticion: **${modeText}**`);
 }

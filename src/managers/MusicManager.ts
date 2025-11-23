@@ -1,125 +1,425 @@
-import { Player, GuildQueue, Track } from 'discord-player';
-import { DefaultExtractors } from '@discord-player/extractor';
-import { Client } from 'discord.js';
-import { YoutubeiExtractor } from 'discord-player-youtubei';
+import { Kazagumo, KazagumoPlayer, KazagumoTrack, Plugins, PlayerState, KazagumoSearchResult } from 'kazagumo';
+import { Connectors } from 'shoukaku';
+import {
+    EmbedBuilder,
+    ActionRowBuilder,
+    ButtonBuilder,
+    ButtonStyle,
+    TextChannel,
+    Message,
+    GuildMember,
+    VoiceBasedChannel
+} from 'discord.js';
+import { BotClient } from '../types/BotClient.js';
+import { config } from '../config.js';
 import { logger } from '../utils/logger.js';
+import { COLORS, EMOJIS } from '../utils/constants.js';
+
+// Nodos Lavalink publicos
+const LAVALINK_NODES = [
+    {
+        name: 'Lavalink1',
+        url: 'lavalink.jirayu.net:13592',
+        auth: 'youshallnotpass',
+        secure: false
+    },
+    {
+        name: 'Lavalink2',
+        url: 'lava-v4.ajieblogs.eu.org:80',
+        auth: 'https://dsc.gg/ajidevserver',
+        secure: false
+    }
+];
+
+export enum LoopMode {
+    NONE = 'none',
+    TRACK = 'track',
+    QUEUE = 'queue'
+}
 
 export class MusicManager {
-    public player: Player;
-    private client: Client;
+    public kazagumo: Kazagumo;
+    private client: BotClient;
+    private playerMessages: Map<string, Message> = new Map();
+    private textChannels: Map<string, TextChannel> = new Map();
 
-    constructor(client: Client) {
+    constructor(client: BotClient) {
         this.client = client;
-        // ✅ discord-player v7 no usa estas opciones en el constructor
-        // Las opciones de desconexión se configuran por cola individual
-        this.player = new Player(client);
+
+        this.kazagumo = new Kazagumo({
+            defaultSearchEngine: 'youtube',
+            plugins: [
+                new Plugins.PlayerMoved(client)
+            ],
+            send: (guildId, payload) => {
+                const guild = client.guilds.cache.get(guildId);
+                if (guild) guild.shard.send(payload);
+            }
+        }, new Connectors.DiscordJS(client), LAVALINK_NODES);
+
+        this.setupEvents();
+        logger.info('MusicManager', 'Manager de Lavalink inicializado');
     }
 
-    async initialize(): Promise<void> {
-        try {
-            // ✅ Configuración avanzada para evitar errores de parsing
-            await this.player.extractors.register(YoutubeiExtractor, {
-                // Usar cliente de Android (más estable)
-                streamOptions: {
-                    useClient: 'ANDROID'
-                },
-                // Autenticación opcional (si tienes cookies de YouTube)
-                // authentication: process.env.YOUTUBE_COOKIE,
-
-                // Opciones para reducir warnings
-                overrideDownloadOptions: {
-                    quality: 'highestaudio'
-                }
-            });
-
-            // Cargar otros extractores
-            await this.player.extractors.loadMulti(DefaultExtractors);
-
-            logger.info('MusicManager', '✅ Sistema de música inicializado');
-            logger.info('MusicManager', `📦 Extractores cargados: ${this.player.extractors.size}`);
-
-            this.setupPlayerEvents();
-
-        } catch (error) {
-            logger.error('MusicManager', 'Error inicializando sistema de música', error);
-            throw error;
-        }
-    }
-
-    private setupPlayerEvents(): void {
-        this.player.events.on('playerStart', (queue: GuildQueue, track: Track) => {
-            logger.info(
-                'Music',
-                `🎵 Reproduciendo: "${track.title}" en ${queue.guild.name}`
-            );
+    private setupEvents(): void {
+        // Shoukaku events
+        this.kazagumo.shoukaku.on('ready', (name) => {
+            logger.info('MusicManager', `Nodo Lavalink conectado: ${name}`);
         });
 
-        this.player.events.on('playerFinish', (queue: GuildQueue, track: Track) => {
-            logger.debug(
-                'Music',
-                `✅ Terminó: "${track.title}" en ${queue.guild.name}`
-            );
+        this.kazagumo.shoukaku.on('error', (name, error) => {
+            logger.error('MusicManager', `Error en nodo ${name}`, error);
         });
 
-        this.player.events.on('emptyQueue', (queue: GuildQueue) => {
-            logger.info('Music', `ℹ️ Cola vacía en ${queue.guild.name}`);
+        this.kazagumo.shoukaku.on('close', (name, code, reason) => {
+            logger.warn('MusicManager', `Nodo ${name} desconectado. Code: ${code}, Reason: ${reason}`);
         });
 
-        this.player.events.on('emptyChannel', (queue: GuildQueue) => {
-            logger.info('Music', `👋 Canal vacío en ${queue.guild.name}, desconectando...`);
+        this.kazagumo.shoukaku.on('disconnect', (name, count) => {
+            logger.warn('MusicManager', `Nodo ${name} desconectado, ${count} players afectados`);
         });
 
-        this.player.events.on('error', (queue: GuildQueue, error: Error) => {
-            logger.error('Music', `Error en ${queue.guild.name}`, error);
+        // Kazagumo player events
+        this.kazagumo.on('playerStart', async (player, track) => {
+            logger.info('MusicManager', `Reproduciendo: ${track.title}`);
+            await this.sendPlayerEmbed(player, track);
         });
 
-        this.player.events.on('playerError', (queue: GuildQueue, error: Error, track: Track) => {
-            logger.error('Music', `Error reproduciendo "${track.title}"`, error);
+        this.kazagumo.on('playerEnd', async (player) => {
+            // Si no hay mas canciones, no hacer nada (playerEmpty se encarga)
         });
 
-        // ✅ Filtrar warnings de YouTube.js para que no llenen los logs
-        this.player.events.on('debug', (queue: GuildQueue, message: string) => {
-            // Solo mostrar mensajes que no sean warnings de parsing
-            if (!message.includes('InnertubeError') &&
-                !message.includes('not found!') &&
-                !message.includes('Unable to find matching run')) {
-                logger.debug('Music', `[${queue.guild.name}] ${message}`);
+        this.kazagumo.on('playerEmpty', async (player) => {
+            const channel = this.textChannels.get(player.guildId);
+            if (channel) {
+                const embed = new EmbedBuilder()
+                    .setColor(COLORS.INFO)
+                    .setDescription(`${EMOJIS.MUSIC} La cola ha terminado. Agrega mas canciones!`);
+                await channel.send({ embeds: [embed] });
+            }
+            await this.deletePlayerMessage(player.guildId);
+        });
+
+        this.kazagumo.on('playerDestroy', async (player) => {
+            await this.deletePlayerMessage(player.guildId);
+            this.textChannels.delete(player.guildId);
+            logger.info('MusicManager', 'Player destruido');
+        });
+
+        this.kazagumo.on('playerException', (player, data) => {
+            logger.error('MusicManager', 'Excepción en player', data);
+            const channel = this.textChannels.get(player.guildId);
+            if (channel) {
+                const embed = new EmbedBuilder()
+                    .setColor(COLORS.DANGER)
+                    .setDescription(`${EMOJIS.ERROR} **Error:** ${data.exception?.message || 'Error desconocido'}`);
+                channel.send({ embeds: [embed] }).catch(() => {});
             }
         });
     }
 
-    getQueue(guildId: string): GuildQueue | null {
-        return this.player.nodes.get(guildId) || null;
+    /**
+     * Reproduce una cancion o la agrega a la cola
+     */
+    async play(
+        voiceChannel: VoiceBasedChannel,
+        textChannel: TextChannel,
+        query: string,
+        requester: GuildMember
+    ): Promise<KazagumoSearchResult> {
+        const guildId = voiceChannel.guild.id;
+
+        // Guardar canal de texto
+        this.textChannels.set(guildId, textChannel);
+
+        // Obtener o crear player
+        let player = this.kazagumo.players.get(guildId);
+
+        if (!player) {
+            player = await this.kazagumo.createPlayer({
+                guildId: guildId,
+                voiceId: voiceChannel.id,
+                textId: textChannel.id,
+                deaf: true,
+                volume: 80
+            });
+        }
+
+        // Buscar cancion
+        const result = await this.kazagumo.search(query, { requester });
+
+        if (!result.tracks.length) {
+            throw new Error('No se encontraron resultados');
+        }
+
+        // Agregar a la cola
+        if (result.type === 'PLAYLIST') {
+            for (const track of result.tracks) {
+                player.queue.add(track);
+            }
+
+            const embed = new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.SUCCESS} **Playlist agregada:** ${result.playlistName}`)
+                .addFields(
+                    { name: 'Canciones', value: `${result.tracks.length}`, inline: true }
+                );
+            await textChannel.send({ embeds: [embed] });
+        } else {
+            const track = result.tracks[0];
+            player.queue.add(track);
+
+            // Si ya hay algo reproduciendose, notificar que se agrego a la cola
+            if (player.playing || player.paused) {
+                const embed = new EmbedBuilder()
+                    .setColor(COLORS.SUCCESS)
+                    .setDescription(`${EMOJIS.SUCCESS} **Agregado a la cola:** [${track.title}](${track.uri})`)
+                    .addFields(
+                        { name: 'Duracion', value: this.formatTime(Math.floor((track.length || 0) / 1000)), inline: true },
+                        { name: 'Posicion en cola', value: `#${player.queue.length}`, inline: true }
+                    )
+                    .setThumbnail(track.thumbnail || null)
+                    .setFooter({ text: `Solicitado por ${requester.displayName}` });
+                await textChannel.send({ embeds: [embed] });
+            }
+        }
+
+        // Iniciar reproduccion si no esta reproduciendo
+        if (!player.playing && !player.paused) {
+            await player.play();
+        }
+
+        return result;
     }
 
-    createQueue(guildId: string): GuildQueue {
-        return this.player.nodes.create(guildId);
+    /**
+     * Envia el embed del reproductor con botones
+     */
+    async sendPlayerEmbed(player: KazagumoPlayer, track: KazagumoTrack): Promise<void> {
+        const channel = this.textChannels.get(player.guildId);
+        if (!channel) return;
+
+        const embed = this.createPlayerEmbed(player, track);
+        const buttons = this.createPlayerButtons(player);
+
+        try {
+            await this.deletePlayerMessage(player.guildId);
+
+            const message = await channel.send({
+                embeds: [embed],
+                components: buttons
+            });
+
+            this.playerMessages.set(player.guildId, message);
+        } catch (error) {
+            logger.error('MusicManager', 'Error enviando reproductor', error);
+        }
     }
 
-    deleteQueue(guildId: string): boolean {
-        return this.player.nodes.delete(guildId);
+    /**
+     * Actualiza el embed del reproductor existente
+     */
+    async refreshPlayerEmbed(player: KazagumoPlayer): Promise<void> {
+        const message = this.playerMessages.get(player.guildId);
+        const track = player.queue.current;
+        if (!message || !track) return;
+
+        const embed = this.createPlayerEmbed(player, track);
+        const buttons = this.createPlayerButtons(player);
+
+        try {
+            await message.edit({
+                embeds: [embed],
+                components: buttons
+            });
+        } catch (error) {
+            logger.error('MusicManager', 'Error actualizando reproductor', error);
+        }
     }
 
+    /**
+     * Crea el embed del reproductor
+     */
+    createPlayerEmbed(player: KazagumoPlayer, track: KazagumoTrack): EmbedBuilder {
+        const progress = this.createProgressBar(player, track);
+        const loopMode = player.loop === LoopMode.NONE
+            ? 'Desactivado'
+            : player.loop === LoopMode.TRACK
+                ? 'Cancion'
+                : 'Cola';
+
+        const requester = track.requester as GuildMember | undefined;
+
+        const embed = new EmbedBuilder()
+            .setColor(0x1DB954)
+            .setAuthor({
+                name: 'Reproduciendo ahora',
+                iconURL: 'https://i.imgur.com/3Lx4ivB.png'
+            })
+            .setTitle(track.title || 'Cancion desconocida')
+            .setURL(track.uri || null)
+            .setThumbnail(track.thumbnail || null)
+            .addFields(
+                {
+                    name: 'Artista',
+                    value: track.author || 'Desconocido',
+                    inline: true
+                },
+                {
+                    name: 'Duracion',
+                    value: this.formatTime(Math.floor((track.length || 0) / 1000)),
+                    inline: true
+                },
+                {
+                    name: 'Volumen',
+                    value: `${player.volume}%`,
+                    inline: true
+                },
+                {
+                    name: 'En cola',
+                    value: `${player.queue.length} canciones`,
+                    inline: true
+                },
+                {
+                    name: 'Repetir',
+                    value: loopMode,
+                    inline: true
+                },
+                {
+                    name: 'Fuente',
+                    value: track.sourceName || 'Desconocida',
+                    inline: true
+                }
+            )
+            .setDescription(progress)
+            .setFooter({
+                text: `Solicitado por ${requester?.displayName || 'Desconocido'}`,
+                iconURL: requester?.user?.avatarURL() || undefined
+            })
+            .setTimestamp();
+
+        return embed;
+    }
+
+    /**
+     * Crea la barra de progreso visual
+     */
+    createProgressBar(player: KazagumoPlayer, track: KazagumoTrack): string {
+        const current = Math.floor((player.position || 0) / 1000);
+        const total = Math.floor((track.length || 0) / 1000);
+        const size = 15;
+
+        const progress = total > 0 ? Math.round((current / total) * size) : 0;
+        const emptyProgress = size - progress;
+
+        const progressText = '▬'.repeat(Math.max(0, progress)) + '🔘' + '▬'.repeat(Math.max(0, emptyProgress));
+        const currentTime = this.formatTime(current);
+        const totalTime = this.formatTime(total);
+
+        return `\`${currentTime}\` ${progressText} \`${totalTime}\``;
+    }
+
+    /**
+     * Formatea segundos a MM:SS
+     */
+    formatTime(seconds: number): string {
+        const mins = Math.floor(seconds / 60);
+        const secs = Math.floor(seconds % 60);
+        return `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+    }
+
+    /**
+     * Crea los botones del reproductor
+     */
+    createPlayerButtons(player: KazagumoPlayer): ActionRowBuilder<ButtonBuilder>[] {
+        const isPaused = player.paused;
+        const loop = player.loop;
+
+        const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId('music_previous')
+                .setEmoji('⏮️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(true),
+
+            new ButtonBuilder()
+                .setCustomId('music_playpause')
+                .setEmoji(isPaused ? '▶️' : '⏸️')
+                .setStyle(isPaused ? ButtonStyle.Success : ButtonStyle.Primary),
+
+            new ButtonBuilder()
+                .setCustomId('music_skip')
+                .setEmoji('⏭️')
+                .setStyle(ButtonStyle.Secondary),
+
+            new ButtonBuilder()
+                .setCustomId('music_stop')
+                .setEmoji('⏹️')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+        const row2 = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId('music_shuffle')
+                .setEmoji('🔀')
+                .setStyle(ButtonStyle.Secondary),
+
+            new ButtonBuilder()
+                .setCustomId('music_loop')
+                .setEmoji(loop === LoopMode.QUEUE ? '🔁' : '🔂')
+                .setLabel(loop === LoopMode.NONE ? 'Off' : loop === LoopMode.TRACK ? 'Cancion' : 'Cola')
+                .setStyle(loop !== LoopMode.NONE ? ButtonStyle.Success : ButtonStyle.Secondary),
+
+            new ButtonBuilder()
+                .setCustomId('music_voldown')
+                .setEmoji('🔉')
+                .setStyle(ButtonStyle.Secondary),
+
+            new ButtonBuilder()
+                .setCustomId('music_volup')
+                .setEmoji('🔊')
+                .setStyle(ButtonStyle.Secondary),
+
+            new ButtonBuilder()
+                .setCustomId('music_queue')
+                .setEmoji('📋')
+                .setStyle(ButtonStyle.Primary)
+        );
+
+        return [row1, row2];
+    }
+
+    /**
+     * Elimina el mensaje del reproductor
+     */
+    async deletePlayerMessage(guildId: string): Promise<void> {
+        const message = this.playerMessages.get(guildId);
+        if (message) {
+            try {
+                await message.delete();
+            } catch {
+                // El mensaje ya fue eliminado
+            }
+            this.playerMessages.delete(guildId);
+        }
+    }
+
+    /**
+     * Obtiene el player de un servidor
+     */
+    getPlayer(guildId: string): KazagumoPlayer | undefined {
+        return this.kazagumo.players.get(guildId);
+    }
+
+    /**
+     * Destruye el manager y limpia recursos
+     */
     destroy(): void {
-        this.player.destroy();
-        logger.info('MusicManager', '🔴 Sistema de música destruido');
-    }
-
-    getStats(): {
-        totalQueues: number;
-        activeQueues: number;
-        totalTracks: number;
-        extractors: number;
-    } {
-        const queues = this.player.nodes.cache;
-        const activeQueues = Array.from(queues.values()).filter(q => q.isPlaying()).length;
-        const totalTracks = Array.from(queues.values()).reduce((acc, q) => acc + q.tracks.size, 0);
-
-        return {
-            totalQueues: queues.size,
-            activeQueues,
-            totalTracks,
-            extractors: this.player.extractors.size
-        };
+        for (const [guildId] of this.playerMessages) {
+            this.deletePlayerMessage(guildId);
+        }
+        this.playerMessages.clear();
+        this.textChannels.clear();
+        logger.info('MusicManager', 'Manager destruido');
     }
 }
