@@ -24,12 +24,14 @@ export const music: HybridCommand = {
         { name: 'pause', aliases: ['pausar'], description: 'Pausa la reproduccion' },
         { name: 'resume', aliases: ['continuar', 'reanudar'], description: 'Reanuda la reproduccion' },
         { name: 'skip', aliases: ['s', 'saltar', 'next'], description: 'Salta la cancion actual' },
-        { name: 'stop', aliases: ['detener', 'leave'], description: 'Detiene la musica y desconecta' },
+        { name: 'stop', aliases: ['detener', 'clear'], description: 'Detiene y limpia la cola' },
         { name: 'queue', aliases: ['q', 'cola'], description: 'Muestra la cola de reproduccion' },
         { name: 'nowplaying', aliases: ['np', 'actual'], description: 'Muestra la cancion actual' },
         { name: 'volume', aliases: ['vol', 'volumen'], description: 'Ajusta el volumen' },
         { name: 'shuffle', aliases: ['mezclar', 'aleatorio'], description: 'Mezcla la cola' },
         { name: 'loop', aliases: ['repetir', 'repeat'], description: 'Cambia el modo de repeticion' },
+        { name: 'join', aliases: ['conectar', 'entrar'], description: 'Conecta el bot al canal de voz' },
+        { name: 'leave', aliases: ['disconnect', 'salir', 'dc'], description: 'Desconecta el bot del canal' },
     ],
 
     data: new SlashCommandBuilder()
@@ -56,7 +58,13 @@ export const music: HybridCommand = {
             sub.setName('skip').setDescription('Salta la cancion actual')
         )
         .addSubcommand(sub =>
-            sub.setName('stop').setDescription('Detiene la musica y desconecta el bot')
+            sub.setName('stop').setDescription('Detiene la musica y limpia la cola')
+        )
+        .addSubcommand(sub =>
+            sub.setName('join').setDescription('Conecta el bot a tu canal de voz')
+        )
+        .addSubcommand(sub =>
+            sub.setName('leave').setDescription('Desconecta el bot del canal de voz')
         )
         .addSubcommand(sub =>
             sub
@@ -130,6 +138,12 @@ export const music: HybridCommand = {
                 case 'loop':
                     await handleLoop(interaction);
                     break;
+                case 'join':
+                    await handleJoin(interaction);
+                    break;
+                case 'leave':
+                    await handleLeave(interaction);
+                    break;
             }
         } catch (error) {
             await handleCommandError(error, interaction, 'music');
@@ -150,12 +164,14 @@ export const music: HybridCommand = {
                 'pausar': 'pause',
                 'continuar': 'resume', 'reanudar': 'resume',
                 's': 'skip', 'saltar': 'skip', 'next': 'skip',
-                'detener': 'stop', 'leave': 'stop',
+                'detener': 'stop', 'clear': 'stop',
                 'q': 'queue', 'cola': 'queue',
                 'np': 'nowplaying', 'actual': 'nowplaying',
                 'vol': 'volume', 'volumen': 'volume',
                 'mezclar': 'shuffle', 'aleatorio': 'shuffle',
-                'repetir': 'loop', 'repeat': 'loop'
+                'repetir': 'loop', 'repeat': 'loop',
+                'conectar': 'join', 'entrar': 'join',
+                'disconnect': 'leave', 'salir': 'leave', 'dc': 'leave'
             };
 
             const normalizedCommand = commandMap[subcommand] || subcommand;
@@ -190,6 +206,12 @@ export const music: HybridCommand = {
                     break;
                 case 'loop':
                     await handleLoopPrefix(message);
+                    break;
+                case 'join':
+                    await handleJoinPrefix(message);
+                    break;
+                case 'leave':
+                    await handleLeavePrefix(message);
                     break;
                 default:
                     await showHelp(message);
@@ -235,12 +257,14 @@ async function showHelp(message: Message): Promise<void> {
             `\`pause\` - Pausa la reproduccion\n` +
             `\`resume\` - Reanuda la reproduccion\n` +
             `\`skip\` (\`s\`) - Salta la cancion actual\n` +
-            `\`stop\` - Detiene y desconecta\n` +
+            `\`stop\` - Detiene y limpia la cola\n` +
             `\`queue\` (\`q\`) [pagina] - Muestra la cola\n` +
             `\`nowplaying\` (\`np\`) - Cancion actual\n` +
             `\`volume\` (\`vol\`) <0-100> - Ajusta volumen\n` +
             `\`shuffle\` - Mezcla la cola\n` +
-            `\`loop\` - Modo repeticion\n\n` +
+            `\`loop\` - Modo repeticion\n` +
+            `\`join\` - Conecta el bot al canal\n` +
+            `\`leave\` (\`dc\`) - Desconecta el bot\n\n` +
             `**Ejemplos:**\n` +
             `\`${config.prefix}music play never gonna give you up\`\n` +
             `\`${config.prefix}p https://youtube.com/watch?v=...\`\n` +
@@ -374,13 +398,13 @@ async function handleStop(interaction: ChatInputCommandInteraction): Promise<voi
         throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
 
-    await player.destroy();
+    await musicManager.stop(interaction.guildId!);
 
     await interaction.reply({
         embeds: [
             new EmbedBuilder()
-                .setColor(COLORS.DANGER)
-                .setDescription(`${EMOJIS.STOP} Musica detenida y bot desconectado`)
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.STOP} Reproduccion detenida y cola limpiada`)
         ]
     });
 }
@@ -519,6 +543,45 @@ async function handleLoop(interaction: ChatInputCommandInteraction): Promise<voi
     });
 }
 
+async function handleJoin(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    const voiceChannel = getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    await musicManager.join(voiceChannel, interaction.channel as TextChannel);
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.SUCCESS} Conectado a **${voiceChannel.name}**`)
+        ]
+    });
+}
+
+async function handleLeave(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    getVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin conexion', 'El bot no esta conectado a ningun canal.');
+    }
+
+    await musicManager.leave(interaction.guildId!);
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.SUCCESS} Desconectado del canal de voz`)
+        ]
+    });
+}
+
 // ==================== HANDLERS PREFIX ====================
 
 async function handlePlayPrefix(message: Message, args: string[]): Promise<void> {
@@ -616,7 +679,7 @@ async function handleStopPrefix(message: Message): Promise<void> {
         throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
 
-    await player.destroy();
+    await musicManager.stop(message.guildId!);
     await message.react(EMOJIS.STOP);
 }
 
@@ -741,4 +804,29 @@ async function handleLoopPrefix(message: Message): Promise<void> {
             : 'Repetir cola';
 
     await message.reply(`${EMOJIS.REPEAT} Modo de repeticion: **${modeText}**`);
+}
+
+async function handleJoinPrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    const voiceChannel = getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    await musicManager.join(voiceChannel, message.channel as TextChannel);
+    await message.react(EMOJIS.SUCCESS);
+}
+
+async function handleLeavePrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    getVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin conexion', 'El bot no esta conectado a ningun canal.');
+    }
+
+    await musicManager.leave(message.guildId!);
+    await message.react(EMOJIS.SUCCESS);
 }

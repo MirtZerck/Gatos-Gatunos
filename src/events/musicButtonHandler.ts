@@ -85,8 +85,8 @@ export default {
                     break;
 
                 case 'stop':
-                    await player.destroy();
-                    logger.info('MusicButtonHandler', 'Reproduccion detenida via boton');
+                    await musicManager.stop(guildId);
+                    logger.info('MusicButtonHandler', 'Cola limpiada via boton');
                     return;
 
                 case 'shuffle':
@@ -121,7 +121,16 @@ export default {
                     return;
 
                 case 'previous':
-                    break;
+                    const previousTrack = await musicManager.playPrevious(guildId);
+                    if (previousTrack) {
+                        logger.info('MusicButtonHandler', `Cancion anterior reproducida: ${previousTrack.title}`);
+                    } else {
+                        await buttonInteraction.followUp({
+                            content: 'No hay canciones anteriores en el historial.',
+                            flags: MessageFlags.Ephemeral
+                        });
+                    }
+                    return;
             }
 
             await musicManager.refreshPlayerEmbed(player);

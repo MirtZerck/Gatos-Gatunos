@@ -37,11 +37,17 @@ export enum LoopMode {
     QUEUE = 'queue'
 }
 
+// Tiempo de inactividad antes de desconectar (en ms)
+const INACTIVITY_TIMEOUT = 5 * 60 * 1000; // 5 minutos
+
 export class MusicManager {
     public kazagumo: Kazagumo;
     private client: BotClient;
     private playerMessages: Map<string, Message> = new Map();
     private textChannels: Map<string, TextChannel> = new Map();
+    private trackHistory: Map<string, KazagumoTrack[]> = new Map();
+    private inactivityTimers: Map<string, NodeJS.Timeout> = new Map();
+    private skipHistorySave: Set<string> = new Set(); // Evita guardar en historial al usar "anterior"
 
     constructor(client: BotClient) {
         this.client = client;
@@ -82,11 +88,22 @@ export class MusicManager {
         // Kazagumo player events
         this.kazagumo.on('playerStart', async (player, track) => {
             logger.info('MusicManager', `Reproduciendo: ${track.title}`);
+            // Limpiar timer de inactividad al reproducir
+            this.clearInactivityTimer(player.guildId);
             await this.sendPlayerEmbed(player, track);
         });
 
         this.kazagumo.on('playerEnd', async (player) => {
-            // Si no hay mas canciones, no hacer nada (playerEmpty se encarga)
+            // Guardar la cancion en el historial antes de pasar a la siguiente
+            // Solo si no estamos reproduciendo una cancion anterior
+            if (!this.skipHistorySave.has(player.guildId)) {
+                const currentTrack = player.queue.current;
+                if (currentTrack) {
+                    this.addToHistory(player.guildId, currentTrack);
+                }
+            } else {
+                this.skipHistorySave.delete(player.guildId);
+            }
         });
 
         this.kazagumo.on('playerEmpty', async (player) => {
@@ -94,15 +111,19 @@ export class MusicManager {
             if (channel) {
                 const embed = new EmbedBuilder()
                     .setColor(COLORS.INFO)
-                    .setDescription(`${EMOJIS.MUSIC} La cola ha terminado. Agrega mas canciones!`);
+                    .setDescription(`${EMOJIS.MUSIC} La cola ha terminado. Agrega mas canciones o me desconectare en 5 minutos.`);
                 await channel.send({ embeds: [embed] });
             }
             await this.deletePlayerMessage(player.guildId);
+            // Iniciar timer de inactividad
+            this.startInactivityTimer(player.guildId);
         });
 
         this.kazagumo.on('playerDestroy', async (player) => {
             await this.deletePlayerMessage(player.guildId);
             this.textChannels.delete(player.guildId);
+            this.trackHistory.delete(player.guildId);
+            this.clearInactivityTimer(player.guildId);
             logger.info('MusicManager', 'Player destruido');
         });
 
@@ -334,13 +355,14 @@ export class MusicManager {
     createPlayerButtons(player: KazagumoPlayer): ActionRowBuilder<ButtonBuilder>[] {
         const isPaused = player.paused;
         const loop = player.loop;
+        const hasHistory = this.hasHistory(player.guildId);
 
         const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
                 .setCustomId('music_previous')
                 .setEmoji('⏮️')
                 .setStyle(ButtonStyle.Secondary)
-                .setDisabled(true),
+                .setDisabled(!hasHistory),
 
             new ButtonBuilder()
                 .setCustomId('music_playpause')
@@ -412,14 +434,205 @@ export class MusicManager {
     }
 
     /**
+     * Detiene la reproduccion y limpia la cola sin desconectar
+     */
+    async stop(guildId: string): Promise<boolean> {
+        const player = this.kazagumo.players.get(guildId);
+        if (!player) return false;
+
+        // Limpiar la cola
+        player.queue.clear();
+
+        // Detener la cancion actual
+        await player.skip();
+
+        // Limpiar historial
+        this.trackHistory.delete(guildId);
+
+        // Eliminar mensaje del reproductor
+        await this.deletePlayerMessage(guildId);
+
+        return true;
+    }
+
+    /**
+     * Conecta el bot a un canal de voz sin reproducir nada
+     */
+    async join(
+        voiceChannel: VoiceBasedChannel,
+        textChannel: TextChannel
+    ): Promise<KazagumoPlayer> {
+        const guildId = voiceChannel.guild.id;
+
+        // Guardar canal de texto
+        this.textChannels.set(guildId, textChannel);
+
+        // Verificar si ya existe un player
+        let player = this.kazagumo.players.get(guildId);
+
+        if (!player) {
+            player = await this.kazagumo.createPlayer({
+                guildId: guildId,
+                voiceId: voiceChannel.id,
+                textId: textChannel.id,
+                deaf: true,
+                volume: 80
+            });
+        }
+
+        return player;
+    }
+
+    /**
+     * Desconecta el bot del canal de voz
+     */
+    async leave(guildId: string): Promise<boolean> {
+        const player = this.kazagumo.players.get(guildId);
+        if (!player) return false;
+
+        await player.destroy();
+        return true;
+    }
+
+    /**
+     * Agrega una cancion al historial
+     */
+    addToHistory(guildId: string, track: KazagumoTrack): void {
+        const history = this.trackHistory.get(guildId) || [];
+        history.push(track);
+        // Mantener solo las ultimas 50 canciones
+        if (history.length > 50) {
+            history.shift();
+        }
+        this.trackHistory.set(guildId, history);
+    }
+
+    /**
+     * Verifica si hay historial disponible
+     */
+    hasHistory(guildId: string): boolean {
+        const history = this.trackHistory.get(guildId);
+        return !!history && history.length > 0;
+    }
+
+    /**
+     * Reproduce la cancion anterior del historial
+     */
+    async playPrevious(guildId: string): Promise<KazagumoTrack | null> {
+        const history = this.trackHistory.get(guildId);
+        if (!history || history.length === 0) return null;
+
+        const player = this.kazagumo.players.get(guildId);
+        if (!player) return null;
+
+        // Obtener la ultima cancion del historial
+        const previousTrack = history.pop();
+        if (!previousTrack) return null;
+
+        this.trackHistory.set(guildId, history);
+
+        // Marcar que no debe guardarse en historial al hacer skip
+        this.skipHistorySave.add(guildId);
+
+        // Si hay una cancion actual, agregarla al inicio de la cola
+        const currentTrack = player.queue.current;
+        if (currentTrack) {
+            player.queue.unshift(currentTrack);
+        }
+
+        // Agregar la cancion anterior al inicio y reproducirla
+        player.queue.unshift(previousTrack);
+        await player.skip();
+
+        return previousTrack;
+    }
+
+    /**
+     * Inicia el timer de inactividad
+     */
+    private startInactivityTimer(guildId: string): void {
+        this.clearInactivityTimer(guildId);
+
+        const timer = setTimeout(async () => {
+            const player = this.kazagumo.players.get(guildId);
+            if (player) {
+                const channel = this.textChannels.get(guildId);
+                if (channel) {
+                    const embed = new EmbedBuilder()
+                        .setColor(COLORS.WARNING)
+                        .setDescription(`${EMOJIS.MUSIC} Me desconecte por inactividad. Hasta la proxima!`);
+                    await channel.send({ embeds: [embed] }).catch(() => {});
+                }
+                await player.destroy();
+                logger.info('MusicManager', `Player destruido por inactividad en ${guildId}`);
+            }
+        }, INACTIVITY_TIMEOUT);
+
+        this.inactivityTimers.set(guildId, timer);
+        logger.info('MusicManager', `Timer de inactividad iniciado para ${guildId}`);
+    }
+
+    /**
+     * Limpia el timer de inactividad
+     */
+    private clearInactivityTimer(guildId: string): void {
+        const timer = this.inactivityTimers.get(guildId);
+        if (timer) {
+            clearTimeout(timer);
+            this.inactivityTimers.delete(guildId);
+        }
+    }
+
+    /**
+     * Maneja cuando un usuario sale del canal de voz
+     * Llamar desde el evento voiceStateUpdate
+     */
+    async handleVoiceStateUpdate(guildId: string, voiceChannelId: string | null): Promise<void> {
+        const player = this.kazagumo.players.get(guildId);
+        if (!player) return;
+
+        // Verificar si el bot sigue en el canal
+        const guild = this.client.guilds.cache.get(guildId);
+        if (!guild) return;
+
+        const botVoiceChannel = guild.members.me?.voice.channel;
+        if (!botVoiceChannel) return;
+
+        // Contar usuarios en el canal (excluyendo bots)
+        const usersInChannel = botVoiceChannel.members.filter(m => !m.user.bot).size;
+
+        if (usersInChannel === 0) {
+            // No hay usuarios, iniciar timer de desconexion
+            const channel = this.textChannels.get(guildId);
+            if (channel) {
+                const embed = new EmbedBuilder()
+                    .setColor(COLORS.WARNING)
+                    .setDescription(`${EMOJIS.MUSIC} No hay nadie en el canal. Me desconectare en 5 minutos si nadie se une.`);
+                await channel.send({ embeds: [embed] }).catch(() => {});
+            }
+            this.startInactivityTimer(guildId);
+        } else {
+            // Hay usuarios, cancelar timer si existe
+            this.clearInactivityTimer(guildId);
+        }
+    }
+
+    /**
      * Destruye el manager y limpia recursos
      */
     destroy(): void {
+        // Limpiar todos los timers
+        for (const [guildId] of this.inactivityTimers) {
+            this.clearInactivityTimer(guildId);
+        }
         for (const [guildId] of this.playerMessages) {
             this.deletePlayerMessage(guildId);
         }
         this.playerMessages.clear();
         this.textChannels.clear();
+        this.trackHistory.clear();
+        this.inactivityTimers.clear();
+        this.skipHistorySave.clear();
         logger.info('MusicManager', 'Manager destruido');
     }
 }
