@@ -2,7 +2,8 @@ import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
     Message,
-    EmbedBuilder
+    EmbedBuilder,
+    User
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -322,8 +323,8 @@ export const react: HybridCommand = {
 async function handleReaction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
-    author: any,
-    target: any | null
+    author: User,
+    target: User | null
 ): Promise<void> {
     try {
         const reactionConfig = REACTION_CONFIG[action];
@@ -354,8 +355,8 @@ async function handleReaction(
 async function handleReactionPrefix(
     message: Message,
     action: ActionType,
-    author: any,
-    target: any | undefined
+    author: User,
+    target: User | undefined
 ): Promise<void> {
     const loadingMsg = await message.reply('🔄 Cargando...');
 

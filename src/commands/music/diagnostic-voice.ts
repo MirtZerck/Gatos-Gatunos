@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, PermissionFlagsBits, GuildMember } from 'discord.js';
 import { SlashOnlyCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
 
@@ -29,7 +29,7 @@ export const diagnosticVoice: SlashOnlyCommand = {
         const hasVoiceActivity = botMember.permissions.has(PermissionFlagsBits.UseVAD);
 
         // Si el usuario está en un canal de voz, verificar permisos específicos del canal
-        const member = interaction.member as any;
+        const member = interaction.member as GuildMember;
         let channelPerms = '';
 
         if (member.voice?.channel) {

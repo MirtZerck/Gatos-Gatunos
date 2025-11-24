@@ -9,7 +9,9 @@ import {
     PermissionFlagsBits,
     MessageFlags,
     ComponentType,
-    ButtonInteraction
+    ButtonInteraction,
+    GuildMember,
+    TextChannel
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -17,7 +19,8 @@ import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHa
 import { config } from '../../config.js';
 import { BotClient } from '../../types/BotClient.js';
 import { Validators } from '../../utils/validators.js';
-import { ProposalStatus } from '../../types/CustomCommand.js';
+import { ProposalStatus, CommandProposal } from '../../types/CustomCommand.js';
+import { CustomCommandManager } from '../../managers/CustomCommandManager.js';
 import {
     createProposalSentEmbed,
     createProposalManagementEmbed,
@@ -282,7 +285,7 @@ async function handleListaPrefix(message: Message): Promise<void> {
 
 async function handleGestionarSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     Validators.validateUserPermissions(
-        interaction.member as any,
+        interaction.member as GuildMember,
         [PermissionFlagsBits.ManageMessages],
         ['Gestionar Mensajes']
     );
@@ -350,9 +353,9 @@ async function handleGestionarPrefix(message: Message): Promise<void> {
 
 async function showProposalNavigation(
     interaction: ChatInputCommandInteraction,
-    proposals: any[],
+    proposals: CommandProposal[],
     currentIndex: number,
-    customManager: any,
+    customManager: CustomCommandManager,
     commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
     if (!commandExistsCache) {
@@ -456,10 +459,10 @@ async function showProposalNavigation(
 
 async function processProposalAction(
     interaction: ChatInputCommandInteraction,
-    proposal: any,
+    proposal: CommandProposal,
     accept: boolean,
-    customManager: any,
-    allProposals: any[],
+    customManager: CustomCommandManager,
+    allProposals: CommandProposal[],
     commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
     try {
@@ -475,14 +478,13 @@ async function processProposalAction(
             commandExistsCache.set(proposal.commandName, true);
         }
 
-        // ⚡ Notificación asíncrona (no bloqueante)
         customManager.notifyUser(
             proposal.authorId,
             interaction.guild!,
             proposal,
             accept,
-            interaction.channel as any
-        ).catch((err: any) => {
+            interaction.channel as TextChannel
+        ).catch((err: Error) => {
             console.error('Error enviando notificación (no crítico):', err);
         });
 
@@ -518,12 +520,11 @@ async function processProposalAction(
 
 async function showProposalNavigationPrefix(
     message: Message,
-    proposals: any[],
+    proposals: CommandProposal[],
     currentIndex: number,
-    customManager: any,
-    moderatorId: string,  // ✅ REQUERIDO, no opcional
+    customManager: CustomCommandManager,
+    moderatorId: string,
     commandExistsCache?: Map<string, boolean>
-
 ): Promise<void> {
     const proposal = proposals[currentIndex];
     const isNewCommand = !(await customManager.commandExists(message.guild!.id, proposal.commandName));
@@ -622,10 +623,10 @@ async function showProposalNavigationPrefix(
 
 async function processProposalActionPrefix(
     message: Message,
-    proposal: any,
+    proposal: CommandProposal,
     accept: boolean,
-    customManager: any,
-    allProposals: any[],
+    customManager: CustomCommandManager,
+    allProposals: CommandProposal[],
     moderatorId: string,
     commandExistsCache?: Map<string, boolean>
 ): Promise<void> {
@@ -634,7 +635,7 @@ async function processProposalActionPrefix(
             message.guild!.id,
             proposal.id,
             accept,
-            { id: moderatorId, tag: message.author.tag }
+            message.author
         );
 
         // ✅ Actualizar cache si se aceptó
@@ -642,14 +643,13 @@ async function processProposalActionPrefix(
             commandExistsCache.set(proposal.commandName, true);
         }
 
-        // ⚡ Notificación asíncrona (no bloqueante)
         customManager.notifyUser(
             proposal.authorId,
             message.guild!,
             proposal,
             accept,
-            message.channel as any
-        ).catch((err: any) => {
+            message.channel as TextChannel
+        ).catch((err: Error) => {
             console.error('Error enviando notificación (no crítico):', err);
         });
 
@@ -681,7 +681,7 @@ async function processProposalActionPrefix(
 
 async function handleEditarSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     Validators.validateUserPermissions(
-        interaction.member as any,
+        interaction.member as GuildMember,
         [PermissionFlagsBits.ManageMessages],
         ['Gestionar Mensajes']
     );
@@ -746,7 +746,7 @@ async function showEditNavigation(
     commandName: string,
     values: Record<string, string>,
     currentIndex: number,
-    customManager: any
+    customManager: CustomCommandManager
 ): Promise<void> {
     const entries = Object.entries(values);
 
@@ -842,7 +842,7 @@ async function confirmDeleteValue(
     commandName: string,
     index: string,
     allValues: Record<string, string>,
-    customManager: any
+    customManager: CustomCommandManager
 ): Promise<void> {
     const remainingCount = Object.keys(allValues).length;
     const confirmEmbed = createDeleteValueConfirmationEmbed(commandName, index, remainingCount);
@@ -933,8 +933,8 @@ async function showEditNavigationPrefix(
     commandName: string,
     values: Record<string, string>,
     currentIndex: number,
-    customManager: any,
-    moderatorId: string  // ✅ REQUERIDO
+    customManager: CustomCommandManager,
+    moderatorId: string
 ): Promise<void> {
     const entries = Object.entries(values);
 
@@ -1048,7 +1048,7 @@ async function showEditNavigationPrefix(
 
 async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Promise<void> {
     Validators.validateUserPermissions(
-        interaction.member as any,
+        interaction.member as GuildMember,
         [PermissionFlagsBits.ManageMessages],
         ['Gestionar Mensajes']
     );

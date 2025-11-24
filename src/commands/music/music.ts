@@ -297,11 +297,12 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
                     .setDescription(`${EMOJIS.SEARCH} Buscando: **${query}**`)
             ]
         });
-    } catch (error: any) {
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Error desconocido';
         throw new CommandError(
             ErrorType.UNKNOWN,
             'Error reproduciendo',
-            error.message || `No se pudo reproducir: ${query}`
+            message || `No se pudo reproducir: ${query}`
         );
     }
 }
@@ -598,11 +599,12 @@ async function handlePlayPrefix(message: Message, args: string[]): Promise<void>
             member
         );
         await message.react(EMOJIS.MUSIC);
-    } catch (error: any) {
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
         throw new CommandError(
             ErrorType.UNKNOWN,
             'Error reproduciendo',
-            error.message || `No se pudo reproducir: ${query}`
+            errorMessage || `No se pudo reproducir: ${query}`
         );
     }
 }

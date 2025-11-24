@@ -119,7 +119,7 @@ class Logger {
      * @param {...any[]} args - Argumentos adicionales
      */
 
-    debug(category: string, message: string, ...args: any[]): void {
+    debug(category: string, message: string, ...args: unknown[]): void {
         if (this.shouldLog(LogLevel.DEBUG)) {
             console.debug(this.format('DEBUG', category, message), ...args);
         }
@@ -134,7 +134,7 @@ class Logger {
      * @param {...any[]} args - Argumentos adicionales
      */
 
-    info(category: string, message: string, ...args: any[]): void {
+    info(category: string, message: string, ...args: unknown[]): void {
         if (this.shouldLog(LogLevel.INFO)) {
             console.info(this.format('INFO', category, message), ...args);
         }
@@ -149,10 +149,9 @@ class Logger {
      * @param {...any[]} args - Argumentos adicionales
      */
 
-    warn(category: string, message: string, ...args: any[]): void {
+    warn(category: string, message: string, ...args: unknown[]): void {
         if (this.shouldLog(LogLevel.WARN)) {
             console.error(this.format('WARN', category, message), ...args);
-
         }
     }
 

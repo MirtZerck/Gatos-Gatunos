@@ -9,11 +9,12 @@ import {
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
-import { handleCommandError } from '../../utils/errorHandler.js';
+import { handleCommandError, CommandError } from '../../utils/errorHandler.js';
 import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
 import { Validators } from '../../utils/validators.js';
 import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
+import { InteractionStatsManager } from '../../managers/InteractionStatsManager.js';
 
 export const utility: HybridCommand = {
     type: 'hybrid',
@@ -295,12 +296,12 @@ async function handleStatsPrefix(message: Message, args: string[]): Promise<void
     }
 
     if (targetUser) {
-        // Validaciones
         try {
             Validators.validateNotSelf(author, targetUser);
             Validators.validateNotBot(targetUser);
-        } catch (error: any) {
-            await message.reply(error.userMessage || '❌ Validación fallida.');
+        } catch (error) {
+            const errorMessage = error instanceof CommandError ? (error.userMessage ?? '❌ Validación fallida.') : '❌ Validación fallida.';
+            await message.reply(errorMessage);
             return;
         }
 
@@ -312,9 +313,9 @@ async function handleStatsPrefix(message: Message, args: string[]): Promise<void
 
 async function showPairStats(
     interaction: ChatInputCommandInteraction,
-    user1: any,
-    user2: any,
-    statsManager: any
+    user1: User,
+    user2: User,
+    statsManager: InteractionStatsManager
 ): Promise<void> {
     const description = await statsManager.getStatsDescription(
         user1.id,
@@ -346,9 +347,9 @@ async function showPairStats(
 
 async function showPairStatsPrefix(
     message: Message,
-    user1: any,
-    user2: any,
-    statsManager: any
+    user1: User,
+    user2: User,
+    statsManager: InteractionStatsManager
 ): Promise<void> {
     const description = await statsManager.getStatsDescription(
         user1.id,
@@ -378,9 +379,15 @@ async function showPairStatsPrefix(
     await message.reply({ embeds: [embed] });
 }
 
+interface TrackedInteraction {
+    type: string;
+    emoji: string;
+    name: string;
+}
+
 async function showGeneralInfo(
     interaction: ChatInputCommandInteraction,
-    statsManager: any
+    statsManager: InteractionStatsManager
 ): Promise<void> {
     const trackedInteractions = statsManager.getTrackedInteractionsList();
 
@@ -388,7 +395,7 @@ async function showGeneralInfo(
         '**Estadísticas de Interacciones**\n\n' +
         'Este sistema rastrea interacciones positivas entre usuarios:\n\n' +
         '**Interacciones rastreadas:**\n' +
-        trackedInteractions.map((i: any) => `${i.emoji} **${i.name}**`).join(' • ') +
+        trackedInteractions.map((i: TrackedInteraction) => `${i.emoji} **${i.name}**`).join(' • ') +
         '\n\n' +
         '💡 **Uso:**\n' +
         '`/utility stats @usuario` - Ver tus estadísticas con alguien\n' +
@@ -406,7 +413,7 @@ async function showGeneralInfo(
 
 async function showGeneralInfoPrefix(
     message: Message,
-    statsManager: any
+    statsManager: InteractionStatsManager
 ): Promise<void> {
     const trackedInteractions = statsManager.getTrackedInteractionsList();
 
@@ -414,7 +421,7 @@ async function showGeneralInfoPrefix(
         '**Estadísticas de Interacciones**\n\n' +
         'Este sistema rastrea interacciones positivas entre usuarios:\n\n' +
         '**Interacciones rastreadas:**\n' +
-        trackedInteractions.map((i: any) => `${i.emoji} **${i.name}**`).join(' • ') +
+        trackedInteractions.map((i: TrackedInteraction) => `${i.emoji} **${i.name}**`).join(' • ') +
         '\n\n' +
         '💡 **Uso:**\n' +
         `\`${config.prefix}stats @usuario\` - Ver tus estadísticas con alguien\n` +

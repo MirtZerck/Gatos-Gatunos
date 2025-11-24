@@ -4,6 +4,7 @@ import { logger } from "../utils/logger.js";
 import { COLORS } from "../utils/constants.js";
 import { getRandomGif } from "../utils/tenor.js";
 import { BotClient } from "../types/BotClient.js";
+import { PendingRequest } from "../managers/RequestManager.js";
 
 /** Configuración de acciones de interacción */
 const ACTION_CONFIG: Record<string, {
@@ -159,7 +160,7 @@ export default {
  */
 async function handleAccept(
     interaction: ButtonInteraction,
-    request: any,
+    request: PendingRequest,
     action: string,
     client: BotClient
 ): Promise<void> {
@@ -224,7 +225,7 @@ async function handleAccept(
  */
 async function handleReject(
     interaction: ButtonInteraction,
-    request: any,
+    request: PendingRequest,
     action: string,
     client: BotClient
 ): Promise<void> {

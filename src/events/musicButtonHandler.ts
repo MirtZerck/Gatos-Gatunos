@@ -10,7 +10,8 @@ import { Event } from '../types/Events.js';
 import { BotClient } from '../types/BotClient.js';
 import { logger } from '../utils/logger.js';
 import { EMOJIS } from '../utils/constants.js';
-import { LoopMode } from '../managers/MusicManager.js';
+import { LoopMode, MusicManager } from '../managers/MusicManager.js';
+import { KazagumoPlayer } from 'kazagumo';
 
 /**
  * Handler de botones para controles del reproductor de música.
@@ -153,7 +154,7 @@ export default {
     }
 } as Event;
 
-async function showQueue(interaction: ButtonInteraction, player: any, musicManager: any): Promise<void> {
+async function showQueue(interaction: ButtonInteraction, player: KazagumoPlayer, musicManager: MusicManager): Promise<void> {
     const current = player.queue.current;
     const tracks = player.queue;
 

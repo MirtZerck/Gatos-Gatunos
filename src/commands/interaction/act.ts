@@ -6,6 +6,7 @@ import {
     ActionRowBuilder,
     ButtonBuilder,
     ButtonStyle,
+    User
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
@@ -279,8 +280,8 @@ export const act: HybridCommand = {
 async function handleDirectAction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
-    author: any,
-    target: any | null
+    author: User,
+    target: User | null
 ): Promise<void> {
     try {
         const actionConfig = ACTION_CONFIG[action];
@@ -306,8 +307,8 @@ async function handleDirectAction(
 async function handleDirectActionPrefix(
     message: Message,
     action: ActionType,
-    author: any,
-    target: any | undefined
+    author: User,
+    target: User | undefined
 ): Promise<void> {
     const loadingMsg = await message.reply('🔄 Cargando...');
 
@@ -335,8 +336,8 @@ async function handleDirectActionPrefix(
 async function handleRequestAction(
     interaction: ChatInputCommandInteraction,
     action: ActionType,
-    author: any,
-    target: any
+    author: User,
+    target: User
 ): Promise<void> {
     const requestManager = (interaction.client as BotClient).requestManager;
 
@@ -438,8 +439,8 @@ async function handleRequestAction(
 async function handleRequestActionPrefix(
     message: Message,
     action: ActionType,
-    author: any,
-    target: any
+    author: User,
+    target: User
 ): Promise<void> {
     const requestManager = (message.client as BotClient).requestManager;
 
