@@ -24,6 +24,7 @@ export const moderation: HybridCommand = {
         { name: 'kick', aliases: ['expulsar'], description: 'Expulsa un usuario' },
         { name: 'ban', aliases: ['banear'], description: 'Banea un usuario' },
         { name: 'timeout', aliases: ['silenciar', 'mute'], description: 'Silencia temporalmente' },
+        { name: 'untimeout', aliases: ['unmute', 'desmutear'], description: 'Quita el silencio a un usuario' },
         { name: 'warn', aliases: ['advertir'], description: 'Advierte a un usuario' },
         { name: 'warns', aliases: ['advertencias'], description: 'Ver advertencias de un usuario' },
         { name: 'warn-remove', aliases: ['unwarn'], description: 'Elimina una advertencia' },
@@ -100,6 +101,24 @@ export const moderation: HybridCommand = {
                     option
                         .setName('razon')
                         .setDescription('Razón del timeout')
+                        .setRequired(false)
+                        .setMaxLength(512)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('untimeout')
+                .setDescription('Quita el silencio a un usuario')
+                .addUserOption(option =>
+                    option
+                        .setName('usuario')
+                        .setDescription('Usuario a desmutear')
+                        .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('razon')
+                        .setDescription('Razón del desmuteo')
                         .setRequired(false)
                         .setMaxLength(512)
                 )
@@ -187,6 +206,9 @@ export const moderation: HybridCommand = {
                 case 'timeout':
                     await handleTimeoutSlash(interaction);
                     break;
+                case 'untimeout':
+                    await handleUntimeoutSlash(interaction);
+                    break;
                 case 'warn':
                     await handleWarnSlash(interaction);
                     break;
@@ -211,6 +233,7 @@ export const moderation: HybridCommand = {
             const subcommand = args[0]?.toLowerCase();
             const validSubcommands = [
                 'kick', 'ban', 'timeout', 'expulsar', 'banear', 'silenciar', 'mute',
+                'untimeout', 'unmute', 'desmutear',
                 'warn', 'advertir', 'warns', 'advertencias', 'warn-remove', 'unwarn', 'warn-clear'
             ];
 
@@ -221,6 +244,7 @@ export const moderation: HybridCommand = {
                     `• \`kick\` (\`expulsar\`) <usuario> [razón]\n` +
                     `• \`ban\` (\`banear\`) <usuario> [días] [razón]\n` +
                     `• \`timeout\` (\`silenciar\`) <usuario> <minutos> [razón]\n` +
+                    `• \`untimeout\` (\`unmute\`) <usuario> [razón]\n` +
                     `• \`warn\` (\`advertir\`) <usuario> <razón>\n` +
                     `• \`warns\` (\`advertencias\`) <usuario>\n` +
                     `• \`warn-remove\` (\`unwarn\`) <usuario> <id>\n` +
@@ -234,6 +258,8 @@ export const moderation: HybridCommand = {
                 'banear': 'ban',
                 'silenciar': 'timeout',
                 'mute': 'timeout',
+                'unmute': 'untimeout',
+                'desmutear': 'untimeout',
                 'advertir': 'warn',
                 'advertencias': 'warns',
                 'unwarn': 'warn-remove'
@@ -250,6 +276,9 @@ export const moderation: HybridCommand = {
                     break;
                 case 'timeout':
                     await handleTimeoutPrefix(message, args.slice(1));
+                    break;
+                case 'untimeout':
+                    await handleUntimeoutPrefix(message, args.slice(1));
                     break;
                 case 'warn':
                     await handleWarnPrefix(message, args.slice(1));
@@ -288,6 +317,12 @@ async function handleTimeoutSlash(interaction: ChatInputCommandInteraction): Pro
     const duration = interaction.options.getInteger('duracion', true);
     const reason = interaction.options.getString('razon') || 'Sin razón especificada';
     await executeTimeout(interaction, target, duration, reason);
+}
+
+async function handleUntimeoutSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+    const target = interaction.options.getMember('usuario') as GuildMember | null;
+    const reason = interaction.options.getString('razon') || 'Sin razón especificada';
+    await executeUntimeout(interaction, target, reason);
 }
 
 async function handleKickPrefix(message: Message, args: string[]): Promise<void> {
@@ -408,6 +443,27 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
 
     const reason = args.slice(durationIndex + 1).join(' ') || 'Sin razón especificada';
     await executeTimeout(message, target, duration, reason);
+}
+
+async function handleUntimeoutPrefix(message: Message, args: string[]): Promise<void> {
+    if (args.length === 0) {
+        await message.reply(`❌ **Uso:** \`${config.prefix}untimeout <usuario> [razón]\``);
+        return;
+    }
+
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
+
+    if (!target) {
+        await message.reply(`❌ No se encontró al usuario: **${args[0]}**`);
+        return;
+    }
+
+    const reason = args.slice(1).join(' ') || 'Sin razón especificada';
+    await executeUntimeout(message, target, reason);
 }
 
 async function executeKick(
@@ -586,6 +642,62 @@ async function executeTimeout(
         }
     } catch (error) {
         throw new CommandError(ErrorType.UNKNOWN, 'Fallo al silenciar usuario', '❌ No se pudo silenciar al usuario. Verifica los permisos.');
+    }
+}
+
+async function executeUntimeout(
+    context: ChatInputCommandInteraction | Message,
+    target: GuildMember | null | undefined,
+    reason: string
+): Promise<void> {
+    const isInteraction = context instanceof ChatInputCommandInteraction;
+    const author = isInteraction ? context.user : context.author;
+    const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
+
+    Validators.validateMemberProvided(target);
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
+    Validators.validateBotPermissions(context.guild!, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
+
+    if (!target.isCommunicationDisabled()) {
+        throw new CommandError(ErrorType.VALIDATION_ERROR, 'Usuario no silenciado', '❌ Este usuario no está silenciado.');
+    }
+
+    try {
+        await target.timeout(null, reason);
+
+        try {
+            await target.send({
+                embeds: [
+                    new EmbedBuilder()
+                        .setTitle(`${EMOJIS.SUCCESS} Tu silencio ha sido removido`)
+                        .setDescription(
+                            `**Servidor:** ${context.guild!.name}\n` +
+                            `**Razón:** ${reason}`
+                        )
+                        .setColor(COLORS.SUCCESS)
+                        .setTimestamp()
+                ]
+            });
+        } catch { }
+
+        const embed = new EmbedBuilder()
+            .setTitle(`${EMOJIS.SUCCESS} Usuario desmuteado`)
+            .setDescription(
+                `**Usuario:** ${target.user.tag}\n` +
+                `**Moderador:** ${author.tag}\n` +
+                `**Razón:** ${reason}`
+            )
+            .setColor(COLORS.SUCCESS)
+            .setTimestamp();
+
+        if (isInteraction) {
+            await context.editReply({ embeds: [embed] });
+        } else {
+            await context.reply({ embeds: [embed] });
+        }
+    } catch (error) {
+        if (error instanceof CommandError) throw error;
+        throw new CommandError(ErrorType.UNKNOWN, 'Fallo al desmutear', '❌ No se pudo quitar el silencio. Verifica los permisos.');
     }
 }
 
