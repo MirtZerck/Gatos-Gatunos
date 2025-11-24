@@ -7,6 +7,7 @@ import { FirebaseAdminManager } from "../managers/FirebaseAdminManager.js";
 import { InteractionStatsManager } from "../managers/InteractionStatsManager.js";
 import { CustomCommandManager } from "../managers/CustomCommandManager.js";
 import { MusicManager } from "../managers/MusicManager.js";
+import { WarnManager } from "../managers/WarnManager.js";
 
 /**
  * Cliente extendido del bot con todos los managers y sistemas integrados.
@@ -49,6 +50,9 @@ export class BotClient extends Client {
 
     /** Sistema de reproducción de música con Lavalink */
     public musicManager?: MusicManager;
+
+    /** Sistema de advertencias por servidor */
+    public warnManager?: WarnManager;
 
     /**
      * Crea una nueva instancia del cliente del bot.

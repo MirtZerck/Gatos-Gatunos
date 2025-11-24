@@ -12,6 +12,8 @@ import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 import { config } from '../../config.js';
+import { BotClient } from '../../types/BotClient.js';
+import { WarnAction } from '../../types/Warn.js';
 
 export const moderation: HybridCommand = {
     type: 'hybrid',
@@ -22,6 +24,10 @@ export const moderation: HybridCommand = {
         { name: 'kick', aliases: ['expulsar'], description: 'Expulsa un usuario' },
         { name: 'ban', aliases: ['banear'], description: 'Banea un usuario' },
         { name: 'timeout', aliases: ['silenciar', 'mute'], description: 'Silencia temporalmente' },
+        { name: 'warn', aliases: ['advertir'], description: 'Advierte a un usuario' },
+        { name: 'warns', aliases: ['advertencias'], description: 'Ver advertencias de un usuario' },
+        { name: 'warn-remove', aliases: ['unwarn'], description: 'Elimina una advertencia' },
+        { name: 'warn-clear', aliases: [], description: 'Limpia todas las advertencias' },
     ],
 
     data: new SlashCommandBuilder()
@@ -98,6 +104,63 @@ export const moderation: HybridCommand = {
                         .setMaxLength(512)
                 )
         )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('warn')
+                .setDescription('Advierte a un usuario')
+                .addUserOption(option =>
+                    option
+                        .setName('usuario')
+                        .setDescription('Usuario a advertir')
+                        .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('razon')
+                        .setDescription('Razón de la advertencia')
+                        .setRequired(true)
+                        .setMaxLength(512)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('warns')
+                .setDescription('Ver advertencias de un usuario')
+                .addUserOption(option =>
+                    option
+                        .setName('usuario')
+                        .setDescription('Usuario a consultar')
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('warn-remove')
+                .setDescription('Elimina una advertencia específica')
+                .addUserOption(option =>
+                    option
+                        .setName('usuario')
+                        .setDescription('Usuario objetivo')
+                        .setRequired(true)
+                )
+                .addStringOption(option =>
+                    option
+                        .setName('id')
+                        .setDescription('ID de la advertencia a eliminar')
+                        .setRequired(true)
+                )
+        )
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('warn-clear')
+                .setDescription('Limpia todas las advertencias de un usuario')
+                .addUserOption(option =>
+                    option
+                        .setName('usuario')
+                        .setDescription('Usuario a limpiar advertencias')
+                        .setRequired(true)
+                )
+        )
         .setContexts(CONTEXTS.GUILD_ONLY)
         .setIntegrationTypes(INTEGRATION_TYPES.GUILD_ONLY),
 
@@ -124,6 +187,18 @@ export const moderation: HybridCommand = {
                 case 'timeout':
                     await handleTimeoutSlash(interaction);
                     break;
+                case 'warn':
+                    await handleWarnSlash(interaction);
+                    break;
+                case 'warns':
+                    await handleWarnsSlash(interaction);
+                    break;
+                case 'warn-remove':
+                    await handleWarnRemoveSlash(interaction);
+                    break;
+                case 'warn-clear':
+                    await handleWarnClearSlash(interaction);
+                    break;
             }
         } catch (error) {
             await handleCommandError(error, interaction, 'moderation');
@@ -134,19 +209,22 @@ export const moderation: HybridCommand = {
         try {
             Validators.validateInGuild(message);
             const subcommand = args[0]?.toLowerCase();
-            const validSubcommands = ['kick', 'ban', 'timeout', 'expulsar', 'banear', 'silenciar', 'mute'];
+            const validSubcommands = [
+                'kick', 'ban', 'timeout', 'expulsar', 'banear', 'silenciar', 'mute',
+                'warn', 'advertir', 'warns', 'advertencias', 'warn-remove', 'unwarn', 'warn-clear'
+            ];
 
             if (!subcommand || !validSubcommands.includes(subcommand)) {
                 await message.reply(
                     `❌ **Uso:** \`${config.prefix}moderation <acción> <usuario> [opciones]\`\n\n` +
                     `**Acciones disponibles:**\n` +
-                    `• \`kick\` (\`expulsar\`) <usuario> [razón] - Expulsar usuario\n` +
-                    `• \`ban\` (\`banear\`) <usuario> [días] [razón] - Banear usuario\n` +
-                    `• \`timeout\` (\`silenciar\`, \`mute\`) <usuario> <minutos> [razón] - Silenciar temporalmente\n\n` +
-                    `**Ejemplos:**\n` +
-                    `\`${config.prefix}kick @User spam\`\n` +
-                    `\`${config.prefix}ban User#1234 7 toxicidad\`\n` +
-                    `\`${config.prefix}timeout 123456789 30 flood\``
+                    `• \`kick\` (\`expulsar\`) <usuario> [razón]\n` +
+                    `• \`ban\` (\`banear\`) <usuario> [días] [razón]\n` +
+                    `• \`timeout\` (\`silenciar\`) <usuario> <minutos> [razón]\n` +
+                    `• \`warn\` (\`advertir\`) <usuario> <razón>\n` +
+                    `• \`warns\` (\`advertencias\`) <usuario>\n` +
+                    `• \`warn-remove\` (\`unwarn\`) <usuario> <id>\n` +
+                    `• \`warn-clear\` <usuario>`
                 );
                 return;
             }
@@ -155,7 +233,10 @@ export const moderation: HybridCommand = {
                 'expulsar': 'kick',
                 'banear': 'ban',
                 'silenciar': 'timeout',
-                'mute': 'timeout'
+                'mute': 'timeout',
+                'advertir': 'warn',
+                'advertencias': 'warns',
+                'unwarn': 'warn-remove'
             };
 
             const normalizedCommand = commandMap[subcommand] || subcommand;
@@ -169,6 +250,18 @@ export const moderation: HybridCommand = {
                     break;
                 case 'timeout':
                     await handleTimeoutPrefix(message, args.slice(1));
+                    break;
+                case 'warn':
+                    await handleWarnPrefix(message, args.slice(1));
+                    break;
+                case 'warns':
+                    await handleWarnsPrefix(message, args.slice(1));
+                    break;
+                case 'warn-remove':
+                    await handleWarnRemovePrefix(message, args.slice(1));
+                    break;
+                case 'warn-clear':
+                    await handleWarnClearPrefix(message, args.slice(1));
                     break;
             }
         } catch (error) {
@@ -493,5 +586,337 @@ async function executeTimeout(
         }
     } catch (error) {
         throw new CommandError(ErrorType.UNKNOWN, 'Fallo al silenciar usuario', '❌ No se pudo silenciar al usuario. Verifica los permisos.');
+    }
+}
+
+async function handleWarnSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+    const target = interaction.options.getMember('usuario') as GuildMember | null;
+    const reason = interaction.options.getString('razon', true);
+    await executeWarn(interaction, target, reason);
+}
+
+async function handleWarnsSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+    const target = interaction.options.getMember('usuario') as GuildMember | null;
+    await executeWarns(interaction, target);
+}
+
+async function handleWarnRemoveSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+    const target = interaction.options.getMember('usuario') as GuildMember | null;
+    const warningId = interaction.options.getString('id', true);
+    await executeWarnRemove(interaction, target, warningId);
+}
+
+async function handleWarnClearSlash(interaction: ChatInputCommandInteraction): Promise<void> {
+    const target = interaction.options.getMember('usuario') as GuildMember | null;
+    await executeWarnClear(interaction, target);
+}
+
+async function handleWarnPrefix(message: Message, args: string[]): Promise<void> {
+    if (args.length < 2) {
+        await message.reply(`❌ **Uso:** \`${config.prefix}warn <usuario> <razón>\``);
+        return;
+    }
+
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
+
+    if (!target) {
+        await message.reply(`❌ No se encontró al usuario: **${args[0]}**`);
+        return;
+    }
+
+    const reason = args.slice(1).join(' ');
+    await executeWarn(message, target, reason);
+}
+
+async function handleWarnsPrefix(message: Message, args: string[]): Promise<void> {
+    if (args.length === 0) {
+        await message.reply(`❌ **Uso:** \`${config.prefix}warns <usuario>\``);
+        return;
+    }
+
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
+
+    if (!target) {
+        await message.reply(`❌ No se encontró al usuario: **${args[0]}**`);
+        return;
+    }
+
+    await executeWarns(message, target);
+}
+
+async function handleWarnRemovePrefix(message: Message, args: string[]): Promise<void> {
+    if (args.length < 2) {
+        await message.reply(`❌ **Uso:** \`${config.prefix}warn-remove <usuario> <id>\``);
+        return;
+    }
+
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
+
+    if (!target) {
+        await message.reply(`❌ No se encontró al usuario: **${args[0]}**`);
+        return;
+    }
+
+    await executeWarnRemove(message, target, args[1]);
+}
+
+async function handleWarnClearPrefix(message: Message, args: string[]): Promise<void> {
+    if (args.length === 0) {
+        await message.reply(`❌ **Uso:** \`${config.prefix}warn-clear <usuario>\``);
+        return;
+    }
+
+    const target = await UserSearchHelper.findMemberFromMentionOrQuery(
+        message.guild!,
+        message.mentions.members?.first(),
+        args[0]
+    );
+
+    if (!target) {
+        await message.reply(`❌ No se encontró al usuario: **${args[0]}**`);
+        return;
+    }
+
+    await executeWarnClear(message, target);
+}
+
+async function executeWarn(
+    context: ChatInputCommandInteraction | Message,
+    target: GuildMember | null | undefined,
+    reason: string
+): Promise<void> {
+    const isInteraction = context instanceof ChatInputCommandInteraction;
+    const author = isInteraction ? context.user : context.author;
+    const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
+    const client = context.client as BotClient;
+
+    Validators.validateMemberProvided(target);
+    Validators.validateNotSelf(author, target.user);
+    Validators.validateNotBot(target.user);
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
+
+    if (!client.warnManager) {
+        throw new CommandError(ErrorType.UNKNOWN, 'WarnManager no disponible', '❌ El sistema de advertencias no está disponible.');
+    }
+
+    const result = await client.warnManager.addWarning(
+        context.guild!.id,
+        target.id,
+        author.id,
+        author.tag,
+        reason
+    );
+
+    let actionMessage = '';
+    if (result.actionTaken === WarnAction.TIMEOUT) {
+        const duration = client.warnManager.getTimeoutDuration();
+        try {
+            await target.timeout(duration * 60 * 1000, `Acumulación de ${result.totalWarnings} advertencias`);
+            actionMessage = `\n\n⚠️ **Acción automática:** Timeout de ${duration} minutos aplicado`;
+        } catch {
+            actionMessage = '\n\n⚠️ No se pudo aplicar el timeout automático';
+        }
+    } else if (result.actionTaken === WarnAction.KICK) {
+        try {
+            await target.kick(`Acumulación de ${result.totalWarnings} advertencias`);
+            actionMessage = '\n\n🚪 **Acción automática:** Usuario expulsado';
+        } catch {
+            actionMessage = '\n\n⚠️ No se pudo aplicar el kick automático';
+        }
+    } else if (result.actionTaken === WarnAction.BAN) {
+        try {
+            await target.ban({ reason: `Acumulación de ${result.totalWarnings} advertencias` });
+            actionMessage = '\n\n🔨 **Acción automática:** Usuario baneado';
+        } catch {
+            actionMessage = '\n\n⚠️ No se pudo aplicar el ban automático';
+        }
+    }
+
+    try {
+        await target.send({
+            embeds: [
+                new EmbedBuilder()
+                    .setTitle('⚠️ Has recibido una advertencia')
+                    .setDescription(
+                        `**Servidor:** ${context.guild!.name}\n` +
+                        `**Razón:** ${reason}\n` +
+                        `**Advertencias totales:** ${result.totalWarnings}`
+                    )
+                    .setColor(COLORS.WARNING)
+                    .setTimestamp()
+            ]
+        });
+    } catch { }
+
+    const embed = new EmbedBuilder()
+        .setTitle('⚠️ Usuario advertido')
+        .setDescription(
+            `**Usuario:** ${target.user.tag}\n` +
+            `**Moderador:** ${author.tag}\n` +
+            `**Razón:** ${reason}\n` +
+            `**Advertencias totales:** ${result.totalWarnings}/7` +
+            actionMessage
+        )
+        .setColor(COLORS.WARNING)
+        .setFooter({ text: `ID: ${result.warning.id.slice(0, 8)}` })
+        .setTimestamp();
+
+    if (isInteraction) {
+        await context.editReply({ embeds: [embed] });
+    } else {
+        await context.reply({ embeds: [embed] });
+    }
+}
+
+async function executeWarns(
+    context: ChatInputCommandInteraction | Message,
+    target: GuildMember | null | undefined
+): Promise<void> {
+    const isInteraction = context instanceof ChatInputCommandInteraction;
+    const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
+    const client = context.client as BotClient;
+
+    Validators.validateMemberProvided(target);
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
+
+    if (!client.warnManager) {
+        throw new CommandError(ErrorType.UNKNOWN, 'WarnManager no disponible', '❌ El sistema de advertencias no está disponible.');
+    }
+
+    const warnings = await client.warnManager.getWarnings(context.guild!.id, target.id);
+
+    if (warnings.length === 0) {
+        const embed = new EmbedBuilder()
+            .setTitle(`📋 Advertencias de ${target.user.tag}`)
+            .setDescription('Este usuario no tiene advertencias.')
+            .setColor(COLORS.SUCCESS)
+            .setThumbnail(target.user.displayAvatarURL());
+
+        if (isInteraction) {
+            await context.editReply({ embeds: [embed] });
+        } else {
+            await context.reply({ embeds: [embed] });
+        }
+        return;
+    }
+
+    const warningList = warnings
+        .slice(-10)
+        .map((w, i) => {
+            const date = new Date(w.timestamp);
+            return `**${i + 1}.** ${w.reason}\n` +
+                   `   └ Por: ${w.moderatorTag} | <t:${Math.floor(w.timestamp / 1000)}:R>\n` +
+                   `   └ ID: \`${w.id.slice(0, 8)}\``;
+        })
+        .join('\n\n');
+
+    const embed = new EmbedBuilder()
+        .setTitle(`📋 Advertencias de ${target.user.tag}`)
+        .setDescription(warningList)
+        .setColor(COLORS.WARNING)
+        .setThumbnail(target.user.displayAvatarURL())
+        .setFooter({ text: `Total: ${warnings.length}/7 advertencias` });
+
+    if (isInteraction) {
+        await context.editReply({ embeds: [embed] });
+    } else {
+        await context.reply({ embeds: [embed] });
+    }
+}
+
+async function executeWarnRemove(
+    context: ChatInputCommandInteraction | Message,
+    target: GuildMember | null | undefined,
+    warningId: string
+): Promise<void> {
+    const isInteraction = context instanceof ChatInputCommandInteraction;
+    const author = isInteraction ? context.user : context.author;
+    const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
+    const client = context.client as BotClient;
+
+    Validators.validateMemberProvided(target);
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.ModerateMembers], ['Moderar Miembros']);
+
+    if (!client.warnManager) {
+        throw new CommandError(ErrorType.UNKNOWN, 'WarnManager no disponible', '❌ El sistema de advertencias no está disponible.');
+    }
+
+    const warnings = await client.warnManager.getWarnings(context.guild!.id, target.id);
+    const warning = warnings.find(w => w.id.startsWith(warningId));
+
+    if (!warning) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Advertencia no encontrada', '❌ No se encontró una advertencia con ese ID.');
+    }
+
+    const removed = await client.warnManager.removeWarning(context.guild!.id, target.id, warning.id);
+
+    if (!removed) {
+        throw new CommandError(ErrorType.UNKNOWN, 'Error eliminando', '❌ No se pudo eliminar la advertencia.');
+    }
+
+    const remainingCount = await client.warnManager.getWarningCount(context.guild!.id, target.id);
+
+    const embed = new EmbedBuilder()
+        .setTitle('🗑️ Advertencia eliminada')
+        .setDescription(
+            `**Usuario:** ${target.user.tag}\n` +
+            `**Razón eliminada:** ${warning.reason}\n` +
+            `**Eliminada por:** ${author.tag}\n` +
+            `**Advertencias restantes:** ${remainingCount}`
+        )
+        .setColor(COLORS.SUCCESS)
+        .setTimestamp();
+
+    if (isInteraction) {
+        await context.editReply({ embeds: [embed] });
+    } else {
+        await context.reply({ embeds: [embed] });
+    }
+}
+
+async function executeWarnClear(
+    context: ChatInputCommandInteraction | Message,
+    target: GuildMember | null | undefined
+): Promise<void> {
+    const isInteraction = context instanceof ChatInputCommandInteraction;
+    const author = isInteraction ? context.user : context.author;
+    const member = isInteraction ? context.member as GuildMember : context.member as GuildMember;
+    const client = context.client as BotClient;
+
+    Validators.validateMemberProvided(target);
+    Validators.validateUserPermissions(member, [PermissionFlagsBits.Administrator], ['Administrador']);
+
+    if (!client.warnManager) {
+        throw new CommandError(ErrorType.UNKNOWN, 'WarnManager no disponible', '❌ El sistema de advertencias no está disponible.');
+    }
+
+    const count = await client.warnManager.clearWarnings(context.guild!.id, target.id);
+
+    const embed = new EmbedBuilder()
+        .setTitle('🧹 Advertencias limpiadas')
+        .setDescription(
+            `**Usuario:** ${target.user.tag}\n` +
+            `**Advertencias eliminadas:** ${count}\n` +
+            `**Limpiado por:** ${author.tag}`
+        )
+        .setColor(COLORS.SUCCESS)
+        .setTimestamp();
+
+    if (isInteraction) {
+        await context.editReply({ embeds: [embed] });
+    } else {
+        await context.reply({ embeds: [embed] });
     }
 }

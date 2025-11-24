@@ -22,7 +22,7 @@ export const utility: HybridCommand = {
     description: 'Comandos de utilidad del bot',
     category: CATEGORIES.UTILITY,
     subcommands: [
-        { name: 'ping', aliases: ['p', 'pong'], description: 'Responde con Pong!' },
+        { name: 'ping', aliases: ['pong'], description: 'Responde con Pong!' },
         { name: 'avatar', aliases: ['av', 'pfp'], description: 'Muestra el avatar de un usuario' },
         { name: 'stats', aliases: ['estadisticas', 'interacciones'], description: 'Ver estadísticas de interacciones' },
         { name: 'cooldown', aliases: [], description: 'Gestiona cooldowns (solo admins)' },

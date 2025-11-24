@@ -42,6 +42,11 @@ async function main() {
         const customCommandManager = new CustomCommandManager(firebaseAdminManager);
         client.customCommandManager = customCommandManager;
         logger.info('Bot', 'Sistema de comandos personalizados listo');
+
+        const { WarnManager } = await import('./managers/WarnManager.js');
+        const warnManager = new WarnManager(firebaseAdminManager);
+        client.warnManager = warnManager;
+        logger.info('Bot', 'Sistema de advertencias listo');
     } catch (error) {
         logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
         logger.warn('Bot', 'El bot continuará sin estadísticas de interacciones');
