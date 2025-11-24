@@ -104,6 +104,7 @@ async function main() {
         requestManager.destroy();
         firebaseAdminManager?.destroy();
         musicManager?.destroy();
+        client.aiManager?.destroy();
         client.destroy();
         process.exit(0);
     });
