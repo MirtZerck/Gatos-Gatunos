@@ -1,4 +1,5 @@
 import { FirebaseAdminManager } from './FirebaseAdminManager.js';
+import { CommandManager } from './CommandManager.js';
 import { logger } from '../utils/logger.js';
 import {
     CommandProposal,
@@ -13,20 +14,29 @@ import { randomUUID } from 'crypto';
 /**
  * Gestor de comandos personalizados por servidor.
  * Maneja propuestas, almacenamiento y recuperación de comandos.
- * 
+ *
  * @class CustomCommandManager
- * 
+ *
  * @example
  * ```typescript
- * const manager = new CustomCommandManager(firebaseManager);
+ * const manager = new CustomCommandManager(firebaseManager, commandManager);
  * await manager.createProposal('guild123', 'gatito', 'https://...', user);
  * ```
  */
 export class CustomCommandManager {
     private firebaseManager: FirebaseAdminManager;
+    private commandManager?: CommandManager;
 
-    constructor(firebaseManager: FirebaseAdminManager) {
+    constructor(firebaseManager: FirebaseAdminManager, commandManager?: CommandManager) {
         this.firebaseManager = firebaseManager;
+        this.commandManager = commandManager;
+    }
+
+    /**
+     * Establece el CommandManager para validación de nombres reservados
+     */
+    setCommandManager(commandManager: CommandManager): void {
+        this.commandManager = commandManager;
     }
 
     /**
@@ -46,12 +56,35 @@ export class CustomCommandManager {
     }
 
     /**
+     * Verifica si un nombre está reservado por comandos del sistema
+     */
+    isReservedName(name: string): boolean {
+        if (!this.commandManager) {
+            logger.warn('CustomCommandManager', 'CommandManager no configurado, no se puede validar nombres reservados');
+            return false;
+        }
+        return this.commandManager.isReservedName(name);
+    }
+
+    /**
      * Valida que un nombre de comando sea válido
      */
-    private validateCommandName(name: string): boolean {
-        // Solo letras, números, guiones y guiones bajos
+    private validateCommandName(name: string): { valid: boolean; reason?: string } {
         const regex = /^[a-z0-9_-]+$/i;
-        return regex.test(name) && name.length >= 2 && name.length <= 32;
+
+        if (!regex.test(name)) {
+            return { valid: false, reason: 'Solo se permiten letras, números, guiones (-) y guiones bajos (_)' };
+        }
+
+        if (name.length < 2 || name.length > 32) {
+            return { valid: false, reason: 'El nombre debe tener entre 2 y 32 caracteres' };
+        }
+
+        if (this.isReservedName(name)) {
+            return { valid: false, reason: `"${name}" es un nombre reservado del sistema` };
+        }
+
+        return { valid: true };
     }
 
     /**
@@ -65,8 +98,9 @@ export class CustomCommandManager {
     ): Promise<CommandProposal> {
         this.ensureInitialized();
 
-        if (!this.validateCommandName(commandName)) {
-            throw new Error('Nombre de comando inválido (2-32 caracteres, solo letras, números, - y _)');
+        const validation = this.validateCommandName(commandName);
+        if (!validation.valid) {
+            throw new Error(validation.reason);
         }
 
         const proposalId = this.generateProposalId();

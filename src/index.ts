@@ -54,6 +54,11 @@ async function main() {
     client.commands = commandManager.commands;
     client.commandManager = commandManager;
 
+    // Conectar CustomCommandManager con CommandManager para validación de nombres
+    if (client.customCommandManager) {
+        client.customCommandManager.setCommandManager(commandManager);
+    }
+
     // Sistema de cooldowns
     logger.info('Bot', 'Inicializando sistema de cooldowns...');
     const cooldownManager = new CooldownManager();

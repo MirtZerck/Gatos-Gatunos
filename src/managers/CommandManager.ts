@@ -329,6 +329,49 @@ export class CommandManager {
     }
 
     /**
+     * Obtiene todos los nombres reservados (comandos, aliases, subcomandos).
+     * Útil para validar que comandos personalizados no colisionen.
+     *
+     * @returns {Set<string>} Set con todos los nombres reservados en minúsculas
+     */
+    getReservedNames(): Set<string> {
+        const reserved = new Set<string>();
+
+        for (const [name, command] of this.commands) {
+            reserved.add(name.toLowerCase());
+
+            if (command.type !== 'slash-only' && 'aliases' in command && command.aliases) {
+                for (const alias of command.aliases) {
+                    reserved.add(alias.toLowerCase());
+                }
+            }
+
+            if ('subcommands' in command && command.subcommands) {
+                for (const sub of command.subcommands) {
+                    reserved.add(sub.name.toLowerCase());
+                    if (sub.aliases) {
+                        for (const alias of sub.aliases) {
+                            reserved.add(alias.toLowerCase());
+                        }
+                    }
+                }
+            }
+        }
+
+        return reserved;
+    }
+
+    /**
+     * Verifica si un nombre está reservado por el sistema.
+     *
+     * @param {string} name - Nombre a verificar
+     * @returns {boolean} true si está reservado
+     */
+    isReservedName(name: string): boolean {
+        return this.getReservedNames().has(name.toLowerCase());
+    }
+
+    /**
      * Obtiene estadísticas sobre los comandos cargados.
      *
      * @returns {Object} Estadísticas de comandos
