@@ -59,7 +59,7 @@ class Logger {
      */
 
     constructor() {
-        this.level = LOG_LEVEL_MAP[config.logLevel] || LogLevel.INFO;
+        this.level = LOG_LEVEL_MAP[config.logLevel] ?? LogLevel.INFO;
         this.isDevelopment = config.environment === 'development';
     }
 

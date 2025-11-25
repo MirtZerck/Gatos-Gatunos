@@ -77,8 +77,8 @@ function loadConfig() {
                 allowedRoles: process.env.AI_ALLOWED_ROLES?.split(',').filter(Boolean)
             },
 
-            environment: process.env.NODE_ENV,
-            logLevel: process.env.LOG_LEVEL
+            environment: process.env.NODE_ENV?.toLowerCase().trim(),
+            logLevel: process.env.LOG_LEVEL?.toLowerCase().trim()
         };
 
         return configSchema.parse(rawConfig);
