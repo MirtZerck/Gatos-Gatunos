@@ -98,13 +98,15 @@ async function main() {
     await client.login(config.token);
 
     // Manejo de cierre
-    process.on('SIGINT', () => {
+    process.on('SIGINT', async () => {
         logger.info('Bot', 'Cerrando bot...');
         cooldownManager.destroy();
         requestManager.destroy();
         firebaseAdminManager?.destroy();
         musicManager?.destroy();
-        client.aiManager?.destroy();
+        if (client.aiManager) {
+            await client.aiManager.destroy();
+        }
         client.destroy();
         process.exit(0);
     });

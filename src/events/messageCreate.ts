@@ -3,6 +3,13 @@ import { Event } from "../types/Events.js";
 import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { BotClient } from "../types/BotClient.js";
+import { AnsiFormatter } from "../utils/ansiFormatter.js";
+
+const devFormatMessages = new WeakMap<Message, boolean>();
+
+export function isDevFormatMessage(message: Message): boolean {
+    return devFormatMessages.get(message) === true;
+}
 
 /**
  * Handler del evento MessageCreate.
@@ -13,9 +20,24 @@ export default {
 
     async execute(client: BotClient, message: Message) {
         if (message.author.bot) return;
-        if (!message.content.startsWith(config.prefix)) return;
 
-        const args = message.content.slice(config.prefix.length).trim().split(/ +/);
+        let commandContent = message.content;
+        let isDevFormat = false;
+
+        const codeBlock = AnsiFormatter.parseCodeBlock(message.content);
+        if (codeBlock && codeBlock.language === 'ansi') {
+            commandContent = codeBlock.content;
+            isDevFormat = true;
+            devFormatMessages.set(message, true);
+
+            if (!commandContent.startsWith(config.prefix)) {
+                commandContent = config.prefix + commandContent;
+            }
+        }
+
+        if (!commandContent.startsWith(config.prefix)) return;
+
+        const args = commandContent.slice(config.prefix.length).trim().split(/ +/);
         const commandName = args.shift()?.toLowerCase();
 
         if (!commandName) return;

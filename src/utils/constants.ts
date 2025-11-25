@@ -44,7 +44,8 @@ export const CATEGORIES = {
     UTILITY: 'Utilidad',
     FUN: 'Diversión',
     INFORMATION: 'Información',
-    CONFIGURATION: 'Configuración'
+    CONFIGURATION: 'Configuración',
+    DEVELOPER: 'Desarrollador'
 } as const;
 
 /** Tipo de categoría de comando */

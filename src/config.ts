@@ -13,6 +13,7 @@ const configSchema = z.object({
     guildID: z.string().optional(),
     prefix: z.string().default('*'),
     ownerId: z.string().optional(),
+    developerIds: z.array(z.string()).default([]),
 
     tenorApiKey: z.string().min(1, 'TENOR_API_KEY es requerido'),
 
@@ -56,6 +57,7 @@ function loadConfig() {
             token: process.env.TOKEN,
             clientId: process.env.APPLICATION_ID,
             prefix: process.env.PREFIX || '*',
+            developerIds: process.env.DEVELOPER_IDS?.split(',').filter(Boolean) || [],
 
             tenorApiKey: process.env.TENOR_API_KEY,
 

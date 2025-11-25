@@ -126,3 +126,78 @@ export interface MessageMetrics {
     averageResponseTime: number;
     tokenUsage: TokenBudget;
 }
+
+export interface UserProfile {
+    userId: string;
+    displayName: string;
+    preferredNickname?: string;
+    firstSeen: Date;
+    lastInteraction: Date;
+}
+
+export interface UserFact {
+    id: string;
+    fact: string;
+    relevance: number;
+    confirmedCount: number;
+    lastUsed: Date;
+    createdAt: Date;
+}
+
+export interface UserPreference {
+    id: string;
+    type: 'like' | 'dislike';
+    item: string;
+    relevance: number;
+    lastUsed: Date;
+    createdAt: Date;
+}
+
+export interface UserRelationship {
+    userId: string;
+    name: string;
+    relationship: string;
+    relevance: number;
+    lastUsed: Date;
+    createdAt: Date;
+}
+
+export interface SessionData {
+    userId: string;
+    guildId?: string;
+    messages: ConversationMessage[];
+    startTime: Date;
+    lastInteraction: Date;
+    summary?: string;
+    messageCount: number;
+}
+
+export interface SessionHistory {
+    date: string;
+    summary: string;
+    messageCount: number;
+}
+
+export interface LongTermMemoryData {
+    facts: Map<string, UserFact>;
+    preferences: Map<string, UserPreference>;
+    relationships: Map<string, UserRelationship>;
+}
+
+export interface UserMemoryData {
+    profile: UserProfile;
+    longTerm: LongTermMemoryData;
+    stats: UserStats;
+}
+
+export interface UserStats {
+    totalMessages: number;
+    lastInteraction: Date;
+    tokenUsage: number;
+    servers: Map<string, ServerStats>;
+}
+
+export interface ServerStats {
+    messageCount: number;
+    lastSeen: Date;
+}
