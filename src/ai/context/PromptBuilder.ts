@@ -120,7 +120,7 @@ REGLAS IMPORTANTES:
     buildContextMessage(message: Message): PromptContext {
         return {
             isDM: message.channel.isDMBased(),
-            isMentioned: message.mentions.has(message.client.user!.id),
+            isMentioned: message.mentions.users.has(message.client.user!.id),
             userName: message.author.displayName || message.author.username,
             guildName: message.guild?.name
         };
