@@ -1,4 +1,4 @@
-import { GatewayIntentBits } from "discord.js";
+import { GatewayIntentBits, Partials } from "discord.js";
 import { config, firebaseAdminConfig } from './config.js';
 import { BotClient } from "./types/BotClient.js";
 import { CommandManager } from "./managers/CommandManager.js";
@@ -10,10 +10,6 @@ import { MusicManager } from "./managers/MusicManager.js";
 import { EventManager } from "./managers/EventManager.js";
 import { logger } from './utils/logger.js';
 
-/**
- * Punto de entrada principal del bot.
- * Inicializa todos los sistemas y conecta con Discord.
- */
 async function main() {
     const client = new BotClient({
         intents: [
@@ -23,7 +19,8 @@ async function main() {
             GatewayIntentBits.DirectMessages,
             GatewayIntentBits.GuildMembers,
             GatewayIntentBits.GuildVoiceStates
-        ]
+        ],
+        partials: [Partials.Channel]
     });
 
     // Firebase y sistemas dependientes

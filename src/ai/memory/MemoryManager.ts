@@ -92,6 +92,10 @@ export class MemoryManager {
         return await this.session.getSession(userId, guildId);
     }
 
+    async getSessionData(userId: string, guildId?: string): Promise<SessionData | null> {
+        return await this.session.getSession(userId, guildId);
+    }
+
     clearShortTerm(userId: string): void {
         this.shortTerm.clear(userId);
     }

@@ -5,9 +5,11 @@ import { logger } from '../../utils/logger.js';
 
 export class MessageFilter {
     private botId: string;
+    private aiMessageIds: Set<string>;
 
-    constructor(botId: string) {
+    constructor(botId: string, aiMessageIds: Set<string>) {
         this.botId = botId;
+        this.aiMessageIds = aiMessageIds;
     }
 
     async filter(message: Message): Promise<FilterDecision> {
@@ -40,9 +42,8 @@ export class MessageFilter {
     private buildContext(message: Message): MessageContext {
         const hasBotMentionInContent = message.mentions.users.has(this.botId);
         const isReplyToBot = message.reference?.messageId !== undefined;
-
-        const isBotMention = hasBotMentionInContent && !isReplyToBot;
-
+        const isDM = message.channel.isDMBased();
+        const isBotMention = (hasBotMentionInContent && !isReplyToBot) || isDM;
         const isCommand = this.isCommandMessage(message);
         const isInteractionCommand = this.isInteractionCommand(message);
 
@@ -57,7 +58,7 @@ export class MessageFilter {
     }
 
     private applyLevel1Filters(context: MessageContext): FilterDecision {
-        const { message, isCommand, isBotMention } = context;
+        const { message, isCommand, isBotMention, isReplyToBot } = context;
 
         if (message.author.bot) {
             return {
@@ -83,7 +84,7 @@ export class MessageFilter {
             };
         }
 
-        if (!isBotMention) {
+        if (!isBotMention && !isReplyToBot) {
             return {
                 result: FilterResult.BLOCK,
                 reason: FILTER_REASONS.NO_BOT_MENTION,
@@ -140,6 +141,14 @@ export class MessageFilter {
                 };
             }
 
+            if (this.aiMessageIds.has(referencedMessage.id)) {
+                return {
+                    result: FilterResult.ALLOW,
+                    reason: 'Respuesta válida a conversación del bot (IA)',
+                    level: FilterLevel.CONTEXT
+                };
+            }
+
             const isCommandResponse = this.isCommandResponse(referencedMessage);
 
             if (isCommandResponse) {
@@ -150,9 +159,17 @@ export class MessageFilter {
                 };
             }
 
+            if (referencedMessage.embeds.length > 0 || referencedMessage.components.length > 0) {
+                return {
+                    result: FilterResult.BLOCK,
+                    reason: 'Mensaje del bot con embeds/componentes (probablemente comando)',
+                    level: FilterLevel.CONTEXT
+                };
+            }
+
             return {
-                result: FilterResult.ALLOW,
-                reason: 'Respuesta válida a conversación del bot',
+                result: FilterResult.BLOCK,
+                reason: 'Mensaje del bot no identificado como conversación de IA',
                 level: FilterLevel.CONTEXT
             };
         } catch (error) {

@@ -3,6 +3,8 @@ import { MessageFilter } from '../filters/MessageFilter.js';
 import { CommandFilter } from '../filters/CommandFilter.js';
 import { ContextFilter } from '../filters/ContextFilter.js';
 import { MemoryManager } from '../memory/MemoryManager.js';
+import { GeminiProvider } from '../providers/GeminiProvider.js';
+import { ContextBuilder } from '../context/ContextBuilder.js';
 import { FilterResult, TokenBudget } from './types.js';
 import { DEFAULT_AI_CONFIG, TOKEN_LIMITS } from './constants.js';
 import { logger } from '../../utils/logger.js';
@@ -13,7 +15,11 @@ export class AIManager {
     private commandFilter: CommandFilter;
     private contextFilter: ContextFilter;
     private memoryManager: MemoryManager;
+    private geminiProvider: GeminiProvider;
+    private contextBuilder: ContextBuilder;
     private client: BotClient;
+
+    private aiMessageIds: Set<string>;
 
     constructor(client: BotClient) {
         this.client = client;
@@ -22,7 +28,8 @@ export class AIManager {
             throw new Error('Client user is required for AIManager initialization');
         }
 
-        this.messageFilter = new MessageFilter(client.user.id);
+        this.aiMessageIds = new Set();
+        this.messageFilter = new MessageFilter(client.user.id, this.aiMessageIds);
 
         const initialTokenBudget: TokenBudget = {
             daily: TOKEN_LIMITS.CHAT_DAILY,
@@ -34,6 +41,8 @@ export class AIManager {
         this.commandFilter = new CommandFilter(DEFAULT_AI_CONFIG, initialTokenBudget);
         this.contextFilter = new ContextFilter(DEFAULT_AI_CONFIG);
         this.memoryManager = new MemoryManager(client);
+        this.geminiProvider = new GeminiProvider();
+        this.contextBuilder = new ContextBuilder(this.memoryManager);
 
         logger.info('AIManager', 'Sistema de IA inicializado');
     }
@@ -49,8 +58,8 @@ export class AIManager {
             }
 
             if (level1Result.result === FilterResult.ALLOW) {
-                logger.debug('AI', `✅ Mensaje de ${message.author.tag} aprobado directamente (L${level1Result.level})`);
-                logger.debug('AI', `📝 Razón: ${level1Result.reason}`);
+                const cleanContent = this.contextFilter.extractCleanContent(message);
+                await this.generateAndSendResponse(message, cleanContent);
                 return;
             }
 
@@ -73,14 +82,65 @@ export class AIManager {
                 logger.debug('AI', `✅ Mensaje de ${message.author.tag} aprobado para procesamiento`);
                 logger.debug('AI', `📝 Contenido limpio: "${cleanContent}"`);
 
-                const guildId = message.guildId || undefined;
-                await this.memoryManager.addUserMessage(message.author.id, cleanContent, guildId);
-                await this.memoryManager.updateStats(message.author.id, 1, 0, guildId);
-
-                logger.info('AI', `💾 Mensaje guardado en memoria para ${message.author.tag}`);
+                await this.generateAndSendResponse(message, cleanContent);
             }
         } catch (error) {
-            logger.error('AIManager', 'Error procesando mensaje', error);
+            logger.error('AIManager', 'Error procesando mensaje', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    private async generateAndSendResponse(message: Message, cleanContent: string): Promise<void> {
+        try {
+            if ('sendTyping' in message.channel) {
+                await message.channel.sendTyping();
+            }
+
+            const context = await this.contextBuilder.buildContext(message);
+
+            logger.debug('AI', `🧠 Generando respuesta con ${context.conversationHistory.length} mensajes de historial`);
+
+            const aiResponse = await this.geminiProvider.generateResponse(
+                context.systemPrompt,
+                context.conversationHistory,
+                cleanContent
+            );
+
+            if (aiResponse.content && aiResponse.content.trim().length > 0) {
+                const sentMessage = await message.reply(aiResponse.content);
+
+                const isSlashCommand = message.interaction !== null;
+                const startsWithPrefix = message.content.trim().startsWith('*') ||
+                                       message.content.trim().startsWith('/');
+                const isFromCommand = isSlashCommand || startsWithPrefix;
+
+                if (!isFromCommand) {
+                    this.aiMessageIds.add(sentMessage.id);
+
+                    if (this.aiMessageIds.size > 1000) {
+                        const idsArray = Array.from(this.aiMessageIds);
+                        const toRemove = idsArray.slice(0, 500);
+                        toRemove.forEach(id => this.aiMessageIds.delete(id));
+                    }
+                }
+
+                await this.contextBuilder.saveInteraction(
+                    message,
+                    aiResponse.content,
+                    aiResponse.tokenUsage.total
+                );
+
+                this.commandFilter.consumeTokens(aiResponse.tokenUsage.total);
+
+                logger.info('AI', `✅ Respuesta enviada a ${message.author.tag} (${aiResponse.tokenUsage.total} tokens, ${aiResponse.processingTime}ms)`);
+            } else {
+                logger.warn('AI', 'Respuesta vacía recibida de Gemini');
+            }
+        } catch (error) {
+            logger.error('AI', 'Error generando respuesta', error instanceof Error ? error : new Error(String(error)));
+
+            if (error instanceof Error && error.message.includes('quota')) {
+                await message.reply('Lo siento, he alcanzado mi límite de conversaciones por hoy. Vuelve mañana!');
+            }
         }
     }
 
