@@ -1,16 +1,64 @@
-import { Events, MessageFlags, ChatInputCommandInteraction } from "discord.js";
+import { Events, MessageFlags, ChatInputCommandInteraction, Interaction } from "discord.js";
 import { Event } from "../types/Events.js";
 import { logger } from "../utils/logger.js";
 import { BotClient } from "../types/BotClient.js";
 
 /**
  * Handler del evento InteractionCreate.
- * Procesa comandos slash, verifica cooldowns y ejecuta el comando correspondiente.
+ * Procesa comandos slash, autocomplete, select menus, verifica cooldowns y ejecuta el comando correspondiente.
  */
 export default {
     name: Events.InteractionCreate,
 
-    async execute(client: BotClient, interaction: ChatInputCommandInteraction) {
+    async execute(client: BotClient, interaction: Interaction) {
+        // Manejar autocomplete
+        if (interaction.isAutocomplete()) {
+            const command = client.commands.get(interaction.commandName);
+
+            if (!command) return;
+
+            if ('handleAutocomplete' in command && typeof command.handleAutocomplete === 'function') {
+                try {
+                    await command.handleAutocomplete(interaction);
+                } catch (error) {
+                    logger.error('InteractionCreate', `Error en autocomplete de ${interaction.commandName}`, error);
+                }
+            }
+            return;
+        }
+
+        // Manejar select menus
+        if (interaction.isStringSelectMenu()) {
+            const command = client.commands.get(interaction.customId.split(':')[0]);
+
+            if (!command) return;
+
+            if ('handleSelectMenu' in command && typeof command.handleSelectMenu === 'function') {
+                try {
+                    await command.handleSelectMenu(interaction);
+                } catch (error) {
+                    logger.error('InteractionCreate', `Error en select menu de ${interaction.customId}`, error);
+                }
+            }
+            return;
+        }
+
+        // Manejar botones
+        if (interaction.isButton()) {
+            const command = client.commands.get(interaction.customId.split(':')[0]);
+
+            if (!command) return;
+
+            if ('handleButton' in command && typeof command.handleButton === 'function') {
+                try {
+                    await command.handleButton(interaction);
+                } catch (error) {
+                    logger.error('InteractionCreate', `Error en botón de ${interaction.customId}`, error);
+                }
+            }
+            return;
+        }
+
         if (!interaction.isChatInputCommand()) return;
 
         const command = client.commands.get(interaction.commandName);
