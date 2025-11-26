@@ -24,29 +24,38 @@ async function main() {
     });
 
     // Firebase y sistemas dependientes
-    logger.info('Bot', 'Conectando con Firebase Admin SDK...');
-    const firebaseAdminManager = new FirebaseAdminManager(firebaseAdminConfig);
+    if (firebaseAdminConfig) {
+        logger.info('Bot', 'Conectando con Firebase Admin SDK...');
+        const firebaseAdminManager = new FirebaseAdminManager(firebaseAdminConfig);
 
-    try {
-        await firebaseAdminManager.initialize();
-        client.firebaseAdminManager = firebaseAdminManager;
+        try {
+            await firebaseAdminManager.initialize();
+            client.firebaseAdminManager = firebaseAdminManager;
 
-        const interactionStatsManager = new InteractionStatsManager(firebaseAdminManager);
-        client.interactionStatsManager = interactionStatsManager;
-        logger.info('Bot', 'Sistema de estadísticas listo');
+            const interactionStatsManager = new InteractionStatsManager(firebaseAdminManager);
+            client.interactionStatsManager = interactionStatsManager;
+            logger.info('Bot', 'Sistema de estadísticas listo');
 
-        const { CustomCommandManager } = await import('./managers/CustomCommandManager.js');
-        const customCommandManager = new CustomCommandManager(firebaseAdminManager);
-        client.customCommandManager = customCommandManager;
-        logger.info('Bot', 'Sistema de comandos personalizados listo');
+            const { CustomCommandManager } = await import('./managers/CustomCommandManager.js');
+            const customCommandManager = new CustomCommandManager(firebaseAdminManager);
+            client.customCommandManager = customCommandManager;
+            logger.info('Bot', 'Sistema de comandos personalizados listo');
 
-        const { WarnManager } = await import('./managers/WarnManager.js');
-        const warnManager = new WarnManager(firebaseAdminManager);
-        client.warnManager = warnManager;
-        logger.info('Bot', 'Sistema de advertencias listo');
-    } catch (error) {
-        logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
-        logger.warn('Bot', 'El bot continuará sin estadísticas de interacciones');
+            const { WarnManager } = await import('./managers/WarnManager.js');
+            const warnManager = new WarnManager(firebaseAdminManager);
+            client.warnManager = warnManager;
+            logger.info('Bot', 'Sistema de advertencias listo');
+        } catch (error) {
+            logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
+            logger.warn('Bot', 'El bot continuará sin funcionalidades que requieren Firebase');
+        }
+    } else {
+        logger.warn('Bot', 'Firebase no configurado - Funcionalidades deshabilitadas:');
+        logger.warn('Bot', '  - Comandos personalizados (/custom)');
+        logger.warn('Bot', '  - Sistema de advertencias (/moderation warn)');
+        logger.warn('Bot', '  - Estadísticas de interacciones (/utility stats)');
+        logger.warn('Bot', '  - Configuración de zona horaria por servidor');
+        logger.warn('Bot', '  - Memoria persistente de IA');
     }
 
     // Sistema de comandos
@@ -99,7 +108,7 @@ async function main() {
         logger.info('Bot', 'Cerrando bot...');
         cooldownManager.destroy();
         requestManager.destroy();
-        firebaseAdminManager?.destroy();
+        client.firebaseAdminManager?.destroy();
         musicManager?.destroy();
         if (client.aiManager) {
             await client.aiManager.destroy();

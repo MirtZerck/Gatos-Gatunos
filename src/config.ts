@@ -20,7 +20,7 @@ const configSchema = z.object({
     danbooruApiKey: z.string().min(1, 'DANBOORU_API_KEY es requerido'),
     danbooruUsername: z.string().optional(),
 
-    firebaseAdminSdk: z.string().min(1, 'FIREBASE_ADMIN_SDK es requerido'),
+    firebaseAdminSdk: z.string().optional(),
 
     geminiApiKey: z.string().min(1, 'GEMINI_API_KEY es requerido'),
 
@@ -108,5 +108,7 @@ export const config = loadConfig();
 /** Tipo inferido de la configuración */
 export type Config = z.infer<typeof configSchema>;
 
-/** Configuración de Firebase Admin SDK parseada desde JSON */
-export const firebaseAdminConfig = JSON.parse(config.firebaseAdminSdk);
+/** Configuración de Firebase Admin SDK parseada desde JSON (null si no está configurado) */
+export const firebaseAdminConfig = config.firebaseAdminSdk
+    ? JSON.parse(config.firebaseAdminSdk)
+    : null;

@@ -791,8 +791,13 @@ async function handleHoraServer(interaction: ChatInputCommandInteraction): Promi
     const timezone = await getServerTimezone(interaction.client as BotClient, interaction.guildId);
 
     if (!timezone) {
+        const client = interaction.client as BotClient;
+        const message = !client.firebaseAdminManager
+            ? '❌ Esta funcionalidad requiere Firebase configurado.'
+            : '❌ Un moderador debe establecer la zona horaria del servidor con el comando `/utility sethour`.';
+
         await interaction.reply({
-            content: '❌ Un moderador debe establecer la zona horaria del servidor con el comando `/utility sethour`.',
+            content: message,
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -833,9 +838,12 @@ async function handleHoraServerPrefix(message: Message): Promise<void> {
     const timezone = await getServerTimezone(message.client as BotClient, message.guildId);
 
     if (!timezone) {
-        await message.reply(
-            `❌ Un moderador debe establecer la zona horaria del servidor con el comando \`${config.prefix}sethour <timezone>\`.`
-        );
+        const client = message.client as BotClient;
+        const errorMessage = !client.firebaseAdminManager
+            ? '❌ Esta funcionalidad requiere Firebase configurado.'
+            : `❌ Un moderador debe establecer la zona horaria del servidor con el comando \`${config.prefix}sethour <timezone>\`.`;
+
+        await message.reply(errorMessage);
         return;
     }
 
@@ -931,8 +939,13 @@ async function handleSetHour(interaction: ChatInputCommandInteraction): Promise<
 
         await interaction.reply({ embeds: [embed] });
     } else {
+        const client = interaction.client as BotClient;
+        const message = !client.firebaseAdminManager
+            ? '❌ Esta funcionalidad requiere Firebase configurado.'
+            : '❌ Ocurrió un error al guardar la configuración.';
+
         await interaction.reply({
-            content: '❌ Ocurrió un error al guardar la configuración. Verifica que Firebase esté configurado correctamente.',
+            content: message,
             flags: MessageFlags.Ephemeral
         });
     }
@@ -1008,6 +1021,11 @@ async function handleSetHourPrefix(message: Message, args: string[]): Promise<vo
 
         await message.reply({ embeds: [embed] });
     } else {
-        await message.reply('❌ Ocurrió un error al guardar la configuración. Verifica que Firebase esté configurado correctamente.');
+        const client = message.client as BotClient;
+        const errorMessage = !client.firebaseAdminManager
+            ? '❌ Esta funcionalidad requiere Firebase configurado.'
+            : '❌ Ocurrió un error al guardar la configuración.';
+
+        await message.reply(errorMessage);
     }
 }
