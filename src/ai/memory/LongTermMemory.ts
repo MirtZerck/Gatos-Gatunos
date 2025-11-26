@@ -185,6 +185,38 @@ export class LongTermMemory {
         await this.saveUserMemory(userId, memory);
     }
 
+    async clearUserMemory(userId: string): Promise<void> {
+        if (!this.client.firebaseAdminManager) {
+            logger.warn('LongTermMemory', 'FirebaseAdminManager no disponible para limpiar memoria');
+            return;
+        }
+
+        try {
+            const ref = this.client.firebaseAdminManager.getRef(`ai/memory/${userId}/longTerm`);
+            await ref.remove();
+            this.cache.delete(userId);
+            logger.info('LongTermMemory', `Memoria de largo plazo eliminada para ${userId}`);
+        } catch (error) {
+            logger.error('LongTermMemory', 'Error eliminando memoria de largo plazo', error);
+        }
+    }
+
+    async clearAllMemory(): Promise<void> {
+        if (!this.client.firebaseAdminManager) {
+            logger.warn('LongTermMemory', 'FirebaseAdminManager no disponible para limpiar memoria');
+            return;
+        }
+
+        try {
+            const ref = this.client.firebaseAdminManager.getRef('ai/memory');
+            await ref.remove();
+            this.cache.clear();
+            logger.info('LongTermMemory', 'Toda la memoria de largo plazo ha sido eliminada');
+        } catch (error) {
+            logger.error('LongTermMemory', 'Error eliminando toda la memoria', error);
+        }
+    }
+
     private async ensureUserMemory(userId: string): Promise<UserMemoryData> {
         let memory = await this.getUserMemory(userId);
 

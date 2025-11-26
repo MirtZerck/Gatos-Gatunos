@@ -35,6 +35,10 @@ export const dev: PrefixOnlyCommand = {
                 case 'mem':
                     await handleMemory(message, args.slice(1));
                     break;
+                case 'clear':
+                case 'clearmem':
+                    await handleClearMemory(message, args.slice(1));
+                    break;
                 default:
                     await message.reply(`❌ Subcomando no válido: **${subcommand}**\nUsa \`${config.prefix}dev help\` para ver comandos disponibles.`);
             }
@@ -65,6 +69,13 @@ async function showDevHelp(message: Message): Promise<void> {
         output += AnsiFormatter.dim('  └─ o memoria de un usuario específico') + '\n';
         output += AnsiFormatter.dim('  └─ Alias: mem') + '\n\n';
 
+        output += AnsiFormatter.format(`${config.prefix}dev clear [opciones]`, ANSI.BRIGHT_GREEN) + '\n';
+        output += AnsiFormatter.dim('  └─ Limpiar memoria de IA') + '\n';
+        output += AnsiFormatter.dim('  └─ --all: Limpiar toda la memoria') + '\n';
+        output += AnsiFormatter.dim('  └─ @usuario: Limpiar memoria de usuario') + '\n';
+        output += AnsiFormatter.dim('  └─ --long-term: Incluir memoria largo plazo') + '\n';
+        output += AnsiFormatter.dim('  └─ Alias: clearmem') + '\n\n';
+
         output += AnsiFormatter.dim('═'.repeat(45)) + '\n';
         output += AnsiFormatter.format('⚡ Solo desarrolladores autorizados', ANSI.BRIGHT_YELLOW);
 
@@ -83,6 +94,11 @@ async function showDevHelp(message: Message): Promise<void> {
                 {
                     name: `${config.prefix}dev memory [@usuario]`,
                     value: 'Ver estadísticas del sistema de IA o memoria de un usuario específico\nAlias: `mem`',
+                    inline: false
+                },
+                {
+                    name: `${config.prefix}dev clear [opciones]`,
+                    value: 'Limpiar memoria de IA\n`--all`: Limpiar toda la memoria\n`@usuario`: Limpiar memoria de usuario\n`--long-term`: Incluir memoria largo plazo\nAlias: `clearmem`',
                     inline: false
                 }
             )
@@ -308,5 +324,106 @@ async function showUserMemory(message: Message, user: User, aiManager: AIManager
         embed.setFooter({ text: 'Memoria del sistema de IA' }).setTimestamp();
 
         await message.reply({ embeds: [embed] });
+    }
+}
+
+async function handleClearMemory(message: Message, args: string[]): Promise<void> {
+    const aiManager = (message.client as BotClient).aiManager;
+
+    if (!aiManager) {
+        await message.reply('❌ El sistema de IA no está disponible.');
+        return;
+    }
+
+    const memoryManager = aiManager.getMemoryManager();
+    const isAll = args.includes('--all');
+    const includeLongTerm = args.includes('--long-term');
+
+    let targetUser: User | null = null;
+    const userArg = args.find(arg => !arg.startsWith('--'));
+
+    if (userArg) {
+        targetUser = message.mentions.users.first() || null;
+
+        if (!targetUser && message.guild) {
+            targetUser = await UserSearchHelper.findUser(message.guild, userArg);
+        }
+    }
+
+    if (isAll) {
+        const confirmMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(
+                AnsiFormatter.warning('⚠️  ¿Estás seguro de que quieres limpiar TODA la memoria de IA?') + '\n' +
+                AnsiFormatter.dim(includeLongTerm ? 'Se eliminará la memoria de corto, mediano Y largo plazo de TODOS los usuarios.' : 'Se eliminará la memoria de corto y mediano plazo de TODOS los usuarios.') + '\n\n' +
+                AnsiFormatter.format('Responde con "confirmar" en los próximos 30 segundos.', ANSI.BRIGHT_YELLOW)
+            )
+            : `⚠️  **¿Estás seguro de que quieres limpiar TODA la memoria de IA?**\n${includeLongTerm ? 'Se eliminará la memoria de corto, mediano Y largo plazo de TODOS los usuarios.' : 'Se eliminará la memoria de corto y mediano plazo de TODOS los usuarios.'}\n\nResponde con "confirmar" en los próximos 30 segundos.`;
+
+        const reply = await message.reply(confirmMsg);
+
+        try {
+            if (!('awaitMessages' in message.channel)) {
+                await message.reply('❌ Esta operación no es compatible con este tipo de canal.');
+                return;
+            }
+
+            const collected = await message.channel.awaitMessages({
+                filter: (m: Message) => m.author.id === message.author.id && m.content.toLowerCase() === 'confirmar',
+                max: 1,
+                time: 30000,
+                errors: ['time']
+            });
+
+            if (collected.size > 0) {
+                await memoryManager.clearAllMemory(includeLongTerm);
+
+                const successMsg = isDevFormatMessage(message)
+                    ? AnsiFormatter.codeBlock(
+                        AnsiFormatter.format('✓ Memoria limpiada exitosamente', ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n' +
+                        AnsiFormatter.dim(includeLongTerm ? 'Toda la memoria (corto, mediano y largo plazo) ha sido eliminada.' : 'Toda la memoria de corto y mediano plazo ha sido eliminada.')
+                    )
+                    : `✅ **Memoria limpiada exitosamente**\n${includeLongTerm ? 'Toda la memoria (corto, mediano y largo plazo) ha sido eliminada.' : 'Toda la memoria de corto y mediano plazo ha sido eliminada.'}`;
+
+                await message.reply(successMsg);
+            }
+        } catch (error) {
+            const cancelMsg = isDevFormatMessage(message)
+                ? AnsiFormatter.codeBlock(AnsiFormatter.dim('❌ Operación cancelada (tiempo agotado)'))
+                : '❌ Operación cancelada (tiempo agotado).';
+
+            await message.reply(cancelMsg);
+        }
+    } else if (targetUser) {
+        if (targetUser.bot) {
+            const errorMsg = isDevFormatMessage(message)
+                ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Los bots no tienen memoria de IA'))
+                : '❌ Los bots no tienen memoria de IA.';
+            await message.reply(errorMsg);
+            return;
+        }
+
+        await memoryManager.clearUserMemory(targetUser.id, message.guildId || undefined, includeLongTerm);
+
+        const successMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(
+                AnsiFormatter.format(`✓ Memoria de ${targetUser.tag} limpiada`, ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n' +
+                AnsiFormatter.dim(includeLongTerm ? 'Memoria de corto, mediano y largo plazo eliminada.' : 'Memoria de corto y mediano plazo eliminada.')
+            )
+            : `✅ **Memoria de ${targetUser.tag} limpiada**\n${includeLongTerm ? 'Memoria de corto, mediano y largo plazo eliminada.' : 'Memoria de corto y mediano plazo eliminada.'}`;
+
+        await message.reply(successMsg);
+    } else {
+        const helpMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(
+                AnsiFormatter.error('✘ Debes especificar --all o @usuario') + '\n\n' +
+                AnsiFormatter.format('Ejemplos:', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev clear --all`) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev clear @usuario`) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev clear @usuario --long-term`) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev clear --all --long-term`)
+            )
+            : `❌ **Debes especificar --all o @usuario**\n\n**Ejemplos:**\n\`${config.prefix}dev clear --all\`\n\`${config.prefix}dev clear @usuario\`\n\`${config.prefix}dev clear @usuario --long-term\`\n\`${config.prefix}dev clear --all --long-term\``;
+
+        await message.reply(helpMsg);
     }
 }

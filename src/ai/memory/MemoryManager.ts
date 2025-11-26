@@ -104,6 +104,30 @@ export class MemoryManager {
         await this.session.endSession(userId, guildId);
     }
 
+    async clearUserMemory(userId: string, guildId?: string, includeLongTerm: boolean = false): Promise<void> {
+        this.shortTerm.clear(userId);
+        await this.session.clearUserSession(userId, guildId);
+
+        if (includeLongTerm) {
+            await this.longTerm.clearUserMemory(userId);
+            logger.info('MemoryManager', `Memoria completa (corto, mediano y largo plazo) limpiada para ${userId}`);
+        } else {
+            logger.info('MemoryManager', `Memoria de corto y mediano plazo limpiada para ${userId}`);
+        }
+    }
+
+    async clearAllMemory(includeLongTerm: boolean = false): Promise<void> {
+        this.shortTerm.clearAll();
+        await this.session.clearAllSessions();
+
+        if (includeLongTerm) {
+            await this.longTerm.clearAllMemory();
+            logger.info('MemoryManager', 'Toda la memoria (corto, mediano y largo plazo) ha sido limpiada');
+        } else {
+            logger.info('MemoryManager', 'Toda la memoria de corto y mediano plazo ha sido limpiada');
+        }
+    }
+
     private mergeHistory(
         shortTerm: ConversationMessage[],
         sessionData: SessionData | null

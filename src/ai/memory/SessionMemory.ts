@@ -82,6 +82,37 @@ export class SessionMemory {
         }
     }
 
+    async clearUserSession(userId: string, guildId?: string): Promise<void> {
+        if (!this.client.firebaseAdminManager) {
+            return;
+        }
+
+        try {
+            const sessionKey = this.getSessionKey(userId, guildId);
+            this.activeSessions.delete(sessionKey);
+
+            const currentRef = this.client.firebaseAdminManager.getRef(`ai/memory/${userId}/sessions/current`);
+            await currentRef.remove();
+
+            logger.info('SessionMemory', `Sesión limpiada para ${userId}`);
+        } catch (error) {
+            logger.error('SessionMemory', 'Error limpiando sesión', error);
+        }
+    }
+
+    async clearAllSessions(): Promise<void> {
+        if (!this.client.firebaseAdminManager) {
+            return;
+        }
+
+        try {
+            this.activeSessions.clear();
+            logger.info('SessionMemory', 'Todas las sesiones activas han sido limpiadas');
+        } catch (error) {
+            logger.error('SessionMemory', 'Error limpiando todas las sesiones', error);
+        }
+    }
+
     private async createSession(userId: string, guildId?: string): Promise<SessionData> {
         return {
             userId,
