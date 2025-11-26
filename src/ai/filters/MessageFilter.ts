@@ -135,8 +135,8 @@ export class MessageFilter {
 
             if (referencedMessage.author.id !== this.botId) {
                 return {
-                    result: FilterResult.ALLOW,
-                    reason: 'Respuesta válida a mensaje del usuario',
+                    result: FilterResult.BLOCK,
+                    reason: 'Respuesta a mensaje de otro usuario (no del bot)',
                     level: FilterLevel.CONTEXT
                 };
             }
