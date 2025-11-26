@@ -1,4 +1,4 @@
-import { Events, ButtonInteraction, EmbedBuilder, MessageFlags, TextChannel } from "discord.js";
+import { Events, ButtonInteraction, EmbedBuilder, MessageFlags } from "discord.js";
 import { Event } from "../types/Events.js";
 import { logger } from "../utils/logger.js";
 import { COLORS } from "../utils/constants.js";
@@ -172,16 +172,6 @@ async function handleAccept(
     const author = await client.users.fetch(request.authorId);
     const target = interaction.user;
 
-    const acceptedEmbed = new EmbedBuilder()
-        .setDescription(`${config.emoji} **${target.displayName}** aceptó la solicitud de **${config.name}** de **${author.displayName}**`)
-        .setColor(config.color)
-        .setTimestamp();
-
-    await interaction.editReply({
-        embeds: [acceptedEmbed],
-        components: []
-    });
-
     const gifUrl = await getRandomGif(config.query);
     const message = config.successMessage(author.displayName, target.displayName);
 
@@ -209,11 +199,27 @@ async function handleAccept(
         successEmbed.setDescription(`${config.emoji} ${message}`);
     }
 
-    const channel = interaction.channel as TextChannel;
-    if (channel) {
-        await channel.send({
+    // En servidores: mostrar confirmación y luego followUp
+    // En DMs: solo editar el mensaje original con el resultado
+    if (interaction.inGuild()) {
+        const acceptedEmbed = new EmbedBuilder()
+            .setDescription(`${config.emoji} **${target.displayName}** aceptó la solicitud de **${config.name}** de **${author.displayName}**`)
+            .setColor(config.color)
+            .setTimestamp();
+
+        await interaction.editReply({
+            embeds: [acceptedEmbed],
+            components: []
+        });
+
+        await interaction.followUp({
             content: `<@${author.id}>`,
             embeds: [successEmbed]
+        });
+    } else {
+        await interaction.editReply({
+            embeds: [successEmbed],
+            components: []
         });
     }
 
@@ -234,16 +240,6 @@ async function handleReject(
     const target = interaction.user;
     const actionName = config?.name || action;
 
-    const rejectedEmbed = new EmbedBuilder()
-        .setDescription(`❌ **${target.displayName}** rechazó la solicitud de **${actionName}** de **${author.displayName}**`)
-        .setColor(COLORS.DANGER)
-        .setTimestamp();
-
-    await interaction.editReply({
-        embeds: [rejectedEmbed],
-        components: []
-    });
-
     const rejectEmbed = new EmbedBuilder()
         .setDescription(
             `💔 **${target.displayName}** rechazó la solicitud de **${actionName}** de **${author.displayName}**`
@@ -252,11 +248,27 @@ async function handleReject(
         .setFooter({ text: '¡Quizás en otra ocasión!' })
         .setTimestamp();
 
-    const channel = interaction.channel as TextChannel;
-    if (channel) {
-        await channel.send({
+    // En servidores: mostrar confirmación y luego followUp
+    // En DMs: solo editar el mensaje original con el resultado
+    if (interaction.inGuild()) {
+        const rejectedEmbed = new EmbedBuilder()
+            .setDescription(`❌ **${target.displayName}** rechazó la solicitud de **${actionName}** de **${author.displayName}**`)
+            .setColor(COLORS.DANGER)
+            .setTimestamp();
+
+        await interaction.editReply({
+            embeds: [rejectedEmbed],
+            components: []
+        });
+
+        await interaction.followUp({
             content: `<@${author.id}>`,
             embeds: [rejectEmbed]
+        });
+    } else {
+        await interaction.editReply({
+            embeds: [rejectEmbed],
+            components: []
         });
     }
 
