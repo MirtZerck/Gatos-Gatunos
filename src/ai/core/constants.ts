@@ -46,6 +46,15 @@ export const CONTEXT_LIMITS = {
     MIN_RELEVANCE_SCORE: 0.5
 } as const;
 
+export const CHANNEL_CONTEXT_LIMITS = {
+    MAX_MESSAGES: 8,
+    MAX_AGE_MINUTES: 5,
+    MAX_MESSAGE_LENGTH: 150,
+    ENABLE_IN_DM: true,
+    ENABLE_IN_MENTIONS: true,
+    ENABLE_IN_CASUAL: false
+} as const;
+
 export const INTERACTION_COMMAND_PATTERNS = [
     /^\*\w+\s+<@!?\d+>/i,
     /^\*hug\s+/i,

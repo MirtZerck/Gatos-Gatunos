@@ -1,7 +1,8 @@
-import { Message } from 'discord.js';
+import { Message, TextChannel, DMChannel, Collection } from 'discord.js';
 import { MemoryManager } from '../memory/MemoryManager.js';
 import { PromptBuilder } from './PromptBuilder.js';
 import { AIContext, SessionData, ConversationMessage } from '../core/types.js';
+import { CHANNEL_CONTEXT_LIMITS, COMMAND_PREFIXES, INTERACTION_COMMAND_PATTERNS } from '../core/constants.js';
 import { logger } from '../../utils/logger.js';
 
 export class ContextBuilder {
@@ -29,14 +30,17 @@ export class ContextBuilder {
             promptContext.isMentioned
         );
 
-        const tokenCount = this.estimateTokenCount(systemPrompt, conversationHistory);
+        const channelContext = await this.getChannelContext(message, promptContext.isDM, promptContext.isMentioned);
+        const fullHistory = [...channelContext, ...conversationHistory];
 
-        logger.debug('ContextBuilder', `Contexto construido: ${conversationHistory.length} mensajes, ~${tokenCount} tokens`);
+        const tokenCount = this.estimateTokenCount(systemPrompt, fullHistory);
+
+        logger.debug('ContextBuilder', `Contexto construido: ${channelContext.length} ctx canal + ${conversationHistory.length} historial, ~${tokenCount} tokens`);
 
         return {
             shortTermMemory: [],
             relevantHistory: [],
-            conversationHistory,
+            conversationHistory: fullHistory,
             systemPrompt,
             tokenCount
         };
@@ -71,6 +75,87 @@ export class ContextBuilder {
         } else {
             return 3;
         }
+    }
+
+    private async getChannelContext(
+        message: Message,
+        isDM: boolean,
+        isMentioned: boolean
+    ): Promise<ConversationMessage[]> {
+        const shouldFetchContext =
+            (isDM && CHANNEL_CONTEXT_LIMITS.ENABLE_IN_DM) ||
+            (isMentioned && CHANNEL_CONTEXT_LIMITS.ENABLE_IN_MENTIONS) ||
+            (!isDM && !isMentioned && CHANNEL_CONTEXT_LIMITS.ENABLE_IN_CASUAL);
+
+        if (!shouldFetchContext) {
+            return [];
+        }
+
+        try {
+            const channel = message.channel;
+            if (!channel || (!channel.isTextBased())) {
+                return [];
+            }
+
+            const fetchedMessages = await channel.messages.fetch({
+                limit: CHANNEL_CONTEXT_LIMITS.MAX_MESSAGES + 5,
+                before: message.id
+            });
+
+            const cutoffTime = Date.now() - (CHANNEL_CONTEXT_LIMITS.MAX_AGE_MINUTES * 60 * 1000);
+
+            const relevantMessages = fetchedMessages
+                .filter(msg => {
+                    if (msg.createdTimestamp < cutoffTime) return false;
+                    if (this.isIrrelevantMessage(msg)) return false;
+                    return true;
+                })
+                .sort((a, b) => a.createdTimestamp - b.createdTimestamp)
+                .first(CHANNEL_CONTEXT_LIMITS.MAX_MESSAGES);
+
+            const contextMessages: ConversationMessage[] = relevantMessages.map(msg => ({
+                role: 'user' as const,
+                parts: [{
+                    text: this.formatChannelMessage(msg)
+                }],
+                timestamp: msg.createdAt
+            }));
+
+            logger.debug('ContextBuilder', `Obtenidos ${contextMessages.length} mensajes de contexto del canal`);
+            return contextMessages;
+
+        } catch (error) {
+            logger.error('ContextBuilder', 'Error obteniendo contexto del canal', error);
+            return [];
+        }
+    }
+
+    private isIrrelevantMessage(msg: Message): boolean {
+        if (msg.author.bot) return true;
+        if (!msg.content || msg.content.trim().length === 0) return true;
+
+        const content = msg.content.trim();
+
+        for (const prefix of COMMAND_PREFIXES) {
+            if (content.startsWith(prefix)) return true;
+        }
+
+        for (const pattern of INTERACTION_COMMAND_PATTERNS) {
+            if (pattern.test(content)) return true;
+        }
+
+        return false;
+    }
+
+    private formatChannelMessage(msg: Message): string {
+        const author = msg.author.displayName || msg.author.username;
+        let content = msg.content;
+
+        if (content.length > CHANNEL_CONTEXT_LIMITS.MAX_MESSAGE_LENGTH) {
+            content = content.substring(0, CHANNEL_CONTEXT_LIMITS.MAX_MESSAGE_LENGTH - 3) + '...';
+        }
+
+        return `[${author}]: ${content}`;
     }
 
     private estimateTokenCount(systemPrompt: string, history: ConversationMessage[]): number {
