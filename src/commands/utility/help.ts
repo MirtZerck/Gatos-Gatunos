@@ -101,33 +101,50 @@ export const help: UnifiedCommand & {
 
     async handleSelectMenu(interaction: StringSelectMenuInteraction) {
         const client = interaction.client as BotClient;
-        const [commandId, action] = interaction.customId.split(':');
+        const [commandId, action, userId] = interaction.customId.split(':');
 
         if (commandId !== 'help') return;
+
+        if (userId && userId !== interaction.user.id) {
+            await interaction.reply({
+                content: '❌ No puedes interactuar con el menú de ayuda de otra persona. Usa `/help` para obtener tu propio menú.',
+                ephemeral: true
+            });
+            return;
+        }
 
         const selectedCategory = interaction.values[0];
 
         if (selectedCategory === 'home') {
-            await interaction.update(await buildCategoryMenuMessage(client));
+            await interaction.update(await buildCategoryMenuMessage(client, userId));
         } else {
-            await interaction.update(await buildCategoryDetailsMessage(client, selectedCategory, 0));
+            await interaction.update(await buildCategoryDetailsMessage(client, selectedCategory, 0, userId));
         }
     },
 
     async handleButton(interaction: ButtonInteraction) {
         const client = interaction.client as BotClient;
-        const [commandId, action, category, pageStr] = interaction.customId.split(':');
+        const parts = interaction.customId.split(':');
+        const [commandId, action, userId] = parts;
 
         if (commandId !== 'help') return;
 
-        const page = parseInt(pageStr) || 0;
+        if (userId && userId !== interaction.user.id) {
+            await interaction.reply({
+                content: '❌ No puedes interactuar con el menú de ayuda de otra persona. Usa `/help` para obtener tu propio menú.',
+                ephemeral: true
+            });
+            return;
+        }
 
         if (action === 'close') {
             await interaction.message.delete();
         } else if (action === 'home') {
-            await interaction.update(await buildCategoryMenuMessage(client));
+            await interaction.update(await buildCategoryMenuMessage(client, userId));
         } else if (action === 'page') {
-            await interaction.update(await buildCategoryDetailsMessage(client, category, page));
+            const category = parts[3];
+            const page = parseInt(parts[4]) || 0;
+            await interaction.update(await buildCategoryDetailsMessage(client, category, page, userId));
         }
     },
 };
@@ -139,7 +156,8 @@ async function showCategoryMenu(
     source: ChatInputCommandInteraction | Message,
     client: BotClient
 ): Promise<void> {
-    const message = await buildCategoryMenuMessage(client);
+    const userId = source instanceof Message ? source.author.id : source.user.id;
+    const message = await buildCategoryMenuMessage(client, userId);
 
     if (source instanceof Message) {
         await source.reply(message);
@@ -151,7 +169,7 @@ async function showCategoryMenu(
 /**
  * Construye el mensaje del menú de categorías
  */
-async function buildCategoryMenuMessage(client: BotClient) {
+async function buildCategoryMenuMessage(client: BotClient, userId?: string) {
     const categories = getCategoriesWithCommands(client);
 
     const categoryEmojis: Record<string, string> = {
@@ -193,7 +211,7 @@ async function buildCategoryMenuMessage(client: BotClient) {
     });
 
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('help:category')
+        .setCustomId(`help:category:${userId || ''}`)
         .setPlaceholder('🔍 Selecciona una categoría para explorar')
         .setMinValues(1)
         .setMaxValues(1);
@@ -213,7 +231,7 @@ async function buildCategoryMenuMessage(client: BotClient) {
 
     // Botón de cerrar
     const closeButton = new ButtonBuilder()
-        .setCustomId('help:close::')
+        .setCustomId(`help:close:${userId || ''}:`)
         .setLabel('Cerrar')
         .setEmoji('🗑️')
         .setStyle(ButtonStyle.Danger);
@@ -233,7 +251,7 @@ async function buildCategoryMenuMessage(client: BotClient) {
 /**
  * Construye el mensaje de detalles de una categoría con paginación
  */
-async function buildCategoryDetailsMessage(client: BotClient, category: string, page: number = 0) {
+async function buildCategoryDetailsMessage(client: BotClient, category: string, page: number = 0, userId?: string) {
     const categories = getCategoriesWithCommands(client);
     const commands = categories.get(category);
 
@@ -316,7 +334,7 @@ async function buildCategoryDetailsMessage(client: BotClient, category: string, 
         // Botón anterior
         buttonRow.addComponents(
             new ButtonBuilder()
-                .setCustomId(`help:page:${category}:${currentPage - 1}`)
+                .setCustomId(`help:page:${userId || ''}:${category}:${currentPage - 1}`)
                 .setLabel('◀ Anterior')
                 .setStyle(ButtonStyle.Primary)
                 .setDisabled(currentPage === 0)
@@ -325,7 +343,7 @@ async function buildCategoryDetailsMessage(client: BotClient, category: string, 
         // Botón de inicio
         buttonRow.addComponents(
             new ButtonBuilder()
-                .setCustomId('help:home::0')
+                .setCustomId(`help:home:${userId || ''}::0`)
                 .setLabel('🏠 Inicio')
                 .setStyle(ButtonStyle.Secondary)
         );
@@ -333,7 +351,7 @@ async function buildCategoryDetailsMessage(client: BotClient, category: string, 
         // Botón siguiente
         buttonRow.addComponents(
             new ButtonBuilder()
-                .setCustomId(`help:page:${category}:${currentPage + 1}`)
+                .setCustomId(`help:page:${userId || ''}:${category}:${currentPage + 1}`)
                 .setLabel('Siguiente ▶')
                 .setStyle(ButtonStyle.Primary)
                 .setDisabled(currentPage >= totalPages - 1)
@@ -342,7 +360,7 @@ async function buildCategoryDetailsMessage(client: BotClient, category: string, 
         // Si no hay paginación, solo mostrar botón de inicio
         buttonRow.addComponents(
             new ButtonBuilder()
-                .setCustomId('help:home::0')
+                .setCustomId(`help:home:${userId || ''}::0`)
                 .setLabel('🏠 Inicio')
                 .setStyle(ButtonStyle.Secondary)
         );
@@ -351,7 +369,7 @@ async function buildCategoryDetailsMessage(client: BotClient, category: string, 
     // Botón de cerrar (siempre disponible)
     buttonRow.addComponents(
         new ButtonBuilder()
-            .setCustomId('help:close::')
+            .setCustomId(`help:close:${userId || ''}::`)
             .setLabel('Cerrar')
             .setEmoji('🗑️')
             .setStyle(ButtonStyle.Danger)
@@ -361,7 +379,7 @@ async function buildCategoryDetailsMessage(client: BotClient, category: string, 
 
     // Select menu para cambiar de categoría
     const selectMenu = new StringSelectMenuBuilder()
-        .setCustomId('help:category')
+        .setCustomId(`help:category:${userId || ''}`)
         .setPlaceholder('🔍 Cambiar de categoría o volver al inicio')
         .setMinValues(1)
         .setMaxValues(1);
