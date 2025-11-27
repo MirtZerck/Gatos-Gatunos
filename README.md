@@ -4,7 +4,10 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 
 ## 🚀 Características
 
+- **Sistema de IA Avanzado**: Conversaciones naturales con Gemini 2.0 Flash, memoria a corto/mediano/largo plazo
+- **Sistema de Música Completo**: Reproducción con Lavalink (YouTube, Spotify, SoundCloud), control de volumen, cola, repetición
 - **Comandos Slash y Prefijo**: Soporte para ambos tipos de comandos con conversión automática
+- **Sistema de Ayuda Interactivo**: Menú con categorías, botones de navegación y paginación
 - **Sistema de Comandos Modular**: Arquitectura escalable y fácil de extender
 - **Subcomandos con Aliases**: Sistema avanzado de subcomandos con soporte para múltiples aliases
 - **Comandos Personalizados por Servidor**: Sistema completo de comandos personalizados con propuestas y gestión de moderadores
@@ -18,6 +21,7 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 - **TypeScript**: Código type-safe y mantenible con tipado completo
 - **Optimización de Interacciones**: Manejo inteligente de deferReply para evitar timeouts
 - **Firebase Integration**: Integración con Firebase Realtime Database para almacenamiento persistente
+- **Comandos de Desarrollador**: Herramientas para gestionar memoria de IA y estadísticas del sistema
 
 ## 📋 Requisitos
 
@@ -127,6 +131,23 @@ Hikari-Koizumi-2.0/
 
 ## 🎮 Comandos Disponibles
 
+### 🎵 Música
+
+Sistema completo de reproducción musical con Lavalink:
+
+- **`/music play <canción>`** - Reproduce música (YouTube, Spotify, SoundCloud, etc.) con autocompletado
+- **`/music pause/resume`** - Pausa o reanuda la reproducción
+- **`/music skip`** - Salta a la siguiente canción
+- **`/music stop`** - Detiene y limpia la cola
+- **`/music queue [página]`** - Muestra la cola de reproducción
+- **`/music nowplaying`** - Muestra la canción actual
+- **`/music volume <0-100>`** - Ajusta el volumen
+- **`/music shuffle`** - Mezcla la cola aleatoriamente
+- **`/music loop`** - Cambia modo de repetición (Off → Canción → Cola)
+- **`/music join/leave`** - Conecta o desconecta el bot
+
+**Uso:** `/music play never gonna give you up` o `*p never gonna give you up`
+
 ### 🎭 Interacción
 
 #### `/react` - Reacciones y Expresiones Emocionales
@@ -138,15 +159,6 @@ Comandos de reacción que puedes usar solo o dirigidos a alguien:
 - **`blush`** (`sonrojar`) - Sonrójate 😳
 - **`pout`** (`puchero`) - Haz pucheros 🥺
 - **`angry`** (`enojado`) - Enójate 😠
-- **`confused`** (`confundido`) - Confúndete 😕
-- **`shocked`** (`sorprendido`) - Sorpréndete 😱
-- **`happy`** (`feliz`) - Sé feliz 😄
-- **`sad`** (`triste`) - Entristécete 😔
-- **`sleep`** (`dormir`) - Duerme 😴
-- **`yawn`** (`bostezar`) - Bosteza 🥱
-- **`shrug`** - Encógete de hombros 🤷
-- **`think`** (`pensar`) - Piensa 🤔
-- **`stare`** (`mirar`) - Mira fijamente 👀
 
 **Uso:** `/react smile [@usuario]` o `*react smile [@usuario]`
 
@@ -162,9 +174,6 @@ Acciones que puedes realizar solo o con alguien. Algunas requieren solicitud cua
 - **`wave`** (`saludar`, `saludo`) - Saluda 👋
 - **`bow`** (`reverencia`) - Haz una reverencia 🙇
 - **`clap`** (`aplaudir`) - Aplaude 👏
-- **`cheer`** (`animar`) - Anima 🎉
-- **`salute`** - Saludo militar 🫡
-- **`nod`** (`asentir`) - Asiente 👍
 
 **Uso:** `/act dance [@usuario]` o `*act dance [@usuario]`
 
@@ -182,22 +191,39 @@ Interacciones íntimas/románticas o juguetonas/agresivas:
 **Directas (requiere @usuario):**
 - **`slap`** (`cachetada`, `bofetada`) - Abofetea 🖐️
 - **`poke`** (`molestar`) - Molesta 👉
-- **`bite`** (`morder`) - Muerde 😬
-- **`tickle`** (`cosquillas`) - Cosquillas 🤭
-- **`bonk`** (`golpear`) - Golpe juguetón 🔨
-- **`boop`** - Toca la nariz 👆
 
 **Uso:** `/interact hug @usuario` o `*hug @usuario`
 
 > **Nota:** Las interacciones íntimas (`hug`, `kiss`, `pat`, `cuddle`) requieren que el usuario objetivo acepte la solicitud usando los botones.
 
+### 🤖 IA (Inteligencia Artificial)
+
+Sistema de IA conversacional con memoria persistente:
+
+- **Menciona a Hikari** en servidores o **envía DM** para conversar
+- **Memoria a corto plazo**: Últimos 5 mensajes (15 minutos)
+- **Memoria de sesión**: Resumen del día (24 horas)
+- **Memoria a largo plazo**: Facts, preferencias y relaciones (permanente)
+
+**Uso:** `@Hikari hola, ¿cómo estás?` en servidor o `Hola Hikari` en DM
+
+### 👤 Usuario
+
+- **`/user info [@usuario]`** (`ui`, `userinfo`) - Información detallada de un usuario
+- **`/user avatar [@usuario]`** (`av`, `pfp`) - Avatar y perfil de un usuario
+
+**Uso:** `/user info @usuario` o `*userinfo @usuario`
+
 ### 🛠️ Utilidad
 
-- **`ping`** (`p`, `pong`) - Responde con Pong! - Verifica la latencia del bot
-- **`avatar`** (`av`, `pfp`) `[@usuario]` - Muestra el avatar de un usuario
-- **`stats`** `[@usuario]` - Muestra estadísticas de interacciones con un usuario
-- **`cooldown-stats`** - Muestra estadísticas del sistema de cooldowns (Solo Admin)
-- **`cooldown-clear`** `[comando]` `[@usuario]` - Limpia cooldowns (Solo Admin)
+- **`/help [comando]`** (`ayuda`, `comandos`) - Sistema de ayuda interactivo con categorías y navegación
+- **`/utility ping`** (`pong`) - Responde con Pong! - Verifica la latencia del bot
+- **`/utility stats [@usuario]`** (`estadisticas`, `interacciones`) - Muestra estadísticas de interacciones
+- **`/utility hora`** (`time`, `tiempo`) - Muestra la hora actual
+- **`/utility horaserver`** (`hs`, `hour`) - Muestra la hora del servidor
+- **`/utility sethour <timezone>`** (`sh`, `sethora`) - Establece zona horaria (Admin)
+- **`/utility cooldown-stats`** - Muestra estadísticas del sistema de cooldowns (Solo Admin)
+- **`/utility cooldown-clear`** `[comando]` `[@usuario]` - Limpia cooldowns (Solo Admin)
 
 **Uso:** `/utility ping` o `*ping`
 
@@ -205,11 +231,11 @@ Interacciones íntimas/románticas o juguetonas/agresivas:
 
 Sistema completo de comandos personalizados por servidor. Los usuarios pueden proponer comandos con imágenes que los moderadores revisan y aprueban.
 
-- **`/custom proponer <comando> <imagen>`** - Propone un nuevo comando o añade imagen a uno existente
-- **`/custom lista`** - Muestra todos los comandos personalizados disponibles
-- **`/custom gestionar`** - Gestiona propuestas pendientes (Moderadores)
-- **`/custom editar <comando>`** - Edita un comando existente (Moderadores)
-- **`/custom eliminar <comando>`** - Elimina un comando completo (Moderadores)
+- **`/custom proponer <comando> <imagen>`** (`propose`, `prop`, `sugerir`) - Propone un nuevo comando o añade imagen a uno existente
+- **`/custom lista`** (`list`, `comandos`, `ver`) - Muestra todos los comandos personalizados disponibles
+- **`/custom gestionar`** (`manage`, `revisar`, `propuestas`) - Gestiona propuestas pendientes (Moderadores)
+- **`/custom editar <comando>`** (`edit`, `modificar`) - Edita un comando existente (Moderadores)
+- **`/custom eliminar <comando>`** (`delete`, `borrar`, `remove`) - Elimina un comando completo (Moderadores)
 - **`*<comando>`** - Usa un comando personalizado (muestra imagen aleatoria)
 
 **Uso:** `/custom proponer gatito https://i.imgur.com/example.png` o `*proponer gatito https://...`
@@ -218,15 +244,33 @@ Sistema completo de comandos personalizados por servidor. Los usuarios pueden pr
 
 Para más información, consulta `CUSTOM_COMMANDS_GUIDE.md`.
 
+### 🎮 Diversión
+
+- **`/danbooru`** - Envía una imagen aleatoria de Danbooru (requiere canal NSFW o DM)
+
+**Uso:** `/danbooru` en canal NSFW
+
 ### ⚖️ Moderación
 
-- **`kick`** (`expulsar`) `@usuario` `[razón]` - Expulsa a un usuario del servidor
-- **`ban`** (`banear`) `@usuario` `[días]` `[razón]` - Banea a un usuario (puede borrar mensajes de los últimos 0-7 días)
-- **`timeout`** (`silenciar`, `mute`) `@usuario` `<minutos>` `[razón]` - Silencia temporalmente a un usuario
+- **`/moderation kick`** (`expulsar`) `@usuario` `[razón]` - Expulsa a un usuario del servidor
+- **`/moderation ban`** (`banear`) `@usuario` `[días]` `[razón]` - Banea a un usuario (puede borrar mensajes de los últimos 0-7 días)
+- **`/moderation timeout`** (`silenciar`, `mute`) `@usuario` `<minutos>` `[razón]` - Silencia temporalmente a un usuario
 
 **Uso:** `/moderation kick @usuario razón` o `*kick @usuario razón`
 
 > **Requisitos:** Todos los comandos de moderación requieren permisos adecuados y no funcionan en DMs.
+
+### 🔧 Desarrollador
+
+Comandos exclusivos para desarrolladores autorizados:
+
+- **`*dev memory [@usuario]`** (`mem`) - Ver estadísticas del sistema de IA o memoria de un usuario específico
+- **`*dev clear [opciones]`** (`clearmem`) - Limpiar memoria de IA
+  - `--all`: Limpiar toda la memoria
+  - `@usuario`: Limpiar memoria de usuario específico
+  - `--long-term`: Incluir memoria a largo plazo
+
+**Uso:** `*dev memory @usuario` o `*dev clear @usuario --long-term`
 
 ## 🔧 Configuración
 
@@ -240,6 +284,11 @@ Para más información, consulta `CUSTOM_COMMANDS_GUIDE.md`.
 | `TENOR_API_KEY` | API Key de Tenor para GIFs | ✅ | - |
 | `DANBOORU_API_KEY` | API Key de Danbooru | ✅ | - |
 | `FIREBASE_ADMIN_SDK` | Credenciales de Firebase Admin SDK (JSON) | ✅ | - |
+| `GEMINI_API_KEY` | API Key de Google Gemini para IA | ✅ | - |
+| `LAVALINK_HOST` | Host del servidor Lavalink | ✅ | `localhost` |
+| `LAVALINK_PORT` | Puerto del servidor Lavalink | ✅ | `2333` |
+| `LAVALINK_PASSWORD` | Contraseña del servidor Lavalink | ✅ | `youshallnotpass` |
+| `LAVALINK_SECURE` | Usar SSL para Lavalink | ❌ | `false` |
 | `NODE_ENV` | Entorno de ejecución (`development` o `production`) | ❌ | `development` |
 | `LOG_LEVEL` | Nivel de logging (`debug`, `info`, `warn`, `error`) | ❌ | `info` |
 
@@ -252,6 +301,11 @@ PREFIX=*
 TENOR_API_KEY=tu_tenor_api_key_aqui
 DANBOORU_API_KEY=tu_danbooru_api_key_aqui
 FIREBASE_ADMIN_SDK={"type":"service_account","project_id":"...","private_key":"...","client_email":"..."}
+GEMINI_API_KEY=tu_gemini_api_key_aqui
+LAVALINK_HOST=localhost
+LAVALINK_PORT=2333
+LAVALINK_PASSWORD=youshallnotpass
+LAVALINK_SECURE=false
 NODE_ENV=development
 LOG_LEVEL=info
 ```
@@ -266,7 +320,7 @@ LOG_LEVEL=info
 
 ### Configurar Firebase
 
-Para usar comandos personalizados y estadísticas de interacciones, necesitas configurar Firebase:
+Para usar comandos personalizados, estadísticas de interacciones y memoria de IA, necesitas configurar Firebase:
 
 1. Consulta la guía completa en `FIREBASE_SETUP.md`
 2. Crea un proyecto en [Firebase Console](https://console.firebase.google.com/)
@@ -276,6 +330,25 @@ Para usar comandos personalizados y estadísticas de interacciones, necesitas co
 
 ⚠️ **Importante:** El JSON debe estar en una sola línea o con `\n` correctamente escapados.
 
+### Configurar Lavalink (Música)
+
+Para usar el sistema de música, necesitas un servidor Lavalink:
+
+1. Descarga Lavalink desde [GitHub](https://github.com/lavalink-devs/Lavalink/releases)
+2. Crea un archivo `application.yml` con tu configuración
+3. Inicia el servidor: `java -jar Lavalink.jar`
+4. Configura las credenciales en `.env`
+
+Ver documentación completa: [Lavalink Documentation](https://lavalink.dev/)
+
+### Obtener API Key de Gemini
+
+Para usar el sistema de IA:
+
+1. Ve a [Google AI Studio](https://aistudio.google.com/app/apikey)
+2. Crea una API Key
+3. Añádela a `.env` como `GEMINI_API_KEY`
+
 ## 📝 Scripts Disponibles
 
 | Script | Descripción |
@@ -283,7 +356,7 @@ Para usar comandos personalizados y estadísticas de interacciones, necesitas co
 | `npm run dev` | Inicia el bot en modo desarrollo con auto-reload usando nodemon |
 | `npm run build` | Compila TypeScript a JavaScript en la carpeta `dist/` |
 | `npm start` | Inicia el bot en modo producción (requiere compilación previa con `npm run build`) |
-| `npm run deploy` | Despliega los comandos slash a Discord (registra comandos globalmente) |
+| `npm run deploy:prod` | Despliega los comandos slash a Discord (registra comandos globalmente) |
 
 ## 🎯 Características Avanzadas
 

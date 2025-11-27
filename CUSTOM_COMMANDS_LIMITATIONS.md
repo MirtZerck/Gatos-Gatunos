@@ -27,7 +27,7 @@ await discord.registerSlashCommand({
 
 ```bash
 # Los slash commands se registran ejecutando:
-npm run deploy
+npm run deploy:dev
 
 # Esto registra TODOS los comandos estáticos definidos en src/commands/
 # Como: /custom, /interact, /utility, /moderation, etc.

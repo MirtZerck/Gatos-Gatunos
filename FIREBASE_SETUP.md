@@ -43,6 +43,15 @@ Por defecto, Firebase bloquea todo acceso. Necesitas configurar reglas para que 
       "$pairKey": {
         ".validate": "newData.hasChildren(['total', 'byType', 'lastInteraction'])"
       }
+    },
+    "ai": {
+      ".read": true,
+      ".write": true,
+      "users": {
+        "$userId": {
+          ".validate": "newData.hasChildren(['stats'])"
+        }
+      }
     }
   }
 }
@@ -129,10 +138,16 @@ npm run dev
 *proponer gatito https://i.imgur.com/example.png
 ```
 
-5. Verifica en Firebase Console que se crearon los registros:
-   - `interactions/` para estadísticas
+5. Prueba el sistema de IA:
+```
+@Hikari hola, me gusta programar
+```
+
+6. Verifica en Firebase Console que se crearon los registros:
+   - `interactions/` para estadísticas de interacciones
    - `servers/{guildId}/commands/personalizados/` para comandos personalizados
    - `servers/{guildId}/proposals/` para propuestas
+   - `ai/users/{userId}/` para memoria de IA
 
 ## 📊 Estructura de Datos
 
@@ -154,6 +169,42 @@ interactions/
 - Las claves de usuario siempre están ordenadas alfabéticamente
 - `userId1_userId2` es la misma que `userId2_userId1`
 - Timestamps en milisegundos
+
+### Memoria de IA
+
+```
+ai/
+  └── users/
+      └── {userId}/
+          ├── facts/
+          │   └── {factId}/
+          │       ├── fact: "Le gusta programar"
+          │       ├── relevance: 90
+          │       ├── timestamp: 1699999999999
+          │       └── lastAccessed: 1699999999999
+          ├── preferences/
+          │   └── {preferenceId}/
+          │       ├── type: "like"
+          │       ├── item: "café"
+          │       ├── relevance: 85
+          │       ├── timestamp: 1699999999999
+          │       └── lastAccessed: 1699999999999
+          ├── relationships/
+          │   └── {userId2}/
+          │       ├── relationship: "amigo"
+          │       ├── notes: "Le conoció en la universidad"
+          │       ├── relevance: 70
+          │       └── timestamp: 1699999999999
+          └── stats/
+              ├── totalMessages: 150
+              ├── firstInteraction: 1699000000000
+              └── lastInteraction: 1699999999999
+```
+
+**Características:**
+- Memoria persistente a largo plazo
+- Se limpia automáticamente si no se accede en 30 días
+- Relevancia se actualiza dinámicamente
 
 ### Comandos Personalizados
 
@@ -184,11 +235,17 @@ servers/
 ## 🔍 Ver Estadísticas
 
 ```bash
-# Ver estadísticas con un usuario
-/stats @usuario
+# Ver estadísticas de interacciones con un usuario
+/utility stats @usuario
 
 # Ver información general del sistema
-/stats
+/utility stats
+
+# Ver memoria de IA (solo desarrolladores)
+*dev memory @usuario
+
+# Ver estadísticas del sistema de IA (solo desarrolladores)
+*dev memory
 ```
 
 ## 🛡️ Recomendaciones de Seguridad

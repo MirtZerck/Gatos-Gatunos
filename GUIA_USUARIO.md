@@ -76,52 +76,99 @@ Cuéntame sobre ti
 
 ## 📚 Comandos Disponibles
 
-### Comandos de Música
+### Comandos de Música 🎵
 
 | Comando | Descripción |
 |---------|-------------|
-| `/play [canción]` | Reproduce música de YouTube |
-| `/pause` | Pausa la reproducción |
-| `/resume` | Reanuda la reproducción |
-| `/skip` | Salta a la siguiente canción |
-| `/stop` | Detiene la música y limpia la cola |
-| `/queue` | Muestra la cola de reproducción |
-| `/nowplaying` | Muestra la canción actual |
+| `/music play [canción]` | Reproduce música (YouTube, Spotify, SoundCloud, etc.) |
+| `/music pause` | Pausa la reproducción |
+| `/music resume` | Reanuda la reproducción |
+| `/music skip` | Salta a la siguiente canción |
+| `/music stop` | Detiene la música y limpia la cola |
+| `/music queue [página]` | Muestra la cola de reproducción |
+| `/music nowplaying` | Muestra la canción actual |
+| `/music volume <0-100>` | Ajusta el volumen |
+| `/music shuffle` | Mezcla la cola aleatoriamente |
+| `/music loop` | Cambia modo de repetición (Off → Canción → Cola) |
+| `/music join` | Conecta el bot a tu canal de voz |
+| `/music leave` | Desconecta el bot del canal de voz |
 
-### Comandos de Diversión
+**Aliases de prefijo:** `*p`, `*play`, `*pause`, `*s`, `*skip`, `*q`, `*queue`, `*np`, `*vol`, etc.
+
+**💡 Consejo:** El comando `/music play` tiene autocompletado. Escribe lo que quieras buscar y el bot te mostrará opciones para elegir.
+
+### Comandos de Interacción 💝
+
+#### Reacciones (`/react`)
+| Comando | Aliases | Descripción |
+|---------|---------|-------------|
+| `smile` | `sonreir` | Sonríe 😊 |
+| `laugh` | `reir` | Ríe 😂 |
+| `cry` | `llorar` | Llora 😢 |
+| `blush` | `sonrojar` | Sonrójate 😳 |
+| `pout` | `puchero` | Haz pucheros 🥺 |
+| `angry` | `enojado` | Enójate 😠 |
+
+#### Acciones (`/act`)
+| Comando | Aliases | Descripción | Requiere Aceptación |
+|---------|---------|-------------|---------------------|
+| `dance` | `bailar` | Baila 💃 | Sí (si hay @usuario) |
+| `sing` | `cantar` | Canta 🎤 | Sí (si hay @usuario) |
+| `highfive` | `chocalos` | Choca los cinco ✋ | Sí (si hay @usuario) |
+| `wave` | `saludar` | Saluda 👋 | No |
+| `bow` | `reverencia` | Reverencia 🙇 | No |
+| `clap` | `aplaudir` | Aplaude 👏 | No |
+
+#### Interacciones Directas (`/interact`)
+| Comando | Aliases | Descripción | Requiere Aceptación |
+|---------|---------|-------------|---------------------|
+| `hug` | `abrazo` | Abraza a alguien 🤗 | Sí |
+| `kiss` | `beso` | Besa a alguien 😘 | Sí |
+| `pat` | `acariciar` | Acaricia 😊 | Sí |
+| `cuddle` | `acurrucar` | Acurrúcate 🥰 | Sí |
+| `slap` | `cachetada` | Abofetea 🖐️ | No |
+| `poke` | `molestar` | Molesta 👉 | No |
+
+### Comandos de Usuario 👤
+
+| Comando | Aliases | Descripción |
+|---------|---------|-------------|
+| `/user info [@usuario]` | `ui`, `userinfo` | Información detallada de un usuario |
+| `/user avatar [@usuario]` | `av`, `pfp` | Avatar y perfil de un usuario |
+
+### Comandos de Utilidad 🔧
+
+| Comando | Aliases | Descripción |
+|---------|---------|-------------|
+| `/help [comando]` | `ayuda`, `comandos` | Muestra ayuda interactiva con categorías |
+| `/utility ping` | `pong` | Verifica la latencia del bot |
+| `/utility stats [@usuario]` | `estadisticas`, `interacciones` | Ver estadísticas de interacciones |
+| `/utility hora` | `time`, `tiempo` | Muestra la hora actual |
+| `/utility horaserver` | `hs`, `hour` | Muestra la hora del servidor |
+| `/utility sethour <timezone>` | `sh`, `sethora` | Establece zona horaria (Admin) |
+
+### Comandos Personalizados 🎨
 
 | Comando | Descripción |
 |---------|-------------|
-| `/8ball [pregunta]` | Consulta la bola 8 mágica |
-| `/coinflip` | Lanza una moneda |
-| `/roll [dados]` | Lanza dados (ej: 2d6) |
-| `/meme` | Muestra un meme aleatorio |
+| `/custom proponer <comando> <imagen>` | Propone un nuevo comando personalizado |
+| `/custom lista` | Muestra todos los comandos personalizados |
+| `/custom gestionar` | Gestiona propuestas (Moderadores) |
+| `*<comando>` | Usa un comando personalizado |
 
-### Comandos de Interacción
+### Comandos de Diversión 🎮
 
-| Comando | Descripción |
-|---------|-------------|
-| `*hug @usuario` | Abraza a alguien |
-| `*kiss @usuario` | Besa a alguien |
-| `*pat @usuario` | Acaricia a alguien |
-| `*slap @usuario` | Abofetea a alguien |
+| Comando | Descripción | Requisitos |
+|---------|-------------|------------|
+| `/danbooru` | Imagen aleatoria de Danbooru | Canal NSFW o DM |
 
-### Comandos de Utilidad
+### Comandos de Moderación ⚖️
 
-| Comando | Descripción |
-|---------|-------------|
-| `/help` | Muestra todos los comandos |
-| `/userinfo [@usuario]` | Información de un usuario |
-| `/serverinfo` | Información del servidor |
-| `/avatar [@usuario]` | Muestra el avatar de un usuario |
-
-### Comandos de Moderación
-
-| Comando | Descripción | Permisos |
-|---------|-------------|----------|
-| `/warn @usuario [razón]` | Advierte a un usuario | Moderador |
-| `/warnings [@usuario]` | Ver advertencias | Moderador |
-| `/clearwarns @usuario` | Limpia advertencias | Administrador |
+| Comando | Aliases | Descripción | Permisos |
+|---------|---------|-------------|----------|
+| `/moderation kick @usuario [razón]` | `expulsar` | Expulsa a un usuario | Expulsar Miembros |
+| `/moderation ban @usuario [días] [razón]` | `banear` | Banea a un usuario | Banear Miembros |
+| `/moderation timeout @usuario <minutos> [razón]` | `silenciar`, `mute` | Silencia temporalmente | Aislar Miembros |
 
 ---
 
@@ -234,10 +281,19 @@ Verifica que:
 No, Hikari solo puede conversar basándose en su entrenamiento y la memoria de conversaciones contigo.
 
 ### ¿Puedo crear comandos personalizados?
-¡Sí! Los administradores del servidor pueden crear comandos personalizados con `/customcommand create`.
+¡Sí! Cualquier usuario puede proponer comandos con `/custom proponer` y los moderadores los revisan.
 
 ### ¿Hikari tiene límite de tiempo de música?
 No hay límite de tiempo, pero solo puede estar en una sala de voz a la vez por servidor.
+
+### ¿Cómo funciona el sistema de ayuda?
+Usa `/help` para ver un menú interactivo con todas las categorías de comandos. Puedes navegar con botones y ver detalles de comandos específicos con `/help comando:<nombre>`.
+
+### ¿Qué son las estadísticas de interacciones?
+Hikari registra las interacciones positivas entre usuarios (abrazos, besos, etc.) y puedes verlas con `/utility stats @usuario`.
+
+### ¿Puedo cambiar la zona horaria del servidor?
+Sí, los moderadores pueden usar `/utility sethour <timezone>` para configurar la zona horaria del servidor.
 
 ---
 
