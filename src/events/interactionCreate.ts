@@ -17,9 +17,9 @@ export default {
 
             if (!command) return;
 
-            if ('handleAutocomplete' in command && typeof command.handleAutocomplete === 'function') {
+            if ('autocomplete' in command && typeof command.autocomplete === 'function') {
                 try {
-                    await command.handleAutocomplete(interaction);
+                    await command.autocomplete(interaction);
                 } catch (error) {
                     logger.error('InteractionCreate', `Error en autocomplete de ${interaction.commandName}`, error);
                 }

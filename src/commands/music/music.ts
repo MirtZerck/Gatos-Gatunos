@@ -1,6 +1,7 @@
 import {
     SlashCommandBuilder,
     ChatInputCommandInteraction,
+    AutocompleteInteraction,
     Message,
     EmbedBuilder,
     GuildMember,
@@ -13,6 +14,7 @@ import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS, EMOJIS } from '../../u
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
 import { LoopMode } from '../../managers/MusicManager.js';
+import { logger } from '../../utils/logger.js';
 
 export const music: HybridCommand = {
     type: 'hybrid',
@@ -46,6 +48,7 @@ export const music: HybridCommand = {
                         .setName('query')
                         .setDescription('URL o nombre de la cancion')
                         .setRequired(true)
+                        .setAutocomplete(true)
                 )
         )
         .addSubcommand(sub =>
@@ -218,6 +221,44 @@ export const music: HybridCommand = {
             }
         } catch (error) {
             await handleCommandError(error, message, 'music');
+        }
+    },
+
+    async autocomplete(interaction: AutocompleteInteraction) {
+        try {
+            const client = interaction.client as BotClient;
+            const musicManager = getMusicManager(client);
+            const focusedValue = interaction.options.getFocused();
+
+            if (!focusedValue || focusedValue.length < 2) {
+                await interaction.respond([]);
+                return;
+            }
+
+            const result = await musicManager.kazagumo.search(focusedValue, {
+                requester: interaction.user
+            });
+
+            if (!result.tracks.length) {
+                await interaction.respond([
+                    { name: 'No se encontraron resultados', value: focusedValue }
+                ]);
+                return;
+            }
+
+            const choices = result.tracks.slice(0, 25).map(track => {
+                const duration = musicManager.formatTime(Math.floor((track.length || 0) / 1000));
+                const name = `${track.title} - ${track.author} [${duration}]`.substring(0, 100);
+                return {
+                    name,
+                    value: track.uri || track.title
+                };
+            });
+
+            await interaction.respond(choices);
+        } catch (error) {
+            logger.error('MusicAutocomplete', 'Error en autocomplete', error);
+            await interaction.respond([]);
         }
     }
 };

@@ -1,5 +1,6 @@
 import {
     ChatInputCommandInteraction,
+    AutocompleteInteraction,
     SlashCommandBuilder,
     SlashCommandOptionsOnlyBuilder,
     SlashCommandSubcommandsOnlyBuilder,
@@ -53,6 +54,8 @@ export interface SlashOnlyCommand extends BaseCommand {
     integrationTypes?: ApplicationIntegrationType[];
     /** Función de ejecución del comando */
     execute: (interaction: ChatInputCommandInteraction) => Promise<void>;
+    /** Handler para autocompletado de opciones */
+    autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
 /**
@@ -135,6 +138,8 @@ export interface HybridCommand extends BaseCommand {
     executeSlash: (interaction: ChatInputCommandInteraction) => Promise<void>;
     /** Handler para ejecución con prefijo */
     executePrefix: (message: Message, args: string[]) => Promise<void>;
+    /** Handler para autocompletado de opciones */
+    autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
 /**
@@ -172,6 +177,8 @@ export interface UnifiedCommand extends BaseCommand {
     integrationTypes?: ApplicationIntegrationType[];
     /** Handler unificado para ambos tipos de ejecución */
     execute: (context: ChatInputCommandInteraction | Message, args?: string[]) => Promise<void>;
+    /** Handler para autocompletado de opciones */
+    autocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
 }
 
 /**
