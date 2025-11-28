@@ -264,9 +264,14 @@ async function handleListaSlash(interaction: ChatInputCommandInteraction): Promi
     }
 
     const commands = await customManager.getCommands(interaction.guild!.id);
-    const embed = createCommandListEmbed(commands, interaction.guild!.name);
 
-    await interaction.editReply({ embeds: [embed] });
+    if (commands.length === 0) {
+        const embed = createCommandListEmbed(commands, interaction.guild!.name);
+        await interaction.editReply({ embeds: [embed] });
+        return;
+    }
+
+    await showCommandListNavigation(interaction, commands, 0);
 }
 
 async function handleListaPrefix(message: Message): Promise<void> {
@@ -278,9 +283,171 @@ async function handleListaPrefix(message: Message): Promise<void> {
     }
 
     const commands = await customManager.getCommands(message.guild!.id);
-    const embed = createCommandListEmbed(commands, message.guild!.name);
 
-    await message.reply({ embeds: [embed] });
+    if (commands.length === 0) {
+        const embed = createCommandListEmbed(commands, message.guild!.name);
+        await message.reply({ embeds: [embed] });
+        return;
+    }
+
+    const reply = await message.reply('🔄 Cargando lista...');
+    await showCommandListNavigationPrefix(reply, commands, 0, message.author.id);
+}
+
+async function showCommandListNavigation(
+    interaction: ChatInputCommandInteraction,
+    commands: Array<{ name: string; count: number }>,
+    currentPage: number
+): Promise<void> {
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(commands.length / itemsPerPage);
+
+    const embed = createCommandListEmbed(commands, interaction.guild!.name, currentPage, itemsPerPage);
+
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('list_prev')
+                .setEmoji('◀️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(currentPage === 0),
+            new ButtonBuilder()
+                .setCustomId('list_next')
+                .setEmoji('▶️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(currentPage === totalPages - 1),
+            new ButtonBuilder()
+                .setCustomId('list_close')
+                .setLabel('Cerrar')
+                .setEmoji('✖️')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+    await interaction.editReply({
+        embeds: [embed],
+        components: [buttons]
+    });
+
+    const collector = (await interaction.fetchReply()).createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 300000,
+        max: 1
+    });
+
+    collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
+        if (buttonInteraction.user.id !== interaction.user.id) {
+            await buttonInteraction.reply({
+                content: '❌ Solo quien llamó este comando puede usar los botones.',
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+
+        await buttonInteraction.deferUpdate();
+
+        try {
+            collector.stop('action_taken');
+
+            if (buttonInteraction.customId === 'list_prev') {
+                await showCommandListNavigation(interaction, commands, currentPage - 1);
+            } else if (buttonInteraction.customId === 'list_next') {
+                await showCommandListNavigation(interaction, commands, currentPage + 1);
+            } else if (buttonInteraction.customId === 'list_close') {
+                await interaction.deleteReply();
+            }
+        } catch (error) {
+            console.error('Error en navegación de lista:', error);
+            collector.stop('error');
+        }
+    });
+
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await interaction.editReply({ components: [] });
+            } catch {
+            }
+        }
+    });
+}
+
+async function showCommandListNavigationPrefix(
+    message: Message,
+    commands: Array<{ name: string; count: number }>,
+    currentPage: number,
+    userId: string
+): Promise<void> {
+    const itemsPerPage = 10;
+    const totalPages = Math.ceil(commands.length / itemsPerPage);
+
+    const embed = createCommandListEmbed(commands, message.guild!.name, currentPage, itemsPerPage);
+
+    const buttons = new ActionRowBuilder<ButtonBuilder>()
+        .addComponents(
+            new ButtonBuilder()
+                .setCustomId('list_prev')
+                .setEmoji('◀️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(currentPage === 0),
+            new ButtonBuilder()
+                .setCustomId('list_next')
+                .setEmoji('▶️')
+                .setStyle(ButtonStyle.Secondary)
+                .setDisabled(currentPage === totalPages - 1),
+            new ButtonBuilder()
+                .setCustomId('list_close')
+                .setLabel('Cerrar')
+                .setEmoji('✖️')
+                .setStyle(ButtonStyle.Danger)
+        );
+
+    await message.edit({
+        content: null,
+        embeds: [embed],
+        components: [buttons]
+    });
+
+    const collector = message.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 300000,
+        max: 1
+    });
+
+    collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
+        if (buttonInteraction.user.id !== userId) {
+            await buttonInteraction.reply({
+                content: '❌ Solo quien llamó este comando puede usar los botones.',
+                flags: MessageFlags.Ephemeral
+            });
+            return;
+        }
+
+        await buttonInteraction.deferUpdate();
+
+        try {
+            collector.stop('action_taken');
+
+            if (buttonInteraction.customId === 'list_prev') {
+                await showCommandListNavigationPrefix(message, commands, currentPage - 1, userId);
+            } else if (buttonInteraction.customId === 'list_next') {
+                await showCommandListNavigationPrefix(message, commands, currentPage + 1, userId);
+            } else if (buttonInteraction.customId === 'list_close') {
+                await message.delete();
+            }
+        } catch (error) {
+            console.error('Error en navegación de lista:', error);
+            collector.stop('error');
+        }
+    });
+
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            try {
+                await message.edit({ components: [] });
+            } catch {
+            }
+        }
+    });
 }
 
 async function handleGestionarSlash(interaction: ChatInputCommandInteraction): Promise<void> {

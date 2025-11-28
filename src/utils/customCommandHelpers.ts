@@ -128,7 +128,9 @@ export function createNotificationEmbed(data: NotificationData): EmbedBuilder {
  */
 export function createCommandListEmbed(
     commands: Array<{ name: string; count: number }>,
-    guildName: string
+    guildName: string,
+    page: number = 0,
+    itemsPerPage: number = 10
 ): EmbedBuilder {
     if (commands.length === 0) {
         return new EmbedBuilder()
@@ -141,7 +143,12 @@ export function createCommandListEmbed(
             .setTimestamp();
     }
 
-    const commandList = commands
+    const totalPages = Math.ceil(commands.length / itemsPerPage);
+    const start = page * itemsPerPage;
+    const end = start + itemsPerPage;
+    const pageCommands = commands.slice(start, end);
+
+    const commandList = pageCommands
         .map(cmd => `• **${cmd.name}** (${cmd.count} imagen${cmd.count !== 1 ? 'es' : ''})`)
         .join('\n');
 
@@ -152,7 +159,7 @@ export function createCommandListEmbed(
             `💡 Usa \`*<comando>\` o \`/custom <comando>\` para verlos`
         )
         .setColor(COLORS.INFO)
-        .setFooter({ text: `Total: ${commands.length} comando${commands.length !== 1 ? 's' : ''}` })
+        .setFooter({ text: `Página ${page + 1}/${totalPages} | Total: ${commands.length} comando${commands.length !== 1 ? 's' : ''}` })
         .setTimestamp();
 }
 
