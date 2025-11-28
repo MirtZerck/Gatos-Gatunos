@@ -14,13 +14,19 @@ export default {
         if (!musicManager) return;
 
         const guildId = oldState.guild.id;
+        const player = musicManager.getPlayer(guildId);
 
-        if (oldState.channelId) {
-            await musicManager.handleVoiceStateUpdate(guildId, oldState.channelId);
-        }
+        if (!player) return;
 
-        if (newState.channelId) {
-            await musicManager.handleVoiceStateUpdate(guildId, newState.channelId);
+        const guild = client.guilds.cache.get(guildId);
+        if (!guild) return;
+
+        const botVoiceChannel = guild.members.me?.voice.channel;
+        if (!botVoiceChannel) return;
+
+        const botChannelId = botVoiceChannel.id;
+        if (oldState.channelId === botChannelId || newState.channelId === botChannelId) {
+            await musicManager.handleVoiceStateUpdate(guildId, botChannelId);
         }
     }
 } as Event;

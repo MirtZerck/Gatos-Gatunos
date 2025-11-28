@@ -564,23 +564,39 @@ export class MusicManager {
     private startInactivityTimer(guildId: string): void {
         this.clearInactivityTimer(guildId);
 
-        const timer = setTimeout(async () => {
-            const player = this.kazagumo.players.get(guildId);
-            if (player) {
-                const channel = this.textChannels.get(guildId);
-                if (channel) {
-                    const embed = new EmbedBuilder()
-                        .setColor(COLORS.WARNING)
-                        .setDescription(`${EMOJIS.MUSIC} Me desconecte por inactividad. Hasta la proxima!`);
-                    await channel.send({ embeds: [embed] }).catch(() => {});
+        const timer = setTimeout(() => {
+            (async () => {
+                try {
+                    logger.info('MusicManager', `Ejecutando timer de inactividad para ${guildId}`);
+                    const player = this.kazagumo.players.get(guildId);
+                    if (!player) {
+                        logger.warn('MusicManager', `Player ya no existe para ${guildId}`);
+                        return;
+                    }
+
+                    const channel = this.textChannels.get(guildId);
+                    if (channel) {
+                        try {
+                            const embed = new EmbedBuilder()
+                                .setColor(COLORS.WARNING)
+                                .setDescription(`${EMOJIS.MUSIC} Me desconecte por inactividad. Hasta la proxima!`);
+                            await channel.send({ embeds: [embed] });
+                        } catch (error) {
+                            logger.error('MusicManager', 'Error enviando mensaje de desconexion', error);
+                        }
+                    }
+
+                    await player.destroy();
+                    this.inactivityTimers.delete(guildId);
+                    logger.info('MusicManager', `Player destruido por inactividad en ${guildId}`);
+                } catch (error) {
+                    logger.error('MusicManager', `Error en timer de inactividad para ${guildId}`, error);
                 }
-                await player.destroy();
-                logger.info('MusicManager', `Player destruido por inactividad en ${guildId}`);
-            }
+            })();
         }, INACTIVITY_TIMEOUT);
 
         this.inactivityTimers.set(guildId, timer);
-        logger.info('MusicManager', `Timer de inactividad iniciado para ${guildId}`);
+        logger.info('MusicManager', `Timer de inactividad iniciado para ${guildId} (${INACTIVITY_TIMEOUT / 1000}s)`);
     }
 
     /**
@@ -591,6 +607,7 @@ export class MusicManager {
         if (timer) {
             clearTimeout(timer);
             this.inactivityTimers.delete(guildId);
+            logger.info('MusicManager', `Timer de inactividad cancelado para ${guildId}`);
         }
     }
 

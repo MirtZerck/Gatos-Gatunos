@@ -5,6 +5,49 @@ import { validateGifDimensions, type GifDimensions } from "./gifDimensions.js";
 /* URL base de la API v2 de Tenor */
 const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
 
+/** Formato de medio de Tenor (gif, mp4, etc.) */
+interface TenorMediaFormat {
+    url: string;
+    dims: number[];
+    duration?: number;
+    size?: number;
+}
+
+/** Todos los formatos de medio disponibles para un GIF */
+interface TenorMediaFormats {
+    gif?: TenorMediaFormat;
+    mediumgif?: TenorMediaFormat;
+    tinygif?: TenorMediaFormat;
+    nanogif?: TenorMediaFormat;
+    mp4?: TenorMediaFormat;
+    loopedmp4?: TenorMediaFormat;
+    tinymp4?: TenorMediaFormat;
+    nanomp4?: TenorMediaFormat;
+    webm?: TenorMediaFormat;
+    tinywebm?: TenorMediaFormat;
+    nanowebm?: TenorMediaFormat;
+}
+
+/** Objeto GIF de la respuesta de Tenor */
+interface TenorGif {
+    id: string;
+    title?: string;
+    media_formats: TenorMediaFormats;
+    created: number;
+    content_description?: string;
+    itemurl?: string;
+    url?: string;
+    tags?: string[];
+    flags?: string[];
+    hasaudio?: boolean;
+}
+
+/** Respuesta de la API de Tenor */
+interface TenorResponse {
+    results: TenorGif[];
+    next?: string;
+}
+
 /**
  * *Obtiene un GIF aleatorio de Tenor basado en una consulta de búsqueda.
  * *Realiza una búsqueda y selecciona aleatoriamente uno de los resultados.
@@ -37,14 +80,14 @@ export async function getRandomGif(query: string, limit: number = 20): Promise<s
         if (!response.ok) {
             throw new Error(`Tenor API error: ${response.status}`);
         }
-        const data = await response.json();
+        const data = await response.json() as TenorResponse;
 
         if (!data.results || data.results.length === 0) {
             throw new Error('No se encontraron GIFs');
         }
 
         // Filtrar GIFs por dimensiones aceptables
-        const validGifs = data.results.filter((gif: any) => {
+        const validGifs = data.results.filter((gif: TenorGif) => {
             const dims = gif.media_formats?.gif?.dims;
             if (!dims || dims.length < 2) return true; // Si no hay dims, aceptar
 
@@ -67,6 +110,10 @@ export async function getRandomGif(query: string, limit: number = 20): Promise<s
 
         const randomIndex = Math.floor(Math.random() * gifsToUse.length);
         const gif = gifsToUse[randomIndex];
+
+        if (!gif.media_formats.gif?.url) {
+            throw new Error('GIF no tiene formato válido');
+        }
 
         return gif.media_formats.gif.url;
     } catch (error) {
@@ -106,14 +153,14 @@ export async function getTrendingGif(category?: string): Promise<string> {
         }
 
         const response = await fetch(url.toString());
-        const data = await response.json();
+        const data = await response.json() as TenorResponse;
 
         if (!data.results || data.results.length === 0) {
             throw new Error('No se encontraron GIFs trending');
         }
 
         // Filtrar GIFs por dimensiones aceptables
-        const validGifs = data.results.filter((gif: any) => {
+        const validGifs = data.results.filter((gif: TenorGif) => {
             const dims = gif.media_formats?.gif?.dims;
             if (!dims || dims.length < 2) return true;
 
@@ -129,6 +176,10 @@ export async function getTrendingGif(category?: string): Promise<string> {
 
         const randomIndex = Math.floor(Math.random() * gifsToUse.length);
         const gif = gifsToUse[randomIndex];
+
+        if (!gif.media_formats.gif?.url) {
+            throw new Error('GIF no tiene formato válido');
+        }
 
         return gif.media_formats.gif.url;
     } catch (error) {
