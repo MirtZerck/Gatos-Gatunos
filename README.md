@@ -427,6 +427,33 @@ Las contribuciones son bienvenidas! Por favor:
 4. Push a la rama (`git push origin feature/AmazingFeature`)
 5. Abre un Pull Request
 
+## 📜 Documentos Legales
+
+Este bot incluye documentos legales completos para cumplir con los requisitos de verificación de Discord:
+
+- **[Términos de Servicio](TERMS_OF_SERVICE.md)** - Reglas y condiciones de uso del bot
+- **[Política de Privacidad](PRIVACY_POLICY.md)** - Cómo se recopilan, usan y protegen los datos
+
+Estos documentos son **requeridos** para la verificación del bot como aplicación en Discord. Si hosteas tu propia instancia del bot, asegúrate de:
+
+1. Revisar y personalizar estos documentos según tus necesidades
+2. Actualizar la información de contacto con tus datos
+3. Publicar estos documentos en un lugar accesible públicamente
+4. Proporcionar los enlaces a Discord durante el proceso de verificación
+
+### Hosting de Documentos Legales
+
+Puedes publicar estos documentos de varias formas:
+
+- **GitHub Pages:** Publica los archivos .md en tu repositorio
+- **Sitio web propio:** Convierte a HTML y sube a tu hosting
+- **Gist de GitHub:** Crea gists públicos con el contenido
+- **Servicios de hosting de documentos:** Usa plataformas como ReadTheDocs
+
+Ejemplo de URLs para Discord:
+- Términos de Servicio: `https://github.com/tu-usuario/tu-repo/blob/main/TERMS_OF_SERVICE.md`
+- Política de Privacidad: `https://github.com/tu-usuario/tu-repo/blob/main/PRIVACY_POLICY.md`
+
 ## 📄 Licencia
 
 Este proyecto está bajo la Licencia ISC.
