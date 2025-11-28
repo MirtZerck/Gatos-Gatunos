@@ -54,5 +54,5 @@ USER nodejs
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
     CMD node -e "console.log('Bot is running')" || exit 1
 
-# Start the bot
-CMD ["node", "dist/index.js"]
+# Start the bot (deploy commands first, then start)
+CMD ["npm", "run", "start:prod"]
