@@ -19,7 +19,7 @@ import { logger } from '../../utils/logger.js';
 export const music: HybridCommand = {
     type: 'hybrid',
     name: 'music',
-    description: 'Sistema de musica con Lavalink',
+    description: 'Sistema de musica del bot',
     category: CATEGORIES.MUSIC,
     subcommands: [
         { name: 'play', aliases: ['p', 'reproducir'], description: 'Reproduce una cancion' },
@@ -38,7 +38,7 @@ export const music: HybridCommand = {
 
     data: new SlashCommandBuilder()
         .setName('music')
-        .setDescription('Sistema de musica con Lavalink')
+        .setDescription('Sistema de musica del bot')
         .addSubcommand(sub =>
             sub
                 .setName('play')
@@ -278,8 +278,8 @@ function getMusicManager(client: BotClient) {
     if (!client.musicManager) {
         throw new CommandError(
             ErrorType.UNKNOWN,
-            'MusicManager no inicializado',
-            'El sistema de musica no esta disponible.'
+            'Sistema de música no disponible',
+            'El sistema de música no está disponible en este momento.'
         );
     }
     return client.musicManager;
@@ -339,11 +339,11 @@ async function handlePlay(interaction: ChatInputCommandInteraction): Promise<voi
             ]
         });
     } catch (error) {
-        const message = error instanceof Error ? error.message : 'Error desconocido';
+        logger.error('MusicCommand', 'Error en play', error);
         throw new CommandError(
             ErrorType.UNKNOWN,
             'Error reproduciendo',
-            message || `No se pudo reproducir: ${query}`
+            `No se pudo reproducir la canción. Intenta con otra búsqueda o URL.`
         );
     }
 }
@@ -641,11 +641,11 @@ async function handlePlayPrefix(message: Message, args: string[]): Promise<void>
         );
         await message.react(EMOJIS.MUSIC);
     } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+        logger.error('MusicCommand', 'Error en play prefix', error);
         throw new CommandError(
             ErrorType.UNKNOWN,
             'Error reproduciendo',
-            errorMessage || `No se pudo reproducir: ${query}`
+            `No se pudo reproducir la canción. Intenta con otra búsqueda o URL.`
         );
     }
 }

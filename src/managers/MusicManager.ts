@@ -68,9 +68,8 @@ export class MusicManager {
     }
 
     private setupEvents(): void {
-        // Shoukaku events
         this.kazagumo.shoukaku.on('ready', (name) => {
-            logger.info('MusicManager', `Nodo Lavalink conectado: ${name}`);
+            logger.info('MusicManager', `Nodo conectado: ${name}`);
         });
 
         this.kazagumo.shoukaku.on('error', (name, error) => {
@@ -78,11 +77,14 @@ export class MusicManager {
         });
 
         this.kazagumo.shoukaku.on('close', (name, code, reason) => {
-            logger.warn('MusicManager', `Nodo ${name} desconectado. Code: ${code}, Reason: ${reason}`);
+            logger.warn('MusicManager', `Nodo ${name} cerrado. Code: ${code}, Reason: ${reason}`);
         });
 
         this.kazagumo.shoukaku.on('disconnect', (name, count) => {
             logger.warn('MusicManager', `Nodo ${name} desconectado, ${count} players afectados`);
+            if (count > 0) {
+                logger.info('MusicManager', 'Kazagumo manejará la reconexión automáticamente');
+            }
         });
 
         this.kazagumo.on('playerStart', async (player, track) => {
@@ -136,7 +138,7 @@ export class MusicManager {
             if (channel) {
                 const embed = new EmbedBuilder()
                     .setColor(COLORS.DANGER)
-                    .setDescription(`${EMOJIS.ERROR} **Error:** ${data.exception?.message || 'Error desconocido'}`);
+                    .setDescription(`${EMOJIS.ERROR} Hubo un problema reproduciendo esta canción. Saltando a la siguiente...`);
                 channel.send({ embeds: [embed] }).catch(() => {});
             }
         });
@@ -333,10 +335,16 @@ export class MusicManager {
         const total = Math.floor((track.length || 0) / 1000);
         const size = 15;
 
-        const progress = total > 0 ? Math.round((current / total) * size) : 0;
-        const emptyProgress = size - progress;
+        let progress = 0;
+        if (total > 0 && current >= 0 && isFinite(current) && isFinite(total)) {
+            const ratio = current / total;
+            if (isFinite(ratio)) {
+                progress = Math.max(0, Math.min(size, Math.round(ratio * size)));
+            }
+        }
 
-        const progressText = '▬'.repeat(Math.max(0, progress)) + '🔘' + '▬'.repeat(Math.max(0, emptyProgress));
+        const emptyProgress = Math.max(0, size - progress);
+        const progressText = '▬'.repeat(progress) + '🔘' + '▬'.repeat(emptyProgress);
         const currentTime = this.formatTime(current);
         const totalTime = this.formatTime(total);
 
