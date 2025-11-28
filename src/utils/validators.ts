@@ -7,6 +7,7 @@ import {
     Message
 } from 'discord.js';
 import { CommandError, ErrorType } from './errorHandler.js';
+import type { BlockManager } from '../managers/BlockManager.js';
 
 /**
  * *Colección de validadores reutilizables para comandos de Discord.
@@ -61,6 +62,44 @@ export class Validators {
                 ErrorType.VALIDATION_ERROR,
                 'El usuario intenta interactuar con un bot',
                 '❌ No puedes interactuar con un bot.'
+            );
+        }
+    }
+
+    /**
+     * *Valida que no exista un bloqueo mutuo entre dos usuarios.
+     * *Verifica si alguno de los usuarios ha bloqueado al otro.
+     *
+     * @static
+     * @async
+     * @param {User} author - Usuario que ejecuta la acción
+     * @param {User} target - Usuario objetivo
+     * @param {BlockManager | undefined} blockManager - Gestor de bloqueos (puede ser undefined si Firebase no está disponible)
+     * @throws {CommandError} Si existe un bloqueo entre los usuarios
+     *
+     * @example
+     * ```typescript
+     * await Validators.validateNotBlocked(author, target, client.blockManager);
+     * ```
+     */
+
+    static async validateNotBlocked(
+        author: User,
+        target: User,
+        blockManager: BlockManager | undefined
+    ): Promise<void> {
+        // Si no hay blockManager (Firebase no disponible), permitir la interacción
+        if (!blockManager) {
+            return;
+        }
+
+        const isBlocked = await blockManager.isBlockedMutual(author.id, target.id);
+
+        if (isBlocked) {
+            throw new CommandError(
+                ErrorType.VALIDATION_ERROR,
+                'Existe un bloqueo entre los usuarios',
+                '🚫 No puedes interactuar con este usuario debido a un bloqueo.'
             );
         }
     }

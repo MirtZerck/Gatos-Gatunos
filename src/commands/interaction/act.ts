@@ -202,6 +202,11 @@ export const act: HybridCommand = {
                 try {
                     Validators.validateNotSelf(author, target);
                     Validators.validateNotBot(target);
+                    await Validators.validateNotBlocked(
+                        author,
+                        target,
+                        (interaction.client as BotClient).blockManager
+                    );
                 } catch (error) {
                     if (error instanceof CommandError) {
                         await interaction.reply({
@@ -276,6 +281,11 @@ export const act: HybridCommand = {
                     target = targetMember.user;
                     Validators.validateNotSelf(message.author, target);
                     Validators.validateNotBot(target);
+                    await Validators.validateNotBlocked(
+                        message.author,
+                        target,
+                        (message.client as BotClient).blockManager
+                    );
                 }
             }
 

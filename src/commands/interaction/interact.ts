@@ -202,6 +202,11 @@ export const interact: HybridCommand = {
 
             Validators.validateNotSelf(author, target);
             Validators.validateNotBot(target);
+            await Validators.validateNotBlocked(
+                author,
+                target,
+                (interaction.client as BotClient).blockManager
+            );
 
             await interaction.deferReply();
 
@@ -259,6 +264,11 @@ export const interact: HybridCommand = {
 
             Validators.validateNotSelf(message.author, target);
             Validators.validateNotBot(target);
+            await Validators.validateNotBlocked(
+                message.author,
+                target,
+                (message.client as BotClient).blockManager
+            );
 
             if (REQUIRE_REQUEST.includes(subcommand)) {
                 await handleRequestActionPrefix(message, subcommand, message.author, target);

@@ -45,6 +45,11 @@ async function main() {
             const warnManager = new WarnManager(firebaseAdminManager);
             client.warnManager = warnManager;
             logger.info('Bot', 'Sistema de advertencias listo');
+
+            const { BlockManager } = await import('./managers/BlockManager.js');
+            const blockManager = new BlockManager(firebaseAdminManager);
+            client.blockManager = blockManager;
+            logger.info('Bot', 'Sistema de bloqueos listo');
         } catch (error) {
             logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
             logger.warn('Bot', 'El bot continuará sin funcionalidades que requieren Firebase');

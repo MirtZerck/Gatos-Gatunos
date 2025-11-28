@@ -9,6 +9,7 @@ import { CustomCommandManager } from "../managers/CustomCommandManager.js";
 import { MusicManager } from "../managers/MusicManager.js";
 import { WarnManager } from "../managers/WarnManager.js";
 import { AIManager } from "../ai/core/AIManager.js";
+import { BlockManager } from "../managers/BlockManager.js";
 
 /**
  * Cliente extendido del bot con todos los managers y sistemas integrados.
@@ -57,6 +58,9 @@ export class BotClient extends Client {
 
     /** Sistema de inteligencia artificial */
     public aiManager?: AIManager;
+
+    /** Gestor de bloqueos de interacciones entre usuarios */
+    public blockManager?: BlockManager;
 
     /**
      * Crea una nueva instancia del cliente del bot.

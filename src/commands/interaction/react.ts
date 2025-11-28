@@ -11,6 +11,7 @@ import { getRandomGif } from '../../utils/tenor.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
+import { BotClient } from '../../types/BotClient.js';
 import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 
 const ACTION_QUERIES = {
@@ -244,6 +245,11 @@ export const react: HybridCommand = {
                 try {
                     Validators.validateNotSelf(author, target);
                     Validators.validateNotBot(target);
+                    await Validators.validateNotBlocked(
+                        author,
+                        target,
+                        (interaction.client as BotClient).blockManager
+                    );
                 } catch (error) {
                     if (error instanceof CommandError) {
                         await interaction.reply({
@@ -321,6 +327,11 @@ export const react: HybridCommand = {
                     target = targetMember.user;
                     Validators.validateNotSelf(message.author, target);
                     Validators.validateNotBot(target);
+                    await Validators.validateNotBlocked(
+                        message.author,
+                        target,
+                        (message.client as BotClient).blockManager
+                    );
                 }
             }
 
