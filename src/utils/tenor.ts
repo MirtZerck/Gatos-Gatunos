@@ -1,5 +1,6 @@
 import { config } from "../config.js";
 import { logger } from "./logger.js";
+import { validateGifDimensions, type GifDimensions } from "./gifDimensions.js";
 
 /* URL base de la API v2 de Tenor */
 const TENOR_API_URL = 'https://tenor.googleapis.com/v2';
@@ -42,8 +43,30 @@ export async function getRandomGif(query: string, limit: number = 20): Promise<s
             throw new Error('No se encontraron GIFs');
         }
 
-        const randomIndex = Math.floor(Math.random() * data.results.length);
-        const gif = data.results[randomIndex];
+        // Filtrar GIFs por dimensiones aceptables
+        const validGifs = data.results.filter((gif: any) => {
+            const dims = gif.media_formats?.gif?.dims;
+            if (!dims || dims.length < 2) return true; // Si no hay dims, aceptar
+
+            const dimensions: GifDimensions = {
+                width: dims[0],
+                height: dims[1]
+            };
+
+            return validateGifDimensions(dimensions);
+        });
+
+        // Si no hay GIFs válidos después del filtrado, usar todos
+        const gifsToUse = validGifs.length > 0 ? validGifs : data.results;
+
+        if (validGifs.length === 0) {
+            logger.warn('Tenor', `No se encontraron GIFs con buenas dimensiones para: ${query}, usando todos`);
+        } else {
+            logger.debug('Tenor', `Filtrados ${gifsToUse.length}/${data.results.length} GIFs con buenas dimensiones`);
+        }
+
+        const randomIndex = Math.floor(Math.random() * gifsToUse.length);
+        const gif = gifsToUse[randomIndex];
 
         return gif.media_formats.gif.url;
     } catch (error) {
@@ -89,8 +112,23 @@ export async function getTrendingGif(category?: string): Promise<string> {
             throw new Error('No se encontraron GIFs trending');
         }
 
-        const randomIndex = Math.floor(Math.random() * data.results.length);
-        const gif = data.results[randomIndex];
+        // Filtrar GIFs por dimensiones aceptables
+        const validGifs = data.results.filter((gif: any) => {
+            const dims = gif.media_formats?.gif?.dims;
+            if (!dims || dims.length < 2) return true;
+
+            const dimensions: GifDimensions = {
+                width: dims[0],
+                height: dims[1]
+            };
+
+            return validateGifDimensions(dimensions);
+        });
+
+        const gifsToUse = validGifs.length > 0 ? validGifs : data.results;
+
+        const randomIndex = Math.floor(Math.random() * gifsToUse.length);
+        const gif = gifsToUse[randomIndex];
 
         return gif.media_formats.gif.url;
     } catch (error) {

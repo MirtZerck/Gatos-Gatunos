@@ -7,7 +7,7 @@ import {
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
 import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/constants.js';
-import { getRandomGif } from '../../utils/tenor.js';
+import { getInteractionGif } from '../../utils/gifProvider.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
@@ -351,7 +351,7 @@ async function handleReaction(
 ): Promise<void> {
     try {
         const reactionConfig = REACTION_CONFIG[action];
-        const gifURL = await getRandomGif(ACTION_QUERIES[action]);
+        const gifURL = await getInteractionGif(ACTION_QUERIES[action]);
 
         const message = target
             ? reactionConfig.withTarget(author.displayName, target.displayName)
@@ -385,7 +385,7 @@ async function handleReactionPrefix(
 
     try {
         const reactionConfig = REACTION_CONFIG[action];
-        const gifUrl = await getRandomGif(ACTION_QUERIES[action]);
+        const gifUrl = await getInteractionGif(ACTION_QUERIES[action]);
 
         const messageText = target
             ? reactionConfig.withTarget(author.displayName, target.displayName)
