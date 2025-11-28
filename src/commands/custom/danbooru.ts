@@ -27,42 +27,13 @@ export const danbooru: HybridCommand = {
         .setNSFW(true),
 
     async executeSlash(interaction: ChatInputCommandInteraction) {
-        const isDM = !interaction.guild;
-        let isNSFW = false;
-
-        if (isDM) {
-            isNSFW = true;
-        } else {
-            if (!interaction.channel) {
-                await interaction.reply({
-                    content: '❌ No se pudo obtener información del canal.',
-                    flags: MessageFlags.Ephemeral
-                });
-                return;
-            }
-
-            if (interaction.channel.isTextBased()) {
-                const textChannel = interaction.channel as TextChannel;
-                isNSFW = textChannel.nsfw === true;
-            }
-        }
-
-        if (!isNSFW) {
-            await interaction.reply({
-                content: '🔞 Este comando solo puede usarse en:\n' +
-                    '• Canales de servidor marcados como NSFW\n' +
-                    '• Mensajes directos (requiere verificación de mayoría de edad)\n\n' +
-                    '💡 Para usar este comando en un servidor, marca el canal como NSFW en la configuración del canal.',
-                flags: MessageFlags.Ephemeral
-            });
-            return;
-        }
-
         await interaction.deferReply();
 
         try {
             const { post, imageUrl } = await getRandomImage();
             const rating = getRatingInfo(post.rating);
+
+            logger.info('Danbooru', `URL de imagen obtenida: ${imageUrl} - ID: ${post.id}, Rating: ${rating.name}`);
 
             const embed = new EmbedBuilder()
                 .setTitle('🎨 Imagen Aleatoria de Danbooru')
@@ -77,7 +48,7 @@ export const danbooru: HybridCommand = {
 
             await interaction.editReply({ embeds: [embed] });
 
-            logger.info('Danbooru', `Imagen enviada exitosamente - ID: ${post.id}, Rating: ${rating.name}`);
+            logger.info('Danbooru', `Imagen enviada exitosamente - ID: ${post.id}`);
 
         } catch (error) {
             logger.error('Danbooru', 'Error al obtener imagen de Danbooru', error);
