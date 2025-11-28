@@ -29,6 +29,7 @@ const ACTION_QUERIES = {
     shrug: 'anime shrug',
     think: 'anime think',
     stare: 'anime stare',
+    horny: 'anime horny',
 } as const;
 
 type ActionType = keyof typeof ACTION_QUERIES;
@@ -160,6 +161,14 @@ const REACTION_CONFIG: Record<ActionType, {
         withTarget: (a, t) => `**${a}** mira fijamente e intensamente a **${t}**`,
         solo: (a) => `**${a}** está mirando fijamente`,
         footer: '👁️ La mirada que lo dice todo'
+    },
+    horny: {
+        emoji: '😈',
+        name: 'calentura',
+        color: 0xFF1493, // Rosa profundo
+        withTarget: (a, t) => `**${a}** está caliente gracias a **${t}**`,
+        solo: (a) => `**${a}** está sintiéndose travieso`,
+        footer: '🔥 ¡Bonk! Ve a la cárcel horny'
     }
 };
 
@@ -184,6 +193,7 @@ export const react: HybridCommand = {
         { name: 'shrug', aliases: [], description: 'Encógete de hombros' },
         { name: 'think', aliases: ['pensar'], description: 'Piensa' },
         { name: 'stare', aliases: ['mirar'], description: 'Mira fijamente' },
+        { name: 'horny', aliases: ['cachondo'], description: 'Siéntete travieso' },
     ],
 
     data: new SlashCommandBuilder()
@@ -219,6 +229,8 @@ export const react: HybridCommand = {
             .addUserOption(opt => opt.setName('usuario').setDescription('En quién (opcional)').setRequired(false)))
         .addSubcommand(sub => sub.setName('stare').setDescription('Mira fijamente')
             .addUserOption(opt => opt.setName('usuario').setDescription('A quién (opcional)').setRequired(false)))
+        .addSubcommand(sub => sub.setName('horny').setDescription('Siéntete travieso')
+            .addUserOption(opt => opt.setName('usuario').setDescription('Gracias a quién (opcional)').setRequired(false)))
         .setContexts(CONTEXTS.ALL)
         .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 

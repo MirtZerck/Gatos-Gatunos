@@ -28,11 +28,12 @@ const ACTION_QUERIES = {
     cheer: 'anime cheer',
     salute: 'anime salute',
     nod: 'anime nod',
+    cookie: 'anime cookie',
 } as const;
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-const REQUIRE_REQUEST_WITH_TARGET: ActionType[] = ['dance', 'sing', 'highfive'];
+const REQUIRE_REQUEST_WITH_TARGET: ActionType[] = ['dance', 'sing', 'highfive', 'cookie'];
 const NO_REQUEST: ActionType[] = ['wave', 'bow', 'clap', 'cheer', 'salute', 'nod'];
 
 const ACTION_CONFIG: Record<ActionType, {
@@ -134,6 +135,16 @@ const ACTION_CONFIG: Record<ActionType, {
         withTarget: (a, t) => `**${a}** asiente aprobadoramente ante **${t}**`,
         solo: (a) => `**${a}** asiente con la cabeza`,
         footer: '✅ De acuerdo, entendido'
+    },
+    cookie: {
+        emoji: '🍪',
+        name: 'galleta',
+        color: 0xD2691E, // Chocolate
+        requestTitle: '¡Ofrenda de Galleta!',
+        requestMessage: (a, t) => `**${a}** te ofrece una deliciosa galleta, **${t}**\n\n¿Aceptas este dulce regalo?`,
+        withTarget: (a, t) => `**${a}** le da una galleta a **${t}**`,
+        solo: (a) => `**${a}** está disfrutando de una galleta`,
+        footer: '🍪 ¡Las galletas siempre alegran el día!'
     }
 };
 
@@ -152,6 +163,7 @@ export const act: HybridCommand = {
         { name: 'cheer', aliases: ['animar'], description: 'Anima' },
         { name: 'salute', aliases: [], description: 'Saludo militar' },
         { name: 'nod', aliases: ['asentir'], description: 'Asiente' },
+        { name: 'cookie', aliases: ['galleta'], description: 'Ofrece o disfruta una galleta' },
     ],
 
     data: new SlashCommandBuilder()
@@ -175,6 +187,8 @@ export const act: HybridCommand = {
             .addUserOption(opt => opt.setName('usuario').setDescription('A quién saludar (opcional)').setRequired(false)))
         .addSubcommand(sub => sub.setName('nod').setDescription('Asiente')
             .addUserOption(opt => opt.setName('usuario').setDescription('Ante quién asentir (opcional)').setRequired(false)))
+        .addSubcommand(sub => sub.setName('cookie').setDescription('Ofrece o disfruta una galleta')
+            .addUserOption(opt => opt.setName('usuario').setDescription('A quién ofrecer la galleta (opcional)').setRequired(false)))
         .setContexts(CONTEXTS.ALL)
         .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 

@@ -29,12 +29,13 @@ const ACTION_QUERIES = {
     tickle: 'anime tickle',
     bonk: 'anime bonk',
     boop: 'anime boop',
+    spank: 'anime spank',
 } as const;
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
 const REQUIRE_REQUEST: ActionType[] = ['hug', 'kiss', 'pat', 'cuddle'];
-const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'bite', 'tickle', 'bonk', 'boop'];
+const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'bite', 'tickle', 'bonk', 'boop', 'spank'];
 
 const ACTION_CONFIG: Record<ActionType, {
     emoji: string;
@@ -134,6 +135,15 @@ const ACTION_CONFIG: Record<ActionType, {
         requestMessage: (a, t) => '',
         successMessage: (a, t) => `**${a}** toca suavemente la nariz de **${t}**`,
         footer: '*boop* 👃 ¡Qué adorable!'
+    },
+    spank: {
+        emoji: '🍑',
+        name: 'nalgada',
+        color: 0xFF1493, // Rosa profundo
+        requestTitle: '',
+        requestMessage: (a, t) => '',
+        successMessage: (a, t) => `**${a}** le da una nalgada a **${t}**`,
+        footer: '💥 ¡Eso fue atrevido!'
     }
 };
 
@@ -153,6 +163,7 @@ export const interact: HybridCommand = {
         { name: 'tickle', aliases: ['cosquillas'], description: 'Cosquillas' },
         { name: 'bonk', aliases: ['golpear'], description: 'Golpe juguetón' },
         { name: 'boop', aliases: [], description: 'Toca la nariz' },
+        { name: 'spank', aliases: ['nalgada'], description: 'Da una nalgada' },
     ],
 
     data: new SlashCommandBuilder()
@@ -178,6 +189,8 @@ export const interact: HybridCommand = {
             .addUserOption(opt => opt.setName('usuario').setDescription('Usuario a golpear juguetonamente').setRequired(true)))
         .addSubcommand(sub => sub.setName('boop').setDescription('Toca la nariz de alguien')
             .addUserOption(opt => opt.setName('usuario').setDescription('Usuario a tocar la nariz').setRequired(true)))
+        .addSubcommand(sub => sub.setName('spank').setDescription('Dale una nalgada a alguien')
+            .addUserOption(opt => opt.setName('usuario').setDescription('Usuario a darle nalgada').setRequired(true)))
         .setContexts(CONTEXTS.ALL)
         .setIntegrationTypes(INTEGRATION_TYPES.ALL),
 
