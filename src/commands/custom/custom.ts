@@ -330,8 +330,7 @@ async function showCommandListNavigation(
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 300000,
-        max: 1
+        time: 300000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -344,10 +343,9 @@ async function showCommandListNavigation(
         }
 
         await buttonInteraction.deferUpdate();
+        collector.stop('action_taken');
 
         try {
-            collector.stop('action_taken');
-
             if (buttonInteraction.customId === 'list_prev') {
                 await showCommandListNavigation(interaction, commands, currentPage - 1);
             } else if (buttonInteraction.customId === 'list_next') {
@@ -357,7 +355,6 @@ async function showCommandListNavigation(
             }
         } catch (error) {
             console.error('Error en navegación de lista:', error);
-            collector.stop('error');
         }
     });
 
@@ -409,8 +406,7 @@ async function showCommandListNavigationPrefix(
 
     const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 300000,
-        max: 1
+        time: 300000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -423,10 +419,9 @@ async function showCommandListNavigationPrefix(
         }
 
         await buttonInteraction.deferUpdate();
+        collector.stop('action_taken');
 
         try {
-            collector.stop('action_taken');
-
             if (buttonInteraction.customId === 'list_prev') {
                 await showCommandListNavigationPrefix(message, commands, currentPage - 1, userId);
             } else if (buttonInteraction.customId === 'list_next') {
@@ -436,7 +431,6 @@ async function showCommandListNavigationPrefix(
             }
         } catch (error) {
             console.error('Error en navegación de lista:', error);
-            collector.stop('error');
         }
     });
 
@@ -577,8 +571,7 @@ async function showProposalNavigation(
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000,
-        max: 1
+        time: 600000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -591,10 +584,9 @@ async function showProposalNavigation(
         }
 
         await buttonInteraction.deferUpdate();
+        collector.stop('action_taken');
 
         try {
-            collector.stop('action_taken');
-
             if (buttonInteraction.customId === 'proposal_prev') {
                 await showProposalNavigation(interaction, proposals, currentIndex - 1, customManager, commandExistsCache);
             } else if (buttonInteraction.customId === 'proposal_next') {
@@ -606,7 +598,6 @@ async function showProposalNavigation(
             }
         } catch (error) {
             console.error('Error en collector:', error);
-            collector.stop('error');
         }
     });
 
@@ -733,13 +724,9 @@ async function showProposalNavigationPrefix(
         components: [buttons]
     });
 
-    // ✅ Los collectors previos se detienen automáticamente al editar el mensaje
-    // No necesitamos verificación manual ya que usamos max: 1
-
     const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000, // 10 minutos
-        max: 1 // ✅ CRÍTICO: Solo aceptar 1 interacción antes de recrear el collector
+        time: 600000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -752,11 +739,9 @@ async function showProposalNavigationPrefix(
         }
 
         await buttonInteraction.deferUpdate();
+        collector.stop('action_taken');
 
         try {
-            // ✅ CRÍTICO: Detener el collector inmediatamente después de procesar
-            collector.stop('action_taken');
-
             if (buttonInteraction.customId === 'proposal_prev') {
                 await showProposalNavigationPrefix(message, proposals, currentIndex - 1, customManager, moderatorId);
             } else if (buttonInteraction.customId === 'proposal_next') {
@@ -768,8 +753,6 @@ async function showProposalNavigationPrefix(
             }
         } catch (error) {
             console.error('Error en collector:', error);
-            // ✅ Asegurar que el collector se detenga incluso si hay error
-            collector.stop('error');
         }
     });
 
@@ -954,8 +937,7 @@ async function showEditNavigation(
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000,
-        max: 1 // ✅ Solo 1 interacción
+        time: 600000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -968,10 +950,9 @@ async function showEditNavigation(
         }
 
         await buttonInteraction.deferUpdate();
+        collector.stop('action_taken');
 
         try {
-            collector.stop('action_taken');
-
             if (buttonInteraction.customId === 'edit_prev') {
                 await showEditNavigation(interaction, commandName, values, currentIndex - 1, customManager);
             } else if (buttonInteraction.customId === 'edit_next') {
@@ -986,7 +967,6 @@ async function showEditNavigation(
             }
         } catch (error) {
             console.error('Error en editor:', error);
-            collector.stop('error');
         }
     });
 
@@ -1035,8 +1015,7 @@ async function confirmDeleteValue(
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 30000,
-        max: 1 // ✅ Solo 1 interacción
+        time: 30000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -1049,7 +1028,6 @@ async function confirmDeleteValue(
         }
 
         await buttonInteraction.deferUpdate();
-
         collector.stop('action_taken');
 
         if (buttonInteraction.customId === 'confirm_delete_value') {
@@ -1143,8 +1121,7 @@ async function showEditNavigationPrefix(
 
     const collector = message.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000,
-        max: 1
+        time: 600000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -1157,10 +1134,9 @@ async function showEditNavigationPrefix(
         }
 
         await buttonInteraction.deferUpdate();
+        collector.stop('action_taken');
 
         try {
-            collector.stop('action_taken');
-
             if (buttonInteraction.customId === 'edit_prev') {
                 await showEditNavigationPrefix(message, commandName, values, currentIndex - 1, customManager, moderatorId);
             } else if (buttonInteraction.customId === 'edit_next') {
@@ -1195,7 +1171,6 @@ async function showEditNavigationPrefix(
             }
         } catch (error) {
             console.error('Error en editor:', error);
-            collector.stop('error');
         }
     });
 
@@ -1262,8 +1237,7 @@ async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Pr
 
     const collector = (await interaction.fetchReply()).createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 30000,
-        max: 1
+        time: 30000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -1276,7 +1250,6 @@ async function handleEliminarSlash(interaction: ChatInputCommandInteraction): Pr
         }
 
         await buttonInteraction.deferUpdate();
-
         collector.stop('action_taken');
 
         if (buttonInteraction.customId === 'confirm_delete_command') {
@@ -1370,8 +1343,7 @@ async function handleEliminarPrefix(message: Message, args: string[]): Promise<v
 
     const collector = reply.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 30000,
-        max: 1
+        time: 30000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -1384,7 +1356,6 @@ async function handleEliminarPrefix(message: Message, args: string[]): Promise<v
         }
 
         await buttonInteraction.deferUpdate();
-
         collector.stop('action_taken');
 
         if (buttonInteraction.customId === 'confirm_delete_command') {
