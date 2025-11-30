@@ -10,6 +10,7 @@ import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/con
 import { handleCommandError } from '../../utils/errorHandler.js';
 import { config } from '../../config.js';
 import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
+import { sendMessage, createErrorEmbed } from '../../utils/messageUtils.js';
 
 export const user: HybridCommand = {
     type: 'hybrid',
@@ -210,7 +211,11 @@ async function handleUserInfo(interaction: ChatInputCommandInteraction): Promise
 
 async function handleUserInfoPrefix(message: Message, args: string[]): Promise<void> {
     if (!message.guild) {
-        await message.reply('❌ Este comando solo puede usarse en un servidor.');
+        const embed = createErrorEmbed(
+            '🏠 Solo en Servidores',
+            'Este comando solo puede usarse en un servidor.'
+        );
+        await sendMessage(message, { embed });
         return;
     }
 
@@ -223,14 +228,22 @@ async function handleUserInfoPrefix(message: Message, args: string[]): Promise<v
         member = mentionedMember;
     } else if (query) {
         if (query.length < 3) {
-            await message.reply('❌ El usuario a mencionar debe tener al menos 3 caracteres.');
+            const embed = createErrorEmbed(
+                '⚠️ Consulta Demasiado Corta',
+                'El usuario a mencionar debe tener al menos 3 caracteres.'
+            );
+            await sendMessage(message, { embed });
             return;
         }
 
         member = await UserSearchHelper.findMember(message.guild, query);
 
         if (!member) {
-            await message.reply(`❌ No se encontró al usuario: **${query}**`);
+            const embed = createErrorEmbed(
+                '🔍 Usuario No Encontrado',
+                `No se encontró al usuario: **${query}**`
+            );
+            await sendMessage(message, { embed });
             return;
         }
     } else {
@@ -238,7 +251,11 @@ async function handleUserInfoPrefix(message: Message, args: string[]): Promise<v
     }
 
     if (!member) {
-        await message.reply('❌ No se pudo obtener la información del usuario.');
+        const embed = createErrorEmbed(
+            '❌ Error',
+            'No se pudo obtener la información del usuario.'
+        );
+        await sendMessage(message, { embed });
         return;
     }
 

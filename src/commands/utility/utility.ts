@@ -16,6 +16,7 @@ import { config } from '../../config.js';
 import { Validators } from '../../utils/validators.js';
 import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
 import { InteractionStatsManager } from '../../managers/InteractionStatsManager.js';
+import { sendMessage, createErrorEmbed, createInfoEmbed } from '../../utils/messageUtils.js';
 
 export const utility: HybridCommand = {
     type: 'hybrid',
@@ -499,19 +500,21 @@ async function showGeneralInfoPrefix(
 
 async function handleCooldownStats(interaction: ChatInputCommandInteraction): Promise<void> {
     if (interaction.memberPermissions && !interaction.memberPermissions.has(PermissionFlagsBits.Administrator)) {
-        await interaction.reply({
-            content: '❌ Necesitas permisos de **Administrador** para usar este comando.',
-            flags: MessageFlags.Ephemeral
-        });
+        const embed = createErrorEmbed(
+            '🔒 Permiso Denegado',
+            'Necesitas permisos de **Administrador** para usar este comando.'
+        );
+        await sendMessage(interaction, { embed, ephemeral: true });
         return;
     }
 
     const cooldownManager = (interaction.client as BotClient).cooldownManager;
     if (!cooldownManager) {
-        await interaction.reply({
-            content: '❌ El sistema de cooldowns no está disponible.',
-            flags: MessageFlags.Ephemeral
-        });
+        const embed = createErrorEmbed(
+            '⚙️ Sistema No Disponible',
+            'El sistema de cooldowns no está disponible en este momento.'
+        );
+        await sendMessage(interaction, { embed, ephemeral: true });
         return;
     }
 

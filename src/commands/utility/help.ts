@@ -17,6 +17,7 @@ import { CATEGORIES, COLORS, CONTEXTS, INTEGRATION_TYPES } from '../../utils/con
 import { handleCommandError } from '../../utils/errorHandler.js';
 import { BotClient } from '../../types/BotClient.js';
 import { config } from '../../config.js';
+import { sendMessage, createErrorEmbed } from '../../utils/messageUtils.js';
 
 export const help: UnifiedCommand & {
     handleAutocomplete?: (interaction: AutocompleteInteraction) => Promise<void>;
@@ -106,10 +107,11 @@ export const help: UnifiedCommand & {
         if (commandId !== 'help') return;
 
         if (userId && userId !== interaction.user.id) {
-            await interaction.reply({
-                content: '❌ No puedes interactuar con el menú de ayuda de otra persona. Usa `/help` para obtener tu propio menú.',
-                ephemeral: true
-            });
+            const embed = createErrorEmbed(
+                '🚫 Acceso Denegado',
+                'No puedes interactuar con el menú de ayuda de otra persona.\n\nUsa `/help` para obtener tu propio menú.'
+            );
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             return;
         }
 
@@ -130,10 +132,11 @@ export const help: UnifiedCommand & {
         if (commandId !== 'help') return;
 
         if (userId && userId !== interaction.user.id) {
-            await interaction.reply({
-                content: '❌ No puedes interactuar con el menú de ayuda de otra persona. Usa `/help` para obtener tu propio menú.',
-                ephemeral: true
-            });
+            const embed = createErrorEmbed(
+                '🚫 Acceso Denegado',
+                'No puedes interactuar con el menú de ayuda de otra persona.\n\nUsa `/help` para obtener tu propio menú.'
+            );
+            await interaction.reply({ embeds: [embed], ephemeral: true });
             return;
         }
 
@@ -158,12 +161,7 @@ async function showCategoryMenu(
 ): Promise<void> {
     const userId = source instanceof Message ? source.author.id : source.user.id;
     const message = await buildCategoryMenuMessage(client, userId);
-
-    if (source instanceof Message) {
-        await source.reply(message);
-    } else {
-        await source.reply(message);
-    }
+    await source.reply(message);
 }
 
 /**
@@ -464,24 +462,22 @@ async function showCommandDetails(
     const command = client.commands.get(commandName);
 
     if (!command) {
-        const errorMessage = `❌ No se encontró el comando **${commandName}**.\nUsa \`${config.prefix}help\` o \`/help\` para ver todos los comandos.`;
+        const embed = createErrorEmbed(
+            '🔍 Comando No Encontrado',
+            `No se encontró el comando **${commandName}**.\n\nUsa \`${config.prefix}help\` o \`/help\` para ver todos los comandos disponibles.`
+        );
 
-        if (source instanceof Message) {
-            await source.reply(errorMessage);
-        } else {
-            await source.reply({ content: errorMessage, ephemeral: true });
-        }
+        await sendMessage(source, { embed, ephemeral: true });
         return;
     }
 
     if (command.category === CATEGORIES.DEVELOPER) {
-        const errorMessage = `❌ El comando **${commandName}** no está disponible.`;
+        const embed = createErrorEmbed(
+            '🔒 Comando No Disponible',
+            `El comando **${commandName}** no está disponible.`
+        );
 
-        if (source instanceof Message) {
-            await source.reply(errorMessage);
-        } else {
-            await source.reply({ content: errorMessage, ephemeral: true });
-        }
+        await sendMessage(source, { embed, ephemeral: true });
         return;
     }
 
@@ -557,11 +553,7 @@ async function showCommandDetails(
         });
     }
 
-    if (source instanceof Message) {
-        await source.reply({ embeds: [embed] });
-    } else {
-        await source.reply({ embeds: [embed] });
-    }
+    await sendMessage(source, { embed });
 }
 
 /**

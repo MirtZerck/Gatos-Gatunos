@@ -13,6 +13,7 @@ import { CATEGORIES, CONTEXTS, INTEGRATION_TYPES } from "../../utils/constants.j
 import { logger } from "../../utils/logger.js";
 import { getRandomImage, getRatingInfo } from "../../utils/danbooru.js";
 import { config } from "../../config.js";
+import { sendMessage, createErrorEmbed, createWarningEmbed } from "../../utils/messageUtils.js";
 
 export const danbooru: HybridCommand = {
     type: "hybrid",
@@ -71,26 +72,32 @@ export const danbooru: HybridCommand = {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             const hasAuth = !!config.danbooruUsername;
 
-            let responseMessage = `❌ ${errorMessage}`;
+            let description = errorMessage;
 
-            if (errorMessage.includes('No se encontraron imágenes') && query) {
-                responseMessage += '\n\n💡 **Posibles causas:**';
-                responseMessage += '\n• El tag podría no existir o estar mal escrito';
-                responseMessage += '\n• El contenido podría estar restringido a cuentas Gold de Danbooru';
+            const isSearchError = errorMessage.includes('No se encontr') ||
+                                 errorMessage.includes('No se pudo obtener');
+
+            if (isSearchError && query) {
+                description = `${errorMessage}\n\n**💡 Posibles causas:**\n`;
+                description += '• El tag podría no existir o estar mal escrito\n';
+                description += '• El contenido podría estar restringido a cuentas Gold de Danbooru';
 
                 if (!hasAuth) {
-                    responseMessage += '\n• No hay credenciales de Danbooru configuradas (algunas búsquedas requieren autenticación)';
-                    responseMessage += '\n\n💎 Considera configurar una cuenta de Danbooru para acceder a más contenido.';
+                    description += '\n• No hay credenciales de Danbooru configuradas (algunas búsquedas requieren autenticación)';
+                    description += '\n\n💎 Considera configurar una cuenta de Danbooru para acceder a más contenido.';
                 } else {
-                    responseMessage += '\n\n💎 Tu cuenta actual podría no tener acceso a este contenido.';
+                    description += '\n\n💎 Tu cuenta actual podría no tener acceso a este contenido.';
                 }
             } else {
-                responseMessage += '\n\nPor favor, intenta de nuevo más tarde.';
+                description += '\n\nPor favor, intenta de nuevo más tarde.';
             }
 
-            await interaction.editReply({
-                content: responseMessage
-            });
+            const embed = createErrorEmbed(
+                '❌ Error al Obtener Imagen',
+                description
+            );
+
+            await interaction.editReply({ embeds: [embed] });
         }
     },
 
@@ -102,7 +109,11 @@ export const danbooru: HybridCommand = {
             isNSFW = true;
         } else {
             if (!message.channel) {
-                await message.reply('❌ No se pudo obtener información del canal.');
+                const embed = createErrorEmbed(
+                    '❌ Error de Canal',
+                    'No se pudo obtener información del canal.'
+                );
+                await sendMessage(message, { embed });
                 return;
             }
 
@@ -113,12 +124,14 @@ export const danbooru: HybridCommand = {
         }
 
         if (!isNSFW) {
-            await message.reply(
-                '🔞 Este comando solo puede usarse en:\n' +
+            const embed = createWarningEmbed(
+                '🔞 Canal NSFW Requerido',
+                'Este comando solo puede usarse en:\n' +
                 '• Canales de servidor marcados como NSFW\n' +
                 '• Mensajes directos (requiere verificación de mayoría de edad)\n\n' +
                 '💡 Para usar este comando en un servidor, marca el canal como NSFW en la configuración del canal.'
             );
+            await sendMessage(message, { embed });
             return;
         }
 
@@ -161,27 +174,32 @@ export const danbooru: HybridCommand = {
             const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             const hasAuth = !!config.danbooruUsername;
 
-            let responseMessage = `❌ ${errorMessage}`;
+            let description = errorMessage;
 
-            if (errorMessage.includes('No se encontraron imágenes') && query) {
-                responseMessage += '\n\n💡 **Posibles causas:**';
-                responseMessage += '\n• El tag podría no existir o estar mal escrito';
-                responseMessage += '\n• El contenido podría estar restringido a cuentas Gold de Danbooru';
+            const isSearchError = errorMessage.includes('No se encontr') ||
+                                 errorMessage.includes('No se pudo obtener');
+
+            if (isSearchError && query) {
+                description = `${errorMessage}\n\n**💡 Posibles causas:**\n`;
+                description += '• El tag podría no existir o estar mal escrito\n';
+                description += '• El contenido podría estar restringido a cuentas Gold de Danbooru';
 
                 if (!hasAuth) {
-                    responseMessage += '\n• No hay credenciales de Danbooru configuradas (algunas búsquedas requieren autenticación)';
-                    responseMessage += '\n\n💎 Considera configurar una cuenta de Danbooru para acceder a más contenido.';
+                    description += '\n• No hay credenciales de Danbooru configuradas (algunas búsquedas requieren autenticación)';
+                    description += '\n\n💎 Considera configurar una cuenta de Danbooru para acceder a más contenido.';
                 } else {
-                    responseMessage += '\n\n💎 Tu cuenta actual podría no tener acceso a este contenido.';
+                    description += '\n\n💎 Tu cuenta actual podría no tener acceso a este contenido.';
                 }
             } else {
-                responseMessage += '\n\nPor favor, intenta de nuevo más tarde.';
+                description += '\n\nPor favor, intenta de nuevo más tarde.';
             }
 
-            await loadingMessage.edit({
-                content: responseMessage,
-                embeds: []
-            });
+            const embed = createErrorEmbed(
+                '❌ Error al Obtener Imagen',
+                description
+            );
+
+            await loadingMessage.edit({ content: null, embeds: [embed] });
         }
     }
 }

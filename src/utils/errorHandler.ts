@@ -1,9 +1,11 @@
 import {
     ChatInputCommandInteraction,
     Message,
-    MessageFlags
+    MessageFlags,
+    EmbedBuilder
 } from 'discord.js';
 import { logger } from './logger.js';
+import { sendMessage, createErrorEmbed, createWarningEmbed } from './messageUtils.js';
 
 /**
  * *Tipos de errores manejados por el sistema.
@@ -91,40 +93,53 @@ export async function handleCommandError(
 ): Promise<void> {
     logger.error(commandName, 'Error en comando', error)
 
-    let userMessage = '❌ Ocurrió un error inesperado. Por favor, intenta de nuevo.'
+    let errorTitle = '❌ Error';
+    let errorDescription = 'Ocurrió un error inesperado. Por favor, intenta de nuevo.';
+    let errorColor = 0xFF0000;
     let shouldLog = true;
 
     if (error instanceof CommandError) {
-        userMessage = error.userMessage || userMessage;
+        errorDescription = error.userMessage || errorDescription;
 
         switch (error.type) {
             case ErrorType.API_ERROR:
                 logger.error(commandName, `API ERROR: ${error.message}`);
+                errorTitle = '🔌 Error de API';
+                errorColor = 0xFF4444;
                 shouldLog = false;
                 break;
 
             case ErrorType.VALIDATION_ERROR:
                 logger.warn(commandName, `Validación fallida: ${error.message}`);
+                errorTitle = '⚠️ Datos Inválidos';
+                errorColor = 0xFFA500;
                 shouldLog = false;
                 break
 
             case ErrorType.PERMISSION_ERROR:
                 logger.warn(commandName, `Permiso denegado: ${error.message}`);
+                errorTitle = '🔒 Permiso Denegado';
+                errorColor = 0xFF6B6B;
                 shouldLog = false;
                 break;
 
             case ErrorType.RATE_LIMIT:
                 logger.warn(commandName, 'Rate limit alcanzado')
-                userMessage = `⏱️ Estás usando los comandos muy rápido. Espera un momento.`
+                errorTitle = '⏱️ Demasiado Rápido';
+                errorDescription = 'Estás usando los comandos muy rápido. Espera un momento.';
+                errorColor = 0xFFAA00;
                 break;
 
             case ErrorType.NOT_FOUND:
                 logger.warn(commandName, `Recurso no encontrado: ${error.message}`);
+                errorTitle = '🔍 No Encontrado';
+                errorColor = 0xFF9800;
                 shouldLog = false;
                 break;
 
             case ErrorType.UNKNOWN:
                 logger.error(commandName, `Error desconocido: ${error.message}`);
+                errorTitle = '❓ Error Desconocido';
                 break;
         }
     } else if (error instanceof Error) {
@@ -132,20 +147,19 @@ export async function handleCommandError(
     }
 
     try {
-        if (context instanceof ChatInputCommandInteraction) {
+        const errorEmbed = new EmbedBuilder()
+            .setTitle(errorTitle)
+            .setDescription(errorDescription)
+            .setColor(errorColor)
+            .setFooter({ text: `Comando: ${commandName}` })
+            .setTimestamp();
 
-            if (context.replied || context.deferred) {
-                await context.editReply({ content: userMessage, embeds: [] });
-            } else {
-                await context.reply({ content: userMessage, flags: MessageFlags.Ephemeral });
-            }
-        } else {
-            await context.reply(userMessage);
-
-        }
+        await sendMessage(context, {
+            embed: errorEmbed,
+            ephemeral: true
+        });
     } catch (replyError) {
         logger.error(commandName, 'No se pudo responder al usuario', replyError)
-
     }
 }
 

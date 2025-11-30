@@ -13,6 +13,7 @@ import { config } from '../../config.js';
 import { BotClient } from '../../types/BotClient.js';
 import { BlockManager } from '../../managers/BlockManager.js';
 import { UserSearchHelper } from '../../utils/userSearchHelpers.js';
+import { sendMessage, createErrorEmbed, createSuccessEmbed, createInfoEmbed } from '../../utils/messageUtils.js';
 
 export const block: HybridCommand = {
     type: 'hybrid',
@@ -84,7 +85,11 @@ export const block: HybridCommand = {
             const blockManager = (message.client as BotClient).blockManager;
 
             if (!blockManager) {
-                await message.reply('❌ El sistema de bloqueos no está disponible. Firebase no está configurado.');
+                const embed = createErrorEmbed(
+                    '⚙️ Sistema No Disponible',
+                    'El sistema de bloqueos no está disponible. Firebase no está configurado.'
+                );
+                await sendMessage(message, { embed });
                 return;
             }
 
@@ -287,7 +292,11 @@ async function handleBlockPrefix(
     const query = args[1] || message.mentions.users.first()?.id;
 
     if (!query) {
-        await message.reply('❌ Menciona a un usuario o usa su ID.');
+        const embed = createErrorEmbed(
+            '❌ Usuario Requerido',
+            'Menciona a un usuario o usa su ID.'
+        );
+        await sendMessage(message, { embed });
         return;
     }
 
@@ -296,7 +305,11 @@ async function handleBlockPrefix(
     if (message.guild) {
         const targetMember = await UserSearchHelper.findMember(message.guild, query);
         if (!targetMember) {
-            await message.reply(`❌ No se encontró al usuario: **${query}**`);
+            const embed = createErrorEmbed(
+                '🔍 Usuario No Encontrado',
+                `No se encontró al usuario: **${query}**`
+            );
+            await sendMessage(message, { embed });
             return;
         }
         target = targetMember.user;
@@ -304,7 +317,11 @@ async function handleBlockPrefix(
         try {
             target = await message.client.users.fetch(query);
         } catch {
-            await message.reply(`❌ No se encontró al usuario: **${query}**`);
+            const embed = createErrorEmbed(
+                '🔍 Usuario No Encontrado',
+                `No se encontró al usuario: **${query}**`
+            );
+            await sendMessage(message, { embed });
             return;
         }
     }
@@ -314,7 +331,11 @@ async function handleBlockPrefix(
         Validators.validateNotBot(target);
     } catch (error) {
         if (error instanceof CommandError) {
-            await message.reply(error.userMessage || '❌ Validación fallida');
+            const embed = createErrorEmbed(
+                '⚠️ Validación Fallida',
+                error.userMessage || 'Validación fallida'
+            );
+            await sendMessage(message, { embed });
             return;
         }
         throw error;
@@ -323,7 +344,11 @@ async function handleBlockPrefix(
     const alreadyBlocked = await blockManager.isBlocked(message.author.id, target.id);
 
     if (alreadyBlocked) {
-        await message.reply(`⚠️ Ya has bloqueado a **${target.displayName}**.`);
+        const embed = createInfoEmbed(
+            '⚠️ Ya Bloqueado',
+            `Ya has bloqueado a **${target.displayName}**.`
+        );
+        await sendMessage(message, { embed });
         return;
     }
 
@@ -339,9 +364,13 @@ async function handleBlockPrefix(
             .setFooter({ text: `Usa ${config.prefix}block unblock @${target.tag} para desbloquear` })
             .setTimestamp();
 
-        await message.reply({ embeds: [embed] });
+        await sendMessage(message, { embed });
     } else {
-        await message.reply('❌ Hubo un error al bloquear al usuario. Intenta de nuevo.');
+        const embed = createErrorEmbed(
+            '❌ Error',
+            'Hubo un error al bloquear al usuario. Intenta de nuevo.'
+        );
+        await sendMessage(message, { embed });
     }
 }
 
@@ -353,7 +382,11 @@ async function handleUnblockPrefix(
     const query = args[1] || message.mentions.users.first()?.id;
 
     if (!query) {
-        await message.reply('❌ Menciona a un usuario o usa su ID.');
+        const embed = createErrorEmbed(
+            '❌ Usuario Requerido',
+            'Menciona a un usuario o usa su ID.'
+        );
+        await sendMessage(message, { embed });
         return;
     }
 
@@ -362,7 +395,11 @@ async function handleUnblockPrefix(
     if (message.guild) {
         const targetMember = await UserSearchHelper.findMember(message.guild, query);
         if (!targetMember) {
-            await message.reply(`❌ No se encontró al usuario: **${query}**`);
+            const embed = createErrorEmbed(
+                '🔍 Usuario No Encontrado',
+                `No se encontró al usuario: **${query}**`
+            );
+            await sendMessage(message, { embed });
             return;
         }
         target = targetMember.user;
@@ -370,7 +407,11 @@ async function handleUnblockPrefix(
         try {
             target = await message.client.users.fetch(query);
         } catch {
-            await message.reply(`❌ No se encontró al usuario: **${query}**`);
+            const embed = createErrorEmbed(
+                '🔍 Usuario No Encontrado',
+                `No se encontró al usuario: **${query}**`
+            );
+            await sendMessage(message, { embed });
             return;
         }
     }
@@ -380,7 +421,11 @@ async function handleUnblockPrefix(
         Validators.validateNotBot(target);
     } catch (error) {
         if (error instanceof CommandError) {
-            await message.reply(error.userMessage || '❌ Validación fallida');
+            const embed = createErrorEmbed(
+                '⚠️ Validación Fallida',
+                error.userMessage || 'Validación fallida'
+            );
+            await sendMessage(message, { embed });
             return;
         }
         throw error;
