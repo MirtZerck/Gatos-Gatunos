@@ -12,9 +12,18 @@ export default {
 
     async execute(client: BotClient, message: Message) {
         try {
-            logger.debug('AI-Event', `🔔 Evento recibido de ${message.author.tag}: "${message.content.substring(0, 50)}"`);
-
             if (!client.user) return;
+
+            const isPotentiallyRelevant = !message.author.bot &&
+                (message.mentions.has(client.user.id) ||
+                    message.channel.isDMBased() ||
+                    message.reference);
+
+            if (!isPotentiallyRelevant) {
+                return;
+            }
+
+            logger.debug('AI-Event', `🔔 Evento recibido de ${message.author.tag}: "${message.content.substring(0, 50)}"`);
 
             const botMention = `<@${client.user.id}>`;
             const botMentionNick = `<@!${client.user.id}>`;
