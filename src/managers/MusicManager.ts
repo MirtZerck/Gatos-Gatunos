@@ -8,7 +8,8 @@ import {
     TextChannel,
     Message,
     GuildMember,
-    VoiceBasedChannel
+    VoiceBasedChannel,
+    ChatInputCommandInteraction
 } from 'discord.js';
 import { BotClient } from '../types/BotClient.js';
 import { config } from '../config.js';
@@ -44,10 +45,11 @@ export class MusicManager {
     public kazagumo: Kazagumo;
     private client: BotClient;
     private playerMessages: Map<string, Message> = new Map();
+    private searchMessages: Map<string, Message | ChatInputCommandInteraction> = new Map();
     private textChannels: Map<string, TextChannel> = new Map();
     private trackHistory: Map<string, KazagumoTrack[]> = new Map();
     private inactivityTimers: Map<string, NodeJS.Timeout> = new Map();
-    private skipHistorySave: Set<string> = new Set(); // Evita guardar en historial al usar "anterior"
+    private skipHistorySave: Set<string> = new Set();
 
     constructor(client: BotClient) {
         this.client = client;
@@ -98,6 +100,7 @@ export class MusicManager {
                 this.clearInactivityTimer(player.guildId);
             }
 
+            await this.deleteSearchMessage(player.guildId);
             await this.sendPlayerEmbed(player, track);
         });
 
@@ -144,21 +147,17 @@ export class MusicManager {
         });
     }
 
-    /**
-     * Reproduce una cancion o la agrega a la cola
-     */
     async play(
         voiceChannel: VoiceBasedChannel,
         textChannel: TextChannel,
         query: string,
-        requester: GuildMember
-    ): Promise<KazagumoSearchResult> {
+        requester: GuildMember,
+        searchMessage?: Message | ChatInputCommandInteraction
+    ): Promise<{ result: KazagumoSearchResult; alreadyPlaying: boolean }> {
         const guildId = voiceChannel.guild.id;
 
-        // Guardar canal de texto
         this.textChannels.set(guildId, textChannel);
 
-        // Obtener o crear player
         let player = this.kazagumo.players.get(guildId);
 
         if (!player) {
@@ -171,14 +170,14 @@ export class MusicManager {
             });
         }
 
-        // Buscar cancion
         const result = await this.kazagumo.search(query, { requester });
 
         if (!result.tracks.length) {
             throw new Error('No se encontraron resultados');
         }
 
-        // Agregar a la cola
+        const wasPlaying = player.playing || player.paused;
+
         if (result.type === 'PLAYLIST') {
             for (const track of result.tracks) {
                 player.queue.add(track);
@@ -195,8 +194,7 @@ export class MusicManager {
             const track = result.tracks[0];
             player.queue.add(track);
 
-            // Si ya hay algo reproduciendose, notificar que se agrego a la cola
-            if (player.playing || player.paused) {
+            if (wasPlaying) {
                 const embed = new EmbedBuilder()
                     .setColor(COLORS.SUCCESS)
                     .setDescription(`${EMOJIS.SUCCESS} **Agregado a la cola:** [${track.title}](${track.uri})`)
@@ -210,12 +208,14 @@ export class MusicManager {
             }
         }
 
-        // Iniciar reproduccion si no esta reproduciendo
-        if (!player.playing && !player.paused) {
+        if (!wasPlaying) {
+            if (searchMessage) {
+                this.searchMessages.set(guildId, searchMessage);
+            }
             await player.play();
         }
 
-        return result;
+        return { result, alreadyPlaying: wasPlaying };
     }
 
     /**
@@ -422,18 +422,27 @@ export class MusicManager {
         return [row1, row2];
     }
 
-    /**
-     * Elimina el mensaje del reproductor
-     */
     async deletePlayerMessage(guildId: string): Promise<void> {
         const message = this.playerMessages.get(guildId);
         if (message) {
             try {
                 await message.delete();
-            } catch {
-                // El mensaje ya fue eliminado
-            }
+            } catch {}
             this.playerMessages.delete(guildId);
+        }
+    }
+
+    async deleteSearchMessage(guildId: string): Promise<void> {
+        const message = this.searchMessages.get(guildId);
+        if (message) {
+            try {
+                if (message instanceof Message) {
+                    await message.delete();
+                } else {
+                    await message.deleteReply();
+                }
+            } catch {}
+            this.searchMessages.delete(guildId);
         }
     }
 
@@ -645,18 +654,18 @@ export class MusicManager {
         }
     }
 
-    /**
-     * Destruye el manager y limpia recursos
-     */
     destroy(): void {
-        // Limpiar todos los timers
         for (const [guildId] of this.inactivityTimers) {
             this.clearInactivityTimer(guildId);
         }
         for (const [guildId] of this.playerMessages) {
             this.deletePlayerMessage(guildId);
         }
+        for (const [guildId] of this.searchMessages) {
+            this.deleteSearchMessage(guildId);
+        }
         this.playerMessages.clear();
+        this.searchMessages.clear();
         this.textChannels.clear();
         this.trackHistory.clear();
         this.inactivityTimers.clear();

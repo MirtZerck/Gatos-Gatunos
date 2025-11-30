@@ -315,31 +315,41 @@ async function showHelp(message: Message): Promise<void> {
 }
 
 async function handlePlay(interaction: ChatInputCommandInteraction): Promise<void> {
-    await interaction.deferReply();
-
     const member = interaction.member as GuildMember;
     const voiceChannel = getVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
     const query = interaction.options.getString('query', true);
 
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0x1DB954)
+                .setDescription(`${EMOJIS.SEARCH} Buscando: **${query}**`)
+        ]
+    });
+
     try {
-        await musicManager.play(
+        const result = await musicManager.play(
             voiceChannel,
             interaction.channel as TextChannel,
             query,
-            member
+            member,
+            interaction
         );
 
+        if (result.alreadyPlaying) {
+            await interaction.deleteReply().catch(() => {});
+        }
+    } catch (error) {
+        logger.error('MusicCommand', 'Error en play', error);
         await interaction.editReply({
             embeds: [
                 new EmbedBuilder()
-                    .setColor(0x1DB954)
-                    .setDescription(`${EMOJIS.SEARCH} Buscando: **${query}**`)
+                    .setColor(COLORS.DANGER)
+                    .setDescription(`${EMOJIS.ERROR} No se pudo reproducir. Intenta con otra búsqueda o URL.`)
             ]
-        });
-    } catch (error) {
-        logger.error('MusicCommand', 'Error en play', error);
+        }).catch(() => {});
         throw new CommandError(
             ErrorType.UNKNOWN,
             'Error reproduciendo',
@@ -632,16 +642,35 @@ async function handlePlayPrefix(message: Message, args: string[]): Promise<void>
     const musicManager = getMusicManager(client);
     const query = args.join(' ');
 
+    const searchMsg = await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(0x1DB954)
+                .setDescription(`${EMOJIS.SEARCH} Buscando: **${query}**`)
+        ]
+    });
+
     try {
-        await musicManager.play(
+        const result = await musicManager.play(
             voiceChannel,
             message.channel as TextChannel,
             query,
-            member
+            member,
+            searchMsg
         );
-        await message.react(EMOJIS.MUSIC);
+
+        if (result.alreadyPlaying) {
+            await searchMsg.delete().catch(() => {});
+        }
     } catch (error) {
         logger.error('MusicCommand', 'Error en play prefix', error);
+        await searchMsg.edit({
+            embeds: [
+                new EmbedBuilder()
+                    .setColor(COLORS.DANGER)
+                    .setDescription(`${EMOJIS.ERROR} No se pudo reproducir. Intenta con otra búsqueda o URL.`)
+            ]
+        }).catch(() => {});
         throw new CommandError(
             ErrorType.UNKNOWN,
             'Error reproduciendo',
