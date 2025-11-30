@@ -9,6 +9,7 @@ import { FilterResult, TokenBudget } from './types.js';
 import { DEFAULT_AI_CONFIG, TOKEN_LIMITS } from './constants.js';
 import { logger } from '../../utils/logger.js';
 import type { BotClient } from '../../types/BotClient.js';
+import { sendMessage, createErrorEmbed, createWarningEmbed } from '../../utils/messageUtils.js';
 
 export class AIManager {
     private messageFilter: MessageFilter;
@@ -110,7 +111,7 @@ export class AIManager {
 
                 const isSlashCommand = message.interaction !== null;
                 const startsWithPrefix = message.content.trim().startsWith('*') ||
-                                       message.content.trim().startsWith('/');
+                    message.content.trim().startsWith('/');
                 const isFromCommand = isSlashCommand || startsWithPrefix;
 
                 if (!isFromCommand) {
@@ -139,7 +140,19 @@ export class AIManager {
             logger.error('AI', 'Error generando respuesta', error instanceof Error ? error : new Error(String(error)));
 
             if (error instanceof Error && error.message.includes('quota')) {
-                await message.reply('Lo siento, he alcanzado mi límite de conversaciones por hoy. Vuelve mañana!');
+                const embed = createWarningEmbed(
+                    '⏱️ Límite Alcanzado',
+                    'Lo siento, he alcanzado mi límite de conversaciones por hoy.\n\n' +
+                    '💡 Vuelve mañana para continuar charlando!'
+                );
+                await sendMessage(message, { embed });
+            } else {
+                const embed = createErrorEmbed(
+                    '❌ Error de IA',
+                    'Lo siento, hubo un problema al generar mi respuesta.\n\n' +
+                    'Por favor, intenta de nuevo en un momento.'
+                );
+                await sendMessage(message, { embed });
             }
         }
     }

@@ -82,7 +82,7 @@ export const DEFAULT_AI_CONFIG: AIConfig = {
 
 export const GEMINI_CONFIG: ProviderConfig = {
     apiKey: config.geminiApiKey,
-    model: 'gemini-2.0-flash',
+    model: 'gemini-2.5-flash-lite',
     temperature: 0.9,
     maxOutputTokens: 500,
     topP: 0.95,
