@@ -113,6 +113,18 @@ export class MusicManager {
             } else {
                 this.skipHistorySave.delete(player.guildId);
             }
+
+            if (player.queue.size === 0 && !player.queue.current) {
+                const channel = this.textChannels.get(player.guildId);
+                if (channel) {
+                    const embed = new EmbedBuilder()
+                        .setColor(COLORS.INFO)
+                        .setDescription(`${EMOJIS.MUSIC} La cola ha terminado. Agrega mas canciones o me desconectare en 5 minutos.`);
+                    await channel.send({ embeds: [embed] });
+                }
+                await this.deletePlayerMessage(player.guildId);
+                this.startInactivityTimer(player.guildId);
+            }
         });
 
         this.kazagumo.on('playerEmpty', async (player) => {
