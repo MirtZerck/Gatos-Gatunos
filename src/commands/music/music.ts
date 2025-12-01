@@ -696,7 +696,14 @@ async function handlePausePrefix(message: Message): Promise<void> {
 
     await player.pause(true);
     await musicManager.refreshPlayerEmbed(player);
-    await message.react(EMOJIS.PAUSE);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.PAUSE} Reproduccion pausada`)
+        ]
+    });
 }
 
 async function handleResumePrefix(message: Message): Promise<void> {
@@ -716,7 +723,14 @@ async function handleResumePrefix(message: Message): Promise<void> {
 
     await player.pause(false);
     await musicManager.refreshPlayerEmbed(player);
-    await message.react(EMOJIS.PLAY);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.PLAY} Reproduccion reanudada`)
+        ]
+    });
 }
 
 async function handleSkipPrefix(message: Message): Promise<void> {
@@ -730,8 +744,16 @@ async function handleSkipPrefix(message: Message): Promise<void> {
         throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
     }
 
+    const currentTrack = player.queue.current;
     await player.skip();
-    await message.react(EMOJIS.SKIP);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.SKIP} Saltando: **${currentTrack?.title || 'Cancion'}**`)
+        ]
+    });
 }
 
 async function handleStopPrefix(message: Message): Promise<void> {
@@ -746,7 +768,14 @@ async function handleStopPrefix(message: Message): Promise<void> {
     }
 
     await musicManager.stop(message.guildId!);
-    await message.react(EMOJIS.STOP);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.STOP} Reproduccion detenida y cola limpiada`)
+        ]
+    });
 }
 
 async function handleQueuePrefix(message: Message, args: string[]): Promise<void> {
@@ -848,7 +877,14 @@ async function handleShufflePrefix(message: Message): Promise<void> {
 
     player.queue.shuffle();
     await musicManager.refreshPlayerEmbed(player);
-    await message.react(EMOJIS.SHUFFLE);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.SHUFFLE} Cola mezclada aleatoriamente`)
+        ]
+    });
 }
 
 async function handleLoopPrefix(message: Message): Promise<void> {
@@ -893,7 +929,14 @@ async function handleJoinPrefix(message: Message): Promise<void> {
     const musicManager = getMusicManager(client);
 
     await musicManager.join(voiceChannel, message.channel as TextChannel);
-    await message.react(EMOJIS.SUCCESS);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.SUCCESS)
+                .setDescription(`${EMOJIS.SUCCESS} Conectado a **${voiceChannel.name}**`)
+        ]
+    });
 }
 
 async function handleLeavePrefix(message: Message): Promise<void> {
@@ -908,5 +951,12 @@ async function handleLeavePrefix(message: Message): Promise<void> {
     }
 
     await musicManager.leave(message.guildId!);
-    await message.react(EMOJIS.SUCCESS);
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.SUCCESS} Desconectado del canal de voz`)
+        ]
+    });
 }
