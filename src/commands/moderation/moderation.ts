@@ -188,7 +188,7 @@ export const moderation: HybridCommand = {
             if (!interaction.guild) {
                 await interaction.reply({
                     content: '❌ Este comando solo funciona en servidores.',
-                    ephemeral: true
+                    flags: [1 << 6]
                 });
                 return;
             }

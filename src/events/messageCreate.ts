@@ -4,6 +4,7 @@ import { config } from "../config.js";
 import { logger } from "../utils/logger.js";
 import { BotClient } from "../types/BotClient.js";
 import { AnsiFormatter } from "../utils/ansiFormatter.js";
+import { handleAutomod } from "./automodHandler.js";
 
 const devFormatMessages = new WeakMap<Message, boolean>();
 
@@ -20,6 +21,8 @@ export default {
 
     async execute(client: BotClient, message: Message) {
         if (message.author.bot) return;
+
+        await handleAutomod(message);
 
         let commandContent = message.content;
         let isDevFormat = false;

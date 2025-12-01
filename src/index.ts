@@ -50,6 +50,11 @@ async function main() {
             const blockManager = new BlockManager(firebaseAdminManager);
             client.blockManager = blockManager;
             logger.info('Bot', 'Sistema de bloqueos listo');
+
+            const { DiscordAutomodManager } = await import('./managers/DiscordAutomodManager.js');
+            const discordAutomodManager = new DiscordAutomodManager();
+            client.discordAutomodManager = discordAutomodManager;
+            logger.info('Bot', 'Sistema de AutoMod listo');
         } catch (error) {
             logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
             logger.warn('Bot', 'El bot continuará sin funcionalidades que requieren Firebase');
@@ -61,6 +66,11 @@ async function main() {
         logger.warn('Bot', '  - Estadísticas de interacciones (/utility stats)');
         logger.warn('Bot', '  - Configuración de zona horaria por servidor');
         logger.warn('Bot', '  - Memoria persistente de IA');
+
+        const { DiscordAutomodManager } = await import('./managers/DiscordAutomodManager.js');
+        const discordAutomodManager = new DiscordAutomodManager();
+        client.discordAutomodManager = discordAutomodManager;
+        logger.info('Bot', 'Sistema de AutoMod listo (sin Firebase)');
     }
 
     // Sistema de comandos
