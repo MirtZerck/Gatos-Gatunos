@@ -11,9 +11,10 @@ import {
     AutocompleteInteraction
 } from 'discord.js';
 import { HybridCommand } from '../../types/Command.js';
-import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES, COLORS } from '../../utils/constants.js';
+import { CONTEXTS, INTEGRATION_TYPES, CATEGORIES } from '../../utils/constants.js';
 import { Validators } from '../../utils/validators.js';
 import { handleCommandError, CommandError, ErrorType } from '../../utils/errorHandler.js';
+import { createSuccessEmbed, createInfoEmbed } from '../../utils/messageUtils.js';
 import { BotClient } from '../../types/BotClient.js';
 import { PRESET_NAMES, PRESET_VALUES, DiscordAutomodPreset } from '../../types/DiscordAutomod.js';
 
@@ -364,18 +365,14 @@ async function handleCreateKeywords(
         }
     );
 
-    const embed = new EmbedBuilder()
-        .setTitle('✅ Regla de AutoMod creada')
-        .setDescription(
-            `**Nombre:** ${name}\n` +
-            `**Tipo:** Palabras clave personalizadas\n` +
-            `**Palabras:** ${palabras.length} palabras\n` +
-            `**Acción:** ${getActionName(accion)}\n` +
-            `**ID:** \`${rule.id}\``
-        )
-        .setColor(COLORS.SUCCESS)
-        .setFooter({ text: '🎖️ Regla nativa de Discord' })
-        .setTimestamp();
+    const embed = createSuccessEmbed(
+        '✅ Regla de AutoMod creada',
+        `**Nombre:** ${name}\n` +
+        `**Tipo:** Palabras clave personalizadas\n` +
+        `**Palabras:** ${palabras.length} palabras\n` +
+        `**Acción:** ${getActionName(accion)}\n` +
+        `**ID:** \`${rule.id}\``
+    ).setFooter({ text: '🎖️ Regla nativa de Discord' });
 
     await interaction.editReply({ embeds: [embed] });
 }
@@ -403,17 +400,13 @@ async function handleCreatePreset(
         }
     );
 
-    const embed = new EmbedBuilder()
-        .setTitle('✅ Regla de AutoMod creada')
-        .setDescription(
-            `**Nombre:** ${name}\n` +
-            `**Tipo:** ${PRESET_NAMES[tipo]}\n` +
-            `**Acción:** ${getActionName(accion)}\n` +
-            `**ID:** \`${rule.id}\``
-        )
-        .setColor(COLORS.SUCCESS)
-        .setFooter({ text: '🎖️ Regla nativa de Discord' })
-        .setTimestamp();
+    const embed = createSuccessEmbed(
+        '✅ Regla de AutoMod creada',
+        `**Nombre:** ${name}\n` +
+        `**Tipo:** ${PRESET_NAMES[tipo]}\n` +
+        `**Acción:** ${getActionName(accion)}\n` +
+        `**ID:** \`${rule.id}\``
+    ).setFooter({ text: '🎖️ Regla nativa de Discord' });
 
     await interaction.editReply({ embeds: [embed] });
 }
@@ -437,17 +430,13 @@ async function handleCreateSpam(
         }
     );
 
-    const embed = new EmbedBuilder()
-        .setTitle('✅ Regla de AutoMod creada')
-        .setDescription(
-            `**Nombre:** ${name}\n` +
-            `**Tipo:** Anti-spam de Discord\n` +
-            `**Acción:** ${getActionName(accion)}\n` +
-            `**ID:** \`${rule.id}\``
-        )
-        .setColor(COLORS.SUCCESS)
-        .setFooter({ text: '🎖️ Regla nativa de Discord' })
-        .setTimestamp();
+    const embed = createSuccessEmbed(
+        '✅ Regla de AutoMod creada',
+        `**Nombre:** ${name}\n` +
+        `**Tipo:** Anti-spam de Discord\n` +
+        `**Acción:** ${getActionName(accion)}\n` +
+        `**ID:** \`${rule.id}\``
+    ).setFooter({ text: '🎖️ Regla nativa de Discord' });
 
     await interaction.editReply({ embeds: [embed] });
 }
@@ -475,19 +464,15 @@ async function handleCreateMentions(
         }
     );
 
-    const embed = new EmbedBuilder()
-        .setTitle('✅ Regla de AutoMod creada')
-        .setDescription(
-            `**Nombre:** ${name}\n` +
-            `**Tipo:** Menciones excesivas\n` +
-            `**Límite:** ${limite} menciones\n` +
-            `**Protección raids:** ${proteccionRaids ? 'Sí' : 'No'}\n` +
-            `**Acción:** ${getActionName(accion)}\n` +
-            `**ID:** \`${rule.id}\``
-        )
-        .setColor(COLORS.SUCCESS)
-        .setFooter({ text: '🎖️ Regla nativa de Discord' })
-        .setTimestamp();
+    const embed = createSuccessEmbed(
+        '✅ Regla de AutoMod creada',
+        `**Nombre:** ${name}\n` +
+        `**Tipo:** Menciones excesivas\n` +
+        `**Límite:** ${limite} menciones\n` +
+        `**Protección raids:** ${proteccionRaids ? 'Sí' : 'No'}\n` +
+        `**Acción:** ${getActionName(accion)}\n` +
+        `**ID:** \`${rule.id}\``
+    ).setFooter({ text: '🎖️ Regla nativa de Discord' });
 
     await interaction.editReply({ embeds: [embed] });
 }
@@ -499,12 +484,10 @@ async function handleList(
     const rules = await client.discordAutomodManager!.listRules(interaction.guild!);
 
     if (rules.length === 0) {
-        const embed = new EmbedBuilder()
-            .setTitle('📋 Reglas de AutoMod nativo')
-            .setDescription('No hay reglas configuradas.')
-            .setColor(COLORS.INFO)
-            .setFooter({ text: 'Usa /automod create para crear reglas' })
-            .setTimestamp();
+        const embed = createInfoEmbed(
+            '📋 Reglas de AutoMod nativo',
+            'No hay reglas configuradas.'
+        ).setFooter({ text: 'Usa /automod create para crear reglas' });
 
         await interaction.editReply({ embeds: [embed] });
         return;
@@ -522,12 +505,10 @@ async function handleList(
                (isProtected ? '\n   └ ⚠️ Regla protegida de Discord (no eliminable)' : '');
     }).join('\n\n');
 
-    const embed = new EmbedBuilder()
-        .setTitle('📋 Reglas de AutoMod nativo')
-        .setDescription(rulesList)
-        .setColor(COLORS.INFO)
-        .setFooter({ text: `Total: ${rules.length} reglas | 🎖️ Badge activo` })
-        .setTimestamp();
+    const embed = createInfoEmbed(
+        '📋 Reglas de AutoMod nativo',
+        rulesList
+    ).setFooter({ text: `Total: ${rules.length} reglas | 🎖️ Badge activo` });
 
     await interaction.editReply({ embeds: [embed] });
 }
@@ -540,11 +521,10 @@ async function handleDelete(
 
     await client.discordAutomodManager!.deleteRule(interaction.guild!, ruleId);
 
-    const embed = new EmbedBuilder()
-        .setTitle('🗑️ Regla eliminada')
-        .setDescription('La regla ha sido eliminada correctamente.')
-        .setColor(COLORS.SUCCESS)
-        .setTimestamp();
+    const embed = createSuccessEmbed(
+        '🗑️ Regla eliminada',
+        'La regla ha sido eliminada correctamente.'
+    );
 
     await interaction.editReply({ embeds: [embed] });
 }
@@ -558,11 +538,10 @@ async function handleToggle(
 
     await client.discordAutomodManager!.toggleRule(interaction.guild!, ruleId, activar);
 
-    const embed = new EmbedBuilder()
-        .setTitle(`${activar ? '✅' : '❌'} Regla ${activar ? 'activada' : 'desactivada'}`)
-        .setDescription(`La regla ha sido ${activar ? 'activada' : 'desactivada'}.`)
-        .setColor(activar ? COLORS.SUCCESS : COLORS.WARNING)
-        .setTimestamp();
+    const embed = createSuccessEmbed(
+        `${activar ? '✅' : '❌'} Regla ${activar ? 'activada' : 'desactivada'}`,
+        `La regla ha sido ${activar ? 'activada' : 'desactivada'}.`
+    );
 
     await interaction.editReply({ embeds: [embed] });
 }
