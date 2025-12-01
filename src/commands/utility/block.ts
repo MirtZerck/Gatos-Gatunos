@@ -21,9 +21,9 @@ export const block: HybridCommand = {
     description: 'Gestiona bloqueos de interacciones',
     category: CATEGORIES.UTILITY,
     subcommands: [
-        { name: 'block', aliases: ['bloquear'], description: 'Bloquea a un usuario' },
-        { name: 'unblock', aliases: ['desbloquear'], description: 'Desbloquea a un usuario' },
-        { name: 'list', aliases: ['lista', 'bloqueados'], description: 'Lista usuarios bloqueados' },
+        { name: 'add', aliases: ['bloquear', 'block', 'addblock'], description: 'Bloquea a un usuario' },
+        { name: 'unblock', aliases: ['desbloquear', 'removeblock'], description: 'Desbloquea a un usuario' },
+        { name: 'list', aliases: ['bloqueados', 'listblock'], description: 'Lista usuarios bloqueados' },
     ],
 
     data: new SlashCommandBuilder()
@@ -63,7 +63,7 @@ export const block: HybridCommand = {
             }
 
             switch (subcommand) {
-                case 'block':
+                case 'add':
                     await handleBlockSlash(interaction, blockManager);
                     break;
                 case 'unblock':
@@ -125,16 +125,19 @@ export const block: HybridCommand = {
             }
 
             switch (subcommand) {
+                case 'add':
                 case 'block':
                 case 'bloquear':
+                case 'addblock':
                     await handleBlockPrefix(message, args, blockManager);
                     break;
                 case 'unblock':
                 case 'desbloquear':
+                case 'removeblock':
                     await handleUnblockPrefix(message, args, blockManager);
                     break;
                 case 'list':
-                case 'lista':
+                case 'listblock':
                 case 'bloqueados':
                     await handleListPrefix(message, blockManager);
                     break;

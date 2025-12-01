@@ -37,7 +37,7 @@ export const custom: HybridCommand = {
     category: CATEGORIES.UTILITY,
     subcommands: [
         { name: 'proponer', aliases: ['propose', 'prop', 'sugerir'], description: 'Proponer un comando personalizado' },
-        { name: 'lista', aliases: ['list', 'comandos', 'ver'], description: 'Ver comandos disponibles' },
+        { name: 'lista', aliases: ['comandos', 'ver'], description: 'Ver comandos disponibles' },
         { name: 'gestionar', aliases: ['manage', 'revisar', 'propuestas'], description: 'Gestionar propuestas (Mod)' },
         { name: 'editar', aliases: ['edit', 'modificar'], description: 'Editar comando existente (Mod)' },
         { name: 'eliminar', aliases: ['delete', 'borrar', 'remove'], description: 'Eliminar comando (Mod)' },
@@ -151,7 +151,6 @@ export const custom: HybridCommand = {
                     await handleProponerPrefix(message, args.slice(1));
                     break;
                 case 'lista':
-                case 'list':
                 case 'comandos':
                 case 'ver':
                     await handleListaPrefix(message);
