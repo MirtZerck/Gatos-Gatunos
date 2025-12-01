@@ -824,7 +824,15 @@ async function handleVolumePrefix(message: Message, args: string[]): Promise<voi
     await player.setVolume(level);
     await musicManager.refreshPlayerEmbed(player);
 
-    await message.reply(`${EMOJIS.VOLUME} Volumen: **${level}%**`);
+    const volumeEmoji = level === 0 ? EMOJIS.VOLUME : level < 50 ? EMOJIS.VOLUME : EMOJIS.VOLUME;
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${volumeEmoji} Volumen ajustado a **${level}%**`)
+        ]
+    });
 }
 
 async function handleShufflePrefix(message: Message): Promise<void> {
@@ -869,7 +877,13 @@ async function handleLoopPrefix(message: Message): Promise<void> {
             ? 'Repetir cancion'
             : 'Repetir cola';
 
-    await message.reply(`${EMOJIS.REPEAT} Modo de repeticion: **${modeText}**`);
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(COLORS.INFO)
+                .setDescription(`${EMOJIS.REPEAT} Modo de repeticion: **${modeText}**`)
+        ]
+    });
 }
 
 async function handleJoinPrefix(message: Message): Promise<void> {
