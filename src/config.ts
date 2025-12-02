@@ -57,7 +57,7 @@ function loadConfig() {
             token: process.env.TOKEN,
             clientId: process.env.APPLICATION_ID,
             prefix: process.env.PREFIX || '*',
-            developerIds: process.env.DEVELOPER_IDS?.split(',').filter(Boolean) || [],
+            developerIds: process.env.DEVELOPER_IDS?.split(',').map(id => id.trim()).filter(Boolean) || [],
 
             tenorApiKey: process.env.TENOR_API_KEY,
 
@@ -74,9 +74,9 @@ function loadConfig() {
                 maxTokensPerRequest: process.env.AI_MAX_TOKENS_PER_REQUEST ? parseInt(process.env.AI_MAX_TOKENS_PER_REQUEST) : undefined,
                 cooldownSeconds: process.env.AI_COOLDOWN_SECONDS ? parseInt(process.env.AI_COOLDOWN_SECONDS) : undefined,
                 maxMessagesPerMinute: process.env.AI_MAX_MESSAGES_PER_MINUTE ? parseInt(process.env.AI_MAX_MESSAGES_PER_MINUTE) : undefined,
-                allowedChannels: process.env.AI_ALLOWED_CHANNELS?.split(',').filter(Boolean),
-                blockedChannels: process.env.AI_BLOCKED_CHANNELS?.split(',').filter(Boolean),
-                allowedRoles: process.env.AI_ALLOWED_ROLES?.split(',').filter(Boolean)
+                allowedChannels: process.env.AI_ALLOWED_CHANNELS?.split(',').map(id => id.trim()).filter(Boolean),
+                blockedChannels: process.env.AI_BLOCKED_CHANNELS?.split(',').map(id => id.trim()).filter(Boolean),
+                allowedRoles: process.env.AI_ALLOWED_ROLES?.split(',').map(id => id.trim()).filter(Boolean)
             },
 
             environment: process.env.NODE_ENV?.toLowerCase().trim(),
