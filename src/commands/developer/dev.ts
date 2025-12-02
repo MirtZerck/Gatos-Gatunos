@@ -9,6 +9,9 @@ import { AnsiFormatter, ANSI } from '../../utils/ansiFormatter.js';
 import { isDevFormatMessage } from '../../events/messageCreate.js';
 import type { AIManager } from '../../ai/core/AIManager.js';
 import type { UserMemoryData, SessionData } from '../../ai/core/types.js';
+import { PremiumTier, PremiumType, PremiumSource } from '../../types/Premium.js';
+import { getTierName, getTierEmoji } from '../../utils/premiumHelpers.js';
+import { createSuccessEmbed, createErrorEmbed, createInfoEmbed } from '../../utils/messageUtils.js';
 
 export const dev: PrefixOnlyCommand = {
     type: 'prefix-only',
@@ -38,6 +41,10 @@ export const dev: PrefixOnlyCommand = {
                 case 'clear':
                 case 'clearmem':
                     await handleClearMemory(message, args.slice(1));
+                    break;
+                case 'premium':
+                case 'prem':
+                    await handlePremium(message, args.slice(1));
                     break;
                 default:
                     await message.reply(`❌ Subcomando no válido: **${subcommand}**\nUsa \`${config.prefix}dev help\` para ver comandos disponibles.`);
@@ -76,6 +83,14 @@ async function showDevHelp(message: Message): Promise<void> {
         output += AnsiFormatter.dim('  └─ --long-term: Incluir memoria largo plazo') + '\n';
         output += AnsiFormatter.dim('  └─ Alias: clearmem') + '\n\n';
 
+        output += AnsiFormatter.format(`${config.prefix}dev premium <acción>`, ANSI.BRIGHT_GREEN) + '\n';
+        output += AnsiFormatter.dim('  └─ Gestionar sistema premium') + '\n';
+        output += AnsiFormatter.dim('  └─ grant @usuario <tier> [días]') + '\n';
+        output += AnsiFormatter.dim('  └─ revoke @usuario [razón]') + '\n';
+        output += AnsiFormatter.dim('  └─ check @usuario') + '\n';
+        output += AnsiFormatter.dim('  └─ stats') + '\n';
+        output += AnsiFormatter.dim('  └─ Alias: prem') + '\n\n';
+
         output += AnsiFormatter.dim('═'.repeat(45)) + '\n';
         output += AnsiFormatter.format('⚡ Solo desarrolladores autorizados', ANSI.BRIGHT_YELLOW);
 
@@ -99,6 +114,11 @@ async function showDevHelp(message: Message): Promise<void> {
                 {
                     name: `${config.prefix}dev clear [opciones]`,
                     value: 'Limpiar memoria de IA\n`--all`: Limpiar toda la memoria\n`@usuario`: Limpiar memoria de usuario\n`--long-term`: Incluir memoria largo plazo\nAlias: `clearmem`',
+                    inline: false
+                },
+                {
+                    name: `${config.prefix}dev premium <acción>`,
+                    value: 'Gestionar sistema premium\n`grant @usuario <tier> [días]`\n`revoke @usuario [razón]`\n`check @usuario`\n`stats`\nAlias: `prem`',
                     inline: false
                 }
             )
@@ -425,5 +445,328 @@ async function handleClearMemory(message: Message, args: string[]): Promise<void
             : `❌ **Debes especificar --all o @usuario**\n\n**Ejemplos:**\n\`${config.prefix}dev clear --all\`\n\`${config.prefix}dev clear @usuario\`\n\`${config.prefix}dev clear @usuario --long-term\`\n\`${config.prefix}dev clear --all --long-term\``;
 
         await message.reply(helpMsg);
+    }
+}
+
+async function handlePremium(message: Message, args: string[]): Promise<void> {
+    const client = message.client as BotClient;
+
+    if (!client.premiumManager) {
+        await message.reply('❌ El sistema premium no está disponible.');
+        return;
+    }
+
+    const action = args[0]?.toLowerCase();
+
+    if (!action) {
+        await message.reply(`❌ Especifica una acción: grant, revoke, check, stats`);
+        return;
+    }
+
+    switch (action) {
+        case 'grant':
+            await handlePremiumGrant(message, args.slice(1), client);
+            break;
+        case 'revoke':
+            await handlePremiumRevoke(message, args.slice(1), client);
+            break;
+        case 'check':
+            await handlePremiumCheck(message, args.slice(1), client);
+            break;
+        case 'stats':
+            await handlePremiumStats(message, client);
+            break;
+        default:
+            await message.reply(`❌ Acción no válida: **${action}**`);
+    }
+}
+
+async function handlePremiumGrant(message: Message, args: string[], client: BotClient): Promise<void> {
+    let targetUser: User | null = message.mentions.users.first() || null;
+
+    if (!targetUser && args[0] && message.guild) {
+        targetUser = await UserSearchHelper.findUser(message.guild, args[0]);
+    }
+
+    if (!targetUser) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Debes mencionar un usuario o proporcionar su nombre/ID'))
+            : '❌ Debes mencionar un usuario o proporcionar su nombre/ID.';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    const tierArg = args[1]?.toLowerCase();
+    if (!tierArg) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Especifica un tier: basic, pro, ultra'))
+            : '❌ Especifica un tier: basic, pro, ultra';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    let tier: PremiumTier;
+    switch (tierArg) {
+        case 'basic':
+        case 'basico':
+            tier = PremiumTier.BASIC;
+            break;
+        case 'pro':
+            tier = PremiumTier.PRO;
+            break;
+        case 'ultra':
+            tier = PremiumTier.ULTRA;
+            break;
+        default:
+            const errorMsg = isDevFormatMessage(message)
+                ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Tier no válido. Usa: basic, pro, ultra'))
+                : '❌ Tier no válido. Usa: basic, pro, ultra';
+            await message.reply(errorMsg);
+            return;
+    }
+
+    const durationArg = args[2];
+    let type: PremiumType;
+    let duration: number | undefined;
+
+    if (durationArg === 'permanent' || durationArg === 'perm') {
+        type = PremiumType.PERMANENT;
+    } else if (durationArg) {
+        const days = parseInt(durationArg);
+        if (isNaN(days) || days <= 0) {
+            const errorMsg = isDevFormatMessage(message)
+                ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Duración inválida. Especifica un número de días o "permanent"'))
+                : '❌ Duración inválida. Especifica un número de días o "permanent"';
+            await message.reply(errorMsg);
+            return;
+        }
+        type = PremiumType.TEMPORARY;
+        duration = days * 86400000;
+    } else {
+        type = PremiumType.TEMPORARY;
+        duration = 30 * 86400000;
+    }
+
+    const success = await client.premiumManager!.grantPremium({
+        userId: targetUser.id,
+        tier,
+        type,
+        duration,
+        source: PremiumSource.MANUAL,
+        sourceId: message.author.id,
+        grantedBy: message.author.id
+    });
+
+    if (success) {
+        const tierName = getTierName(tier);
+        const tierEmoji = getTierEmoji(tier);
+        const durationText = type === PremiumType.PERMANENT ? 'permanente' : `${Math.ceil(duration! / 86400000)} días`;
+
+        if (isDevFormatMessage(message)) {
+            let output = '';
+            output += AnsiFormatter.format('✓ Premium Otorgado', ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n\n';
+            output += AnsiFormatter.key('Usuario') + ': ' + AnsiFormatter.value(targetUser.tag) + '\n';
+            output += AnsiFormatter.key('Tier   ') + ': ' + AnsiFormatter.format(`${tierName} ${tierEmoji}`, ANSI.BRIGHT_CYAN) + '\n';
+            output += AnsiFormatter.key('Tipo   ') + ': ' + AnsiFormatter.value(durationText);
+            await message.reply(AnsiFormatter.codeBlock(output));
+        } else {
+            const embed = createSuccessEmbed(
+                `${tierEmoji} Premium Otorgado`,
+                `Premium **${tierName}** otorgado a ${targetUser}\n\nTipo: ${durationText}`
+            );
+            await message.reply({ embeds: [embed] });
+        }
+    } else {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ No se pudo otorgar el premium'))
+            : undefined;
+        if (errorMsg) {
+            await message.reply(errorMsg);
+        } else {
+            const embed = createErrorEmbed('❌ Error', 'No se pudo otorgar el premium');
+            await message.reply({ embeds: [embed] });
+        }
+    }
+}
+
+async function handlePremiumRevoke(message: Message, args: string[], client: BotClient): Promise<void> {
+    let targetUser: User | null = message.mentions.users.first() || null;
+
+    if (!targetUser && args[0] && message.guild) {
+        targetUser = await UserSearchHelper.findUser(message.guild, args[0]);
+    }
+
+    if (!targetUser) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Debes mencionar un usuario o proporcionar su nombre/ID'))
+            : '❌ Debes mencionar un usuario o proporcionar su nombre/ID.';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    const reason = args.slice(1).join(' ') || 'Sin razón especificada';
+
+    const success = await client.premiumManager!.revokePremium(
+        targetUser.id,
+        message.author.id,
+        reason
+    );
+
+    if (success) {
+        if (isDevFormatMessage(message)) {
+            let output = '';
+            output += AnsiFormatter.format('✓ Premium Revocado', ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n\n';
+            output += AnsiFormatter.key('Usuario') + ': ' + AnsiFormatter.value(targetUser.tag) + '\n';
+            output += AnsiFormatter.key('Razón  ') + ': ' + AnsiFormatter.dim(reason);
+            await message.reply(AnsiFormatter.codeBlock(output));
+        } else {
+            const embed = createSuccessEmbed(
+                '✅ Premium Revocado',
+                `Premium revocado de ${targetUser}\n\nRazón: ${reason}`
+            );
+            await message.reply({ embeds: [embed] });
+        }
+    } else {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ El usuario no tiene premium activo'))
+            : undefined;
+        if (errorMsg) {
+            await message.reply(errorMsg);
+        } else {
+            const embed = createErrorEmbed('❌ Error', 'El usuario no tiene premium activo');
+            await message.reply({ embeds: [embed] });
+        }
+    }
+}
+
+async function handlePremiumCheck(message: Message, args: string[], client: BotClient): Promise<void> {
+    let targetUser: User | null = message.mentions.users.first() || null;
+
+    if (!targetUser && args[0] && message.guild) {
+        targetUser = await UserSearchHelper.findUser(message.guild, args[0]);
+    }
+
+    if (!targetUser) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error('✘ Debes mencionar un usuario o proporcionar su nombre/ID'))
+            : '❌ Debes mencionar un usuario o proporcionar su nombre/ID.';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    const status = await client.premiumManager!.getPremiumStatus(targetUser.id);
+
+    if (!status.hasPremium) {
+        if (isDevFormatMessage(message)) {
+            const output = AnsiFormatter.warning(`⚠ ${targetUser.tag} no tiene premium activo`);
+            await message.reply(AnsiFormatter.codeBlock(output));
+        } else {
+            const embed = createInfoEmbed(
+                'ℹ️ Estado Premium',
+                `${targetUser} no tiene premium activo`
+            );
+            await message.reply({ embeds: [embed] });
+        }
+        return;
+    }
+
+    const tierName = getTierName(status.tier!);
+    const tierEmoji = getTierEmoji(status.tier!);
+
+    if (isDevFormatMessage(message)) {
+        let output = '';
+        output += AnsiFormatter.header(`╔═══════════════════════════════════════════╗`) + '\n';
+        output += AnsiFormatter.header(`║       ESTADO PREMIUM                      ║`) + '\n';
+        output += AnsiFormatter.header(`╚═══════════════════════════════════════════╝`) + '\n\n';
+        output += AnsiFormatter.key('Usuario') + ': ' + AnsiFormatter.value(targetUser.tag) + '\n';
+        output += AnsiFormatter.key('Tier   ') + ': ' + AnsiFormatter.format(`${tierName} ${tierEmoji}`, ANSI.BRIGHT_CYAN) + '\n';
+        output += AnsiFormatter.key('Tipo   ') + ': ' + AnsiFormatter.value(status.type === PremiumType.PERMANENT ? 'Permanente' : 'Temporal') + '\n';
+        output += AnsiFormatter.key('Fuente ') + ': ' + AnsiFormatter.value(status.source!) + '\n';
+
+        if (status.type === PremiumType.TEMPORARY && status.expiresAt) {
+            const daysRemaining = Math.ceil((status.expiresAt - Date.now()) / 86400000);
+            output += AnsiFormatter.key('Expira ') + ': ' + AnsiFormatter.dim(`<t:${Math.floor(status.expiresAt / 1000)}:R>`) + '\n';
+            output += AnsiFormatter.key('Días   ') + ': ' + AnsiFormatter.format(daysRemaining.toString(), ANSI.BRIGHT_YELLOW);
+        }
+
+        await message.reply(AnsiFormatter.codeBlock(output));
+    } else {
+        let description = `Usuario: ${targetUser}\n`;
+        description += `Tier: **${tierName}** ${tierEmoji}\n`;
+        description += `Tipo: **${status.type === PremiumType.PERMANENT ? 'Permanente' : 'Temporal'}**\n`;
+        description += `Fuente: **${status.source}**\n`;
+
+        if (status.type === PremiumType.TEMPORARY && status.expiresAt) {
+            const daysRemaining = Math.ceil((status.expiresAt - Date.now()) / 86400000);
+            description += `Expira: <t:${Math.floor(status.expiresAt / 1000)}:R>\n`;
+            description += `Días restantes: **${daysRemaining}**`;
+        }
+
+        const embed = createInfoEmbed(`${tierEmoji} Estado Premium`, description);
+        await message.reply({ embeds: [embed] });
+    }
+}
+
+async function handlePremiumStats(message: Message, client: BotClient): Promise<void> {
+    const stats = await client.premiumManager!.getStats();
+
+    if (isDevFormatMessage(message)) {
+        let output = '';
+        output += AnsiFormatter.header('╔════════════════════════════════════════════╗') + '\n';
+        output += AnsiFormatter.header('║    ESTADÍSTICAS PREMIUM                    ║') + '\n';
+        output += AnsiFormatter.header('╚════════════════════════════════════════════╝') + '\n\n';
+
+        output += AnsiFormatter.format('👥 USUARIOS', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.key('  Total  ') + ': ' + AnsiFormatter.value(stats.totalUsers.toString()) + '\n';
+        output += AnsiFormatter.key('  Activos') + ': ' + AnsiFormatter.format(stats.activeUsers.toString(), ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n\n';
+
+        output += AnsiFormatter.format('🥉 POR TIER', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.key('  Básico') + ': ' + AnsiFormatter.value(stats.byTier.basic.toString()) + '\n';
+        output += AnsiFormatter.key('  Pro   ') + ': ' + AnsiFormatter.value(stats.byTier.pro.toString()) + '\n';
+        output += AnsiFormatter.key('  Ultra ') + ': ' + AnsiFormatter.value(stats.byTier.ultra.toString()) + '\n\n';
+
+        output += AnsiFormatter.format('📍 POR FUENTE', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.key('  Ko-fi ') + ': ' + AnsiFormatter.value(stats.bySource.kofi.toString()) + '\n';
+        output += AnsiFormatter.key('  Top.gg') + ': ' + AnsiFormatter.value(stats.bySource.topgg.toString()) + '\n';
+        output += AnsiFormatter.key('  DBL   ') + ': ' + AnsiFormatter.value(stats.bySource.dbl.toString()) + '\n';
+        output += AnsiFormatter.key('  Códigs') + ': ' + AnsiFormatter.value(stats.bySource.code.toString()) + '\n';
+        output += AnsiFormatter.key('  Manual') + ': ' + AnsiFormatter.value(stats.bySource.manual.toString()) + '\n';
+
+        await message.reply(AnsiFormatter.codeBlock(output));
+    } else {
+        const embed = new EmbedBuilder()
+            .setTitle('📊 Estadísticas Premium')
+            .setColor(COLORS.INFO)
+            .addFields(
+                {
+                    name: '👥 Usuarios',
+                    value: `Total: **${stats.totalUsers}**\nActivos: **${stats.activeUsers}**`,
+                    inline: true
+                },
+                {
+                    name: '🥉 Por Tier',
+                    value:
+                        `Básico: **${stats.byTier.basic}**\n` +
+                        `Pro: **${stats.byTier.pro}**\n` +
+                        `Ultra: **${stats.byTier.ultra}**`,
+                    inline: true
+                },
+                {
+                    name: '📍 Por Fuente',
+                    value:
+                        `Ko-fi: **${stats.bySource.kofi}**\n` +
+                        `Top.gg: **${stats.bySource.topgg}**\n` +
+                        `DBL: **${stats.bySource.dbl}**\n` +
+                        `Códigos: **${stats.bySource.code}**\n` +
+                        `Manual: **${stats.bySource.manual}**`,
+                    inline: false
+                }
+            )
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
     }
 }

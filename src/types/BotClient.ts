@@ -70,11 +70,15 @@ export class BotClient extends Client {
     /** Sistema de auto-moderación nativo de Discord */
     public discordAutomodManager?: DiscordAutomodManager;
 
-    /**
-     * Crea una nueva instancia del cliente del bot.
-     *
-     * @param {ClientOptions} options - Opciones de configuración del cliente de Discord
-     */
+    /** Sistema de premium */
+    public premiumManager?: import('../managers/PremiumManager.js').PremiumManager;
+
+    // TODO: Descomentar cuando se implementen estos managers
+    // public redeemCodeManager?: import('../managers/RedeemCodeManager.js').RedeemCodeManager;
+    // public donationManager?: import('../managers/DonationManager.js').DonationManager;
+    // public voteManager?: import('../managers/VoteManager.js').VoteManager;
+    // public webhookServer?: import('../server/webhookServer.js').WebhookServer;
+
     constructor(options: ClientOptions) {
         super(options);
         this.commands = new Collection();

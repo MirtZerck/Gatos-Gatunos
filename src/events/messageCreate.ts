@@ -5,6 +5,9 @@ import { logger } from "../utils/logger.js";
 import { BotClient } from "../types/BotClient.js";
 import { AnsiFormatter } from "../utils/ansiFormatter.js";
 import { handleAutomod } from "./automodHandler.js";
+import { checkPremiumAccess, getSubcommandFromPrefix } from "../utils/premiumHelpers.js";
+import { createPremiumRequiredEmbed } from "../utils/premiumEmbeds.js";
+import { sendMessage } from "../utils/messageUtils.js";
 
 const devFormatMessages = new WeakMap<Message, boolean>();
 
@@ -74,6 +77,27 @@ export default {
                     reply.delete().catch(() => { });
                 }, 5000);
 
+                return;
+            }
+        }
+
+        const subcommand = getSubcommandFromPrefix(commandName, args, command);
+        const requiredTier = subcommand?.premiumTier ||
+            ('premiumTier' in command ? command.premiumTier : undefined);
+
+        if (requiredTier) {
+            const premiumCheck = await checkPremiumAccess(
+                message.author.id,
+                requiredTier,
+                client
+            );
+
+            if (!premiumCheck.hasAccess) {
+                const embed = createPremiumRequiredEmbed(
+                    requiredTier,
+                    premiumCheck.currentTier
+                );
+                await sendMessage(message, { embed });
                 return;
             }
         }

@@ -9,6 +9,7 @@ import {
     ApplicationIntegrationType
 } from "discord.js";
 import { CommandCategory } from "../utils/constants.js";
+import { PremiumTier } from "./Premium.js";
 
 /**
  * Propiedades base compartidas por todos los tipos de comando.
@@ -16,12 +17,10 @@ import { CommandCategory } from "../utils/constants.js";
  * @interface BaseCommand
  */
 interface BaseCommand {
-    /** Nombre único del comando */
     name: string;
-    /** Descripción breve del comando */
     description: string;
-    /** Categoría para organización y ayuda */
     category: CommandCategory;
+    premiumTier?: PremiumTier;
 }
 
 /**
@@ -92,12 +91,10 @@ export interface PrefixOnlyCommand extends BaseCommand {
  * @interface SubcommandInfo
  */
 export interface SubcommandInfo {
-    /** Nombre del subcomando */
     name: string;
-    /** Aliases del subcomando (solo para prefijo) */
     aliases?: string[];
-    /** Descripción del subcomando */
     description: string;
+    premiumTier?: PremiumTier;
 }
 
 /**

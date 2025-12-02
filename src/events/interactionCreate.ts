@@ -2,6 +2,8 @@ import { Events, MessageFlags, ChatInputCommandInteraction, Interaction } from "
 import { Event } from "../types/Events.js";
 import { logger } from "../utils/logger.js";
 import { BotClient } from "../types/BotClient.js";
+import { checkPremiumAccess, getSubcommandFromInteraction } from "../utils/premiumHelpers.js";
+import { createPremiumRequiredEmbed } from "../utils/premiumEmbeds.js";
 
 /**
  * Handler del evento InteractionCreate.
@@ -86,6 +88,30 @@ export default {
                 const seconds = Math.ceil(cooldownRemaining / 1000);
                 await interaction.reply({
                     content: `⏱️ Debes esperar **${seconds}** segundo${seconds !== 1 ? 's' : ''} antes de usar este comando nuevamente.`,
+                    flags: MessageFlags.Ephemeral
+                });
+                return;
+            }
+        }
+
+        const subcommand = getSubcommandFromInteraction(interaction, command);
+        const requiredTier = subcommand?.premiumTier ||
+            ('premiumTier' in command ? command.premiumTier : undefined);
+
+        if (requiredTier) {
+            const premiumCheck = await checkPremiumAccess(
+                interaction.user.id,
+                requiredTier,
+                client
+            );
+
+            if (!premiumCheck.hasAccess) {
+                const embed = createPremiumRequiredEmbed(
+                    requiredTier,
+                    premiumCheck.currentTier
+                );
+                await interaction.reply({
+                    embeds: [embed],
                     flags: MessageFlags.Ephemeral
                 });
                 return;

@@ -41,6 +41,23 @@ const configSchema = z.object({
         maxMessagesPerMinute: 10
     }),
 
+    premium: z.object({
+        enabled: z.boolean().default(false),
+        globalTier: z.enum(['basic', 'pro', 'ultra', 'none']).default('none'),
+        globalExpiresAt: z.number().optional(),
+        webhookServerPort: z.number().default(3000),
+        enableWebhookServer: z.boolean().default(false),
+        kofiVerificationToken: z.string().optional(),
+        topggWebhookSecret: z.string().optional(),
+        dblWebhookSecret: z.string().optional(),
+        logChannelId: z.string().optional()
+    }).default({
+        enabled: false,
+        globalTier: 'none',
+        webhookServerPort: 3000,
+        enableWebhookServer: false
+    }),
+
     environment: z.enum(['development', 'production']).default('development'),
     logLevel: z.enum(['debug', 'info', 'warn', 'error']).default('info')
 });
@@ -77,6 +94,18 @@ function loadConfig() {
                 allowedChannels: process.env.AI_ALLOWED_CHANNELS?.split(',').map(id => id.trim()).filter(Boolean),
                 blockedChannels: process.env.AI_BLOCKED_CHANNELS?.split(',').map(id => id.trim()).filter(Boolean),
                 allowedRoles: process.env.AI_ALLOWED_ROLES?.split(',').map(id => id.trim()).filter(Boolean)
+            },
+
+            premium: {
+                enabled: process.env.PREMIUM_ENABLED === 'true',
+                globalTier: process.env.PREMIUM_GLOBAL_TIER as 'basic' | 'pro' | 'ultra' | 'none' | undefined,
+                globalExpiresAt: process.env.PREMIUM_GLOBAL_EXPIRES_AT ? parseInt(process.env.PREMIUM_GLOBAL_EXPIRES_AT) : undefined,
+                webhookServerPort: process.env.WEBHOOK_SERVER_PORT ? parseInt(process.env.WEBHOOK_SERVER_PORT) : undefined,
+                enableWebhookServer: process.env.ENABLE_WEBHOOK_SERVER === 'true',
+                kofiVerificationToken: process.env.KOFI_VERIFICATION_TOKEN,
+                topggWebhookSecret: process.env.TOPGG_WEBHOOK_SECRET,
+                dblWebhookSecret: process.env.DBL_WEBHOOK_SECRET,
+                logChannelId: process.env.PREMIUM_LOG_CHANNEL_ID
             },
 
             environment: process.env.NODE_ENV?.toLowerCase().trim(),

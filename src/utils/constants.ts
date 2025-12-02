@@ -55,22 +55,17 @@ export type CommandCategory = typeof CATEGORIES[keyof typeof CATEGORIES];
  * Paleta de colores para embeds.
  */
 export const COLORS = {
-    /** Azul de Discord - Color principal */
     PRIMARY: 0x5865F2,
-    /** Verde - Operaciones exitosas */
     SUCCESS: 0x57F287,
-    /** Amarillo - Advertencias */
     WARNING: 0xFEE75C,
-    /** Rojo - Errores */
     DANGER: 0xED4245,
-    /** Azul claro - Información */
     INFO: 0x3498DB,
-    /** Rosa - Comandos de interacción */
     INTERACTION: 0xFF69B4,
-    /** Púrpura - Sistema de música */
     MUSIC: 0x9B59B6,
-    /** Rojo oscuro - Moderación */
-    MODERATION: 0xE74C3C
+    MODERATION: 0xE74C3C,
+    PREMIUM_BASIC: 0xF4D03F,
+    PREMIUM_PRO: 0x9B59B6,
+    PREMIUM_ULTRA: 0xFF6B6B
 } as const;
 
 /**
@@ -95,7 +90,13 @@ export const EMOJIS = {
     BAN: '🔨',
     KICK: '👢',
     MUTE: '🔇',
-    SEARCH: '🔍'
+    SEARCH: '🔍',
+    PREMIUM: '👑',
+    PREMIUM_BASIC: '🥉',
+    PREMIUM_PRO: '🥈',
+    PREMIUM_ULTRA: '🥇',
+    GIFT: '🎁',
+    CLOCK: '⏰'
 } as const;
 
 /**
@@ -130,16 +131,36 @@ export const LIMITS = {
  * Tiempos de espera en milisegundos.
  */
 export const TIMEOUTS = {
-    /** Tiempo para diferir interacción (3s) */
     INTERACTION_DEFER: 3000,
-    /** Timeout de peticiones API (10s) */
     API_TIMEOUT: 10000,
-    /** Delay entre reintentos de API (5s) */
     API_RETRY_DELAY: 5000,
-    /** Cooldown por defecto de comandos (3s) */
     COMMAND_COOLDOWN: 3000,
-    /** Delay para eliminar mensajes temporales (5s) */
     DELETE_MESSAGE_DELAY: 5000
+} as const;
+
+export const PREMIUM = {
+    VOTE_DURATION_HOURS: 12,
+    COOLDOWN_REDUCTION: {
+        BASIC: 0.25,
+        PRO: 0.50,
+        ULTRA: 0.75
+    },
+    DONATION_TIERS: {
+        BASIC_MIN: 3,
+        BASIC_MAX: 4.99,
+        PRO_MIN: 5,
+        PRO_MAX: 9.99,
+        ULTRA_MIN: 10,
+        ULTRA_MAX: 24.99,
+        ULTRA_PERMANENT: 25
+    },
+    DURATION_DAYS: 30,
+    CODE_ATTEMPTS_PER_HOUR: 5,
+    EXPIRATION_CHECK_INTERVAL_MS: 3600000,
+    NOTIFICATION_DAYS: {
+        WARNING_3_DAYS: 3,
+        WARNING_1_DAY: 1
+    }
 } as const;
 
 /**
