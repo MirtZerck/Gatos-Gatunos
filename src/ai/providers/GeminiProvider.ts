@@ -46,7 +46,7 @@ export class GeminiProvider {
                     },
                     {
                         role: 'model',
-                        parts: [{ text: 'Entendido. Responderé como Hikari Koizumi, manteniendo mi personalidad alegre y natural.' }]
+                        parts: [{ text: 'Entendido. Responderé como Hitori Gotoh, manteniendo mi personalidad tímida y reservada.' }]
                     },
                     ...cleanHistory
                 ],

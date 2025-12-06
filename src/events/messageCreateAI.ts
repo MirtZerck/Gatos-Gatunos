@@ -31,7 +31,7 @@ export default {
 
             if ((content === botMention || content === botMentionNick) && !message.author.bot) {
                 const embed = new EmbedBuilder()
-                    .setTitle('👋 ¡Hola! Soy Hikari Koizumi')
+                    .setTitle('👋 ¡Hola! Soy Hitori Gotoh')
                     .setDescription(`Mi prefijo es \`${config.prefix}\`\n\nPuedes usar comandos con prefijo o slash commands.`)
                     .addFields(
                         {
