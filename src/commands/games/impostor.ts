@@ -971,7 +971,7 @@ async function updateLobbyMessage(room: GameRoom): Promise<void> {
     try {
         await room.lobbyMessage.edit({ embeds: [embed], components: [buttons] });
     } catch (error) {
-        logger.warn('Impostor', 'No se pudo actualizar mensaje del lobby');
+        logger.error('Impostor', 'No se pudo actualizar mensaje del lobby - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
     }
 }
 
@@ -1236,7 +1236,7 @@ async function handleStartButton(
         try {
             await room.lobbyMessage.edit({ components: [] });
         } catch (error) {
-            logger.warn('Impostor', 'No se pudo deshabilitar botones del lobby');
+            logger.error('Impostor', 'No se pudo deshabilitar botones del lobby - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
         }
     }
 
@@ -1311,7 +1311,7 @@ async function handleLeaveButton(
             try {
                 await room.lobbyMessage.edit({ components: [] });
             } catch (error) {
-                logger.warn('Impostor', 'No se pudo deshabilitar botones del lobby cerrado');
+                logger.error('Impostor', 'No se pudo deshabilitar botones del lobby cerrado - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
             }
         }
         return;
@@ -1472,7 +1472,7 @@ async function handleEndButton(
         try {
             await room.gameMessage.edit({ components: [] });
         } catch (error) {
-            logger.warn('Impostor', 'No se pudo deshabilitar botones del juego terminado');
+            logger.error('Impostor', 'No se pudo deshabilitar botones del juego terminado - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
         }
     }
 
@@ -1480,7 +1480,7 @@ async function handleEndButton(
         try {
             await room.lobbyMessage.edit({ components: [] });
         } catch (error) {
-            logger.warn('Impostor', 'No se pudo deshabilitar botones del lobby');
+            logger.error('Impostor', 'No se pudo deshabilitar botones del lobby - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
         }
     }
 
