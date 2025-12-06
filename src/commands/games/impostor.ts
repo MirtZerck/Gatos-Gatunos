@@ -383,7 +383,7 @@ async function handleCreate(
 
     const collector = response.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 600000
+        time: 3600000
     });
 
     collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
@@ -455,6 +455,8 @@ async function handleJoin(
     );
 
     await sendMessage(interaction, { embed });
+
+    await updateLobbyMessage(room);
 }
 
 async function handlePropose(
@@ -689,7 +691,7 @@ async function handleStart(
             activeRooms.delete(roomKey);
             logger.info('Impostor', `Sala ${roomKey} eliminada por timeout`);
         }
-    }, 1800000);
+    }, 7200000);
 }
 
 async function handleSkip(
@@ -1014,7 +1016,8 @@ async function handleJoinButton(
     room.players.add(interaction.user.id);
 
     await interaction.reply({
-        content: `✅ **${interaction.user.displayName}** se ha unido a la partida!`
+        content: `✅ **${interaction.user.displayName}** se ha unido a la partida!`,
+        flags: MessageFlags.Ephemeral
     });
 
     await updateLobbyMessage(room);
@@ -1241,7 +1244,7 @@ async function handleStartButton(
 
     const gameCollector = gameMessage.createMessageComponentCollector({
         componentType: ComponentType.Button,
-        time: 1800000
+        time: 7200000
     });
 
     gameCollector.on('collect', async (buttonInteraction: ButtonInteraction) => {
