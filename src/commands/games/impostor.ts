@@ -938,12 +938,35 @@ async function handlePlayers(
     await sendMessage(interaction, { embed, ephemeral: true });
 }
 
-async function updateLobbyMessage(room: GameRoom): Promise<void> {
-    if (!room.lobbyMessage) return;
+async function updateLobbyMessage(room: GameRoom, interactionMessage?: Message): Promise<void> {
+    const messageToEdit = interactionMessage || room.lobbyMessage;
+    if (!messageToEdit) return;
+
+    // Verificar si el bot tiene permisos necesarios en el canal
+    if (messageToEdit.channel.isDMBased()) return;
+
+    const botMember = await messageToEdit.guild?.members.fetchMe();
+    if (!botMember) return;
+
+    const permissions = messageToEdit.channel.permissionsFor(botMember);
+
+    if (!permissions) {
+        logger.warn('Impostor', 'No se pudieron obtener permisos del bot en el canal');
+        return;
+    }
+
+    // Verificar permisos específicos necesarios
+    const requiredPerms = ['ViewChannel', 'SendMessages', 'EmbedLinks'] as const;
+    const missingPerms = requiredPerms.filter(perm => !permissions.has(perm));
+
+    if (missingPerms.length > 0) {
+        logger.error('Impostor', `Faltan permisos en el canal: ${missingPerms.join(', ')}`);
+        return;
+    }
 
     const playerNames: string[] = [];
     for (const playerId of room.players) {
-        const player = await room.lobbyMessage.client.users.fetch(playerId);
+        const player = await messageToEdit.client.users.fetch(playerId);
         const isHost = playerId === room.hostId;
         const hasProposed = room.proposedWords.has(playerId);
         playerNames.push(`${isHost ? '👑 ' : ''}${player.displayName}${room.useCustomThemes ? (hasProposed ? ' ✅' : ' ⏳') : ''}`);
@@ -969,9 +992,35 @@ async function updateLobbyMessage(room: GameRoom): Promise<void> {
     const buttons = createLobbyButtons(room.useCustomThemes);
 
     try {
-        await room.lobbyMessage.edit({ embeds: [embed], components: [buttons] });
+        // Intentar obtener el mensaje actualizado antes de editarlo
+        await messageToEdit.fetch().catch(() => null);
+        await messageToEdit.edit({ embeds: [embed], components: [buttons] });
+        logger.info('Impostor', 'Mensaje del lobby actualizado correctamente');
     } catch (error) {
-        logger.error('Impostor', 'No se pudo actualizar mensaje del lobby - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
+        const err = error instanceof Error ? error : new Error(String(error));
+        const allPerms = permissions.toArray();
+        logger.error('Impostor',
+            `Error al actualizar mensaje del lobby.\n` +
+            `Canal: ${messageToEdit.channel.id}\n` +
+            `Mensaje: ${messageToEdit.id}\n` +
+            `Permisos del bot: ${allPerms.join(', ')}\n` +
+            `ViewChannel: ${permissions.has('ViewChannel')}\n` +
+            `SendMessages: ${permissions.has('SendMessages')}\n` +
+            `EmbedLinks: ${permissions.has('EmbedLinks')}\n` +
+            `ReadMessageHistory: ${permissions.has('ReadMessageHistory')}\n` +
+            `ManageMessages: ${permissions.has('ManageMessages')}`,
+            err);
+
+        // Intentar enviar un mensaje de advertencia en el canal si es posible
+        if (permissions.has('SendMessages') && permissions.has('ViewChannel')) {
+            try {
+                await messageToEdit.channel.send(
+                    '⚠️ **Advertencia:** No puedo actualizar el mensaje del lobby. ' +
+                    'Verifica que el bot tenga los permisos de **Ver Canal**, **Enviar Mensajes**, ' +
+                    '**Insertar Enlaces** y **Leer Historial de Mensajes** en este canal específico.'
+                ).catch(() => {});
+            } catch {}
+        }
     }
 }
 
@@ -1020,7 +1069,7 @@ async function handleJoinButton(
         flags: MessageFlags.Ephemeral
     });
 
-    await updateLobbyMessage(room);
+    await updateLobbyMessage(room, interaction.message);
 }
 
 async function handleToggleCustomButton(
@@ -1063,9 +1112,10 @@ async function handleToggleCustomButton(
         content: room.useCustomThemes
             ? '🎭 **Modo temáticas personalizadas activado**\nCada jugador debe proponer su palabra con `/impostor proponer`'
             : '✅ **Modo temáticas personalizadas desactivado**\nSe usarán temas aleatorios',
+        flags: MessageFlags.Ephemeral
     });
 
-    await updateLobbyMessage(room);
+    await updateLobbyMessage(room, interaction.message);
 }
 
 async function handleStartButton(
@@ -1232,15 +1282,15 @@ async function handleStartButton(
 
     room.gameMessage = gameMessage as Message;
 
-    if (room.lobbyMessage) {
+    if (interaction.message) {
         try {
-            await room.lobbyMessage.edit({ components: [] });
+            await interaction.message.edit({ components: [] });
         } catch (error) {
             logger.error('Impostor', 'No se pudo deshabilitar botones del lobby - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
         }
     }
 
-    await updateLobbyMessage(room);
+    await updateLobbyMessage(room, interaction.message);
 
     const gameCollector = gameMessage.createMessageComponentCollector({
         componentType: ComponentType.Button,
@@ -1324,14 +1374,16 @@ async function handleLeaveButton(
 
         await interaction.reply({
             content: `🚪 **${interaction.user.displayName}** ha salido de la sala.\n👑 **Nuevo anfitrión:** ${newHost.displayName}`,
+            flags: MessageFlags.Ephemeral
             });
     } else {
         await interaction.reply({
             content: `🚪 **${interaction.user.displayName}** ha salido de la sala.`,
+            flags: MessageFlags.Ephemeral
             });
     }
 
-    await updateLobbyMessage(room);
+    await updateLobbyMessage(room, interaction.message);
 }
 
 async function handleSkipButton(
