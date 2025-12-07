@@ -9,7 +9,7 @@ export interface PendingRequest {
     authorId: string;
     /* ID del usuario objetivo */
     targetId: string;
-    /* Tipo de acción (hug, kiss, pat, etc.) */
+    /* Tipo de acción (hug, kiss, etc.) */
     action: string;
     /* Timestamp de cuándo expira la solicitud */
     expiresAt: number;
@@ -78,7 +78,7 @@ export class RequestManager {
      * 
      * @param {string} authorId - ID del usuario que envía la solicitud
      * @param {string} targetId - ID del usuario objetivo
-     * @param {string} action - Tipo de acción (hug, kiss, pat, etc.)
+     * @param {string} action - Tipo de acción (hug, kiss, etc.)
      * @param {string} messageId - ID del mensaje de la solicitud
      * @param {string} interactionId - ID de la interacción original
      * @param {number} [duration] - Duración personalizada en ms (default: 10 min)
