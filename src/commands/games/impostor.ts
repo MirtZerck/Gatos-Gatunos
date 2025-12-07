@@ -86,7 +86,7 @@ async function generateThemeWithAI(): Promise<string> {
     }
 
     try {
-        const model = genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+        const model = genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
         const prompt = 'Genera UNA SOLA palabra o frase corta (máximo 3 palabras) que represente un lugar, evento o situación interesante para un juego de adivinanzas. Ejemplos: funeral, boda, circo, concierto de rock, estación espacial. Responde SOLO con la palabra/frase, nada más.';
 
         const result = await model.generateContent(prompt);
