@@ -2,12 +2,13 @@ import { logger } from "./logger.js";
 
 /**
  * Configuración de dimensiones aceptables para GIFs
+ * Límites ajustados para garantizar buena calidad visual en Discord
  */
 export const GIF_CONSTRAINTS = {
-    MIN_WIDTH: 200,
-    MIN_HEIGHT: 200,
-    MIN_ASPECT_RATIO: 0.5,  // 1:2 (muy delgado)
-    MAX_ASPECT_RATIO: 2.0,  // 2:1 (muy ancho)
+    MIN_WIDTH: 300,         // Mínimo aceptable para buena visualización
+    MIN_HEIGHT: 300,        // Mínimo aceptable para buena visualización
+    MIN_ASPECT_RATIO: 0.6,  // 3:5 (evita GIFs muy delgados)
+    MAX_ASPECT_RATIO: 1.8,  // 9:5 (evita GIFs muy anchos)
 } as const;
 
 /**
@@ -55,28 +56,50 @@ export function validateGifDimensions(dimensions: GifDimensions): boolean {
 }
 
 /**
- * Obtiene las dimensiones de una imagen desde una URL
- * Nota: Esta función requiere descargar la imagen, úsala con moderación
+ * Obtiene las dimensiones de un GIF leyendo su header
+ * Solo descarga los primeros bytes necesarios para leer las dimensiones
  *
- * @param {string} url - URL de la imagen
- * @returns {Promise<GifDimensions | null>} Dimensiones de la imagen o null si falla
+ * @param {string} url - URL del GIF
+ * @returns {Promise<GifDimensions | null>} Dimensiones del GIF o null si falla
  */
-export async function getImageDimensions(url: string): Promise<GifDimensions | null> {
+export async function getGifDimensions(url: string): Promise<GifDimensions | null> {
     try {
-        const response = await fetch(url, { method: 'HEAD' });
+        // Descargar solo los primeros 1KB (suficiente para leer el header GIF)
+        const response = await fetch(url, {
+            headers: {
+                'Range': 'bytes=0-1023'
+            }
+        });
 
-        // Intentar obtener dimensiones del header (algunos servidores las proveen)
-        const contentType = response.headers.get('content-type');
-        if (!contentType?.includes('image')) {
+        if (!response.ok && response.status !== 206) {
+            logger.debug('GifDimensions', `Error en respuesta: ${response.status}`);
             return null;
         }
 
-        // Si no están en los headers, necesitamos descargar la imagen
-        // Por ahora retornamos null para evitar descargas innecesarias
-        // waifu.pics no provee dimensiones en headers
-        return null;
+        const buffer = await response.arrayBuffer();
+        const bytes = new Uint8Array(buffer);
+
+        // Verificar que sea un GIF válido (GIF89a o GIF87a)
+        const signature = String.fromCharCode(...bytes.slice(0, 3));
+        if (signature !== 'GIF') {
+            logger.debug('GifDimensions', 'No es un GIF válido');
+            return null;
+        }
+
+        // Las dimensiones están en los bytes 6-9 (little-endian)
+        // Bytes 6-7: ancho, Bytes 8-9: alto
+        const width = bytes[6] | (bytes[7] << 8);
+        const height = bytes[8] | (bytes[9] << 8);
+
+        if (width === 0 || height === 0) {
+            logger.debug('GifDimensions', 'Dimensiones inválidas');
+            return null;
+        }
+
+        logger.debug('GifDimensions', `Dimensiones obtenidas: ${width}x${height}`);
+        return { width, height };
     } catch (error) {
-        logger.error('GifDimensions', 'Error obteniendo dimensiones de imagen', error);
+        logger.error('GifDimensions', 'Error obteniendo dimensiones de GIF', error);
         return null;
     }
 }

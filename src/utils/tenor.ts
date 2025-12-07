@@ -51,13 +51,14 @@ interface TenorResponse {
 /**
  * *Obtiene un GIF aleatorio de Tenor basado en una consulta de búsqueda.
  * *Realiza una búsqueda y selecciona aleatoriamente uno de los resultados.
- * 
+ * *Filtra por dimensiones mínimas para garantizar calidad visual.
+ *
  * @async
  * @param {string} query - Término de búsqueda para el GIF
- * @param {number} [limit=20] - Cantidad máxima de resultados a obtener
+ * @param {number} [limit=50] - Cantidad máxima de resultados a obtener
  * @returns {Promise<string>} URL del GIF seleccionado aleatoriamente
  * @throws {Error} Si la API de Tenor falla o no hay resultados
- * 
+ *
  * @example
  * ```typescript
  * const gifUrl = await getRandomGif('anime hug');
@@ -65,7 +66,7 @@ interface TenorResponse {
  * ```
  */
 
-export async function getRandomGif(query: string, limit: number = 20): Promise<string> {
+export async function getRandomGif(query: string, limit: number = 50): Promise<string> {
     try {
         const url = new URL(`${TENOR_API_URL}/search`);
         url.searchParams.set('q', query);
@@ -89,7 +90,8 @@ export async function getRandomGif(query: string, limit: number = 20): Promise<s
         // Filtrar GIFs por dimensiones aceptables
         const validGifs = data.results.filter((gif: TenorGif) => {
             const dims = gif.media_formats?.gif?.dims;
-            if (!dims || dims.length < 2) return true; // Si no hay dims, aceptar
+            // Rechazar GIFs sin información de dimensiones para garantizar calidad
+            if (!dims || dims.length < 2) return false;
 
             const dimensions: GifDimensions = {
                 width: dims[0],
@@ -146,7 +148,7 @@ export async function getTrendingGif(category?: string): Promise<string> {
         const url = new URL(`${TENOR_API_URL}/featured`);
         url.searchParams.set('key', config.tenorApiKey);
         url.searchParams.set('client_key', 'discord-bot');
-        url.searchParams.set('limit', '20');
+        url.searchParams.set('limit', '50');
 
         if (category) {
             url.searchParams.set('searchfilter', category);
@@ -162,7 +164,8 @@ export async function getTrendingGif(category?: string): Promise<string> {
         // Filtrar GIFs por dimensiones aceptables
         const validGifs = data.results.filter((gif: TenorGif) => {
             const dims = gif.media_formats?.gif?.dims;
-            if (!dims || dims.length < 2) return true;
+            // Rechazar GIFs sin información de dimensiones para garantizar calidad
+            if (!dims || dims.length < 2) return false;
 
             const dimensions: GifDimensions = {
                 width: dims[0],

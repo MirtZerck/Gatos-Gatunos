@@ -5,11 +5,11 @@ import { logger } from "./logger.js";
 /**
  * Obtiene un GIF usando un sistema híbrido:
  * 1. Intenta primero con waifu.pics (más preciso para anime)
- * 2. Si falla o no está soportado, usa Tenor como fallback
+ * 2. Si falla o no está soportado, usa Tenor como fallback con validación de calidad
  *
  * @async
  * @param {string} query - Término de búsqueda para el GIF
- * @param {number} [tenorLimit=20] - Límite de resultados para Tenor (solo si se usa fallback)
+ * @param {number} [tenorLimit=50] - Límite de resultados para Tenor (solo si se usa fallback)
  * @returns {Promise<string>} URL del GIF obtenido
  *
  * @example
@@ -18,7 +18,7 @@ import { logger } from "./logger.js";
  * // Intenta waifu.pics primero, luego Tenor si falla
  * ```
  */
-export async function getInteractionGif(query: string, tenorLimit: number = 20): Promise<string> {
+export async function getInteractionGif(query: string, tenorLimit: number = 50): Promise<string> {
     try {
         // Intentar primero con waifu.pics si está soportado
         if (isWaifuPicsSupported(query)) {

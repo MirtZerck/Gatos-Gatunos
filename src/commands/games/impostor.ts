@@ -9,7 +9,10 @@ import {
     ButtonInteraction,
     ComponentType,
     Message,
-    MessageFlags
+    MessageFlags,
+    StringSelectMenuBuilder,
+    StringSelectMenuInteraction,
+    StringSelectMenuOptionBuilder
 } from 'discord.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { SlashOnlyCommand } from '../../types/Command.js';
@@ -34,6 +37,10 @@ interface GameRoom {
     lobbyMessage?: Message;
     gameMessage?: Message;
     turnOrder?: string[];
+    alivePlayers: Set<string>;
+    votingInProgress: boolean;
+    votes: Map<string, string>;
+    votingMessage?: Message;
 }
 
 const activeRooms = new Map<string, GameRoom>();
@@ -170,9 +177,9 @@ function createGameButtons(): ActionRowBuilder<ButtonBuilder> {
             .setEmoji('🗳️')
             .setStyle(ButtonStyle.Primary),
         new ButtonBuilder()
-            .setCustomId('impostor_end')
-            .setLabel('Terminar')
-            .setEmoji('🏁')
+            .setCustomId('impostor_start_vote')
+            .setLabel('Empezar Votación')
+            .setEmoji('🗳️')
             .setStyle(ButtonStyle.Danger)
     );
 }
@@ -199,8 +206,8 @@ async function handleButtonInteraction(
         case 'impostor_skip':
             await handleSkipButton(interaction, roomKey);
             break;
-        case 'impostor_end':
-            await handleEndButton(interaction, roomKey);
+        case 'impostor_start_vote':
+            await handleStartVoteButton(interaction, roomKey);
             break;
     }
 }
@@ -255,6 +262,15 @@ export const impostor: SlashOnlyCommand = {
                 .setDescription('Vota para saltar la palabra actual (requiere mayoría)'))
         .addSubcommand(sub =>
             sub
+                .setName('expulsar')
+                .setDescription('Expulsa a un jugador del juego (solo el anfitrión)')
+                .addUserOption(opt =>
+                    opt
+                        .setName('jugador')
+                        .setDescription('Jugador a expulsar')
+                        .setRequired(true)))
+        .addSubcommand(sub =>
+            sub
                 .setName('terminar')
                 .setDescription('Termina el juego actual (solo el anfitrión)'))
         .setContexts(CONTEXTS.GUILD_ONLY)
@@ -288,6 +304,9 @@ export const impostor: SlashOnlyCommand = {
                     break;
                 case 'skip':
                     await handleSkip(interaction, roomKey);
+                    break;
+                case 'expulsar':
+                    await handleExpel(interaction, roomKey);
                     break;
                 case 'terminar':
                     await handleEnd(interaction, roomKey);
@@ -376,7 +395,10 @@ async function handleCreate(
         useAI,
         useCustomThemes,
         proposedWords: new Map(),
-        lobbyMessage: response
+        lobbyMessage: response,
+        alivePlayers: new Set(),
+        votingInProgress: false,
+        votes: new Map()
     };
 
     activeRooms.set(roomKey, room);
@@ -601,6 +623,9 @@ async function handleStart(
     room.impostorId = impostorId;
     room.turnOrder = turnOrder;
     room.skipVotes.clear();
+    room.alivePlayers = new Set(playerIds);
+    room.votingInProgress = false;
+    room.votes.clear();
 
     const turnOrderText: string[] = [];
     for (let i = 0; i < turnOrder.length; i++) {
@@ -671,11 +696,11 @@ async function handleStart(
         `• Los demás jugadores tienen la misma palabra secreta\n` +
         `• Turnense para dar pistas sobre la palabra\n` +
         `• El impostor debe intentar adivinar la palabra\n` +
-        `• Los demás deben identificar al impostor\n` +
+        `• Cuando crean saber quién es el impostor, inicien votación con el botón\n` +
         `• Si no les gusta el tema, pueden votar con \`/impostor skip\`\n\n` +
-        `**Comandos útiles:**\n` +
-        `• \`/impostor skip\` - Votar para cambiar de palabra (requiere mayoría)\n` +
-        `• \`/impostor terminar\` - Terminar el juego (solo anfitrión)\n\n` +
+        `**Botones disponibles:**\n` +
+        `• 🗳️ **Votar Skip** - Cambiar de palabra (requiere mayoría)\n` +
+        `• 🗳️ **Empezar Votación** - Votar para expulsar a un jugador\n\n` +
         `¡Que comience el juego! 🎲`;
 
     if (failedDMs.length > 0) {
@@ -795,53 +820,6 @@ async function handleSkip(
     }
 }
 
-async function handleEnd(
-    interaction: ChatInputCommandInteraction,
-    roomKey: string
-): Promise<void> {
-    const room = activeRooms.get(roomKey);
-
-    if (!room) {
-        throw new CommandError(
-            ErrorType.NOT_FOUND,
-            'No hay sala activa',
-            '❌ No hay ninguna sala de juego activa en este canal.'
-        );
-    }
-
-    if (room.hostId !== interaction.user.id) {
-        throw new CommandError(
-            ErrorType.PERMISSION_ERROR,
-            'Usuario no es el host',
-            '❌ Solo el anfitrión puede terminar el juego.'
-        );
-    }
-
-    if (!room.started) {
-        throw new CommandError(
-            ErrorType.VALIDATION_ERROR,
-            'El juego no ha empezado',
-            '❌ El juego aún no ha comenzado.'
-        );
-    }
-
-    const word = room.currentWord!;
-    const impostor = await interaction.client.users.fetch(room.impostorId!);
-
-    activeRooms.delete(roomKey);
-
-    const embed = createInfoEmbed(
-        '🏁 Juego Terminado',
-        `El anfitrión ha terminado el juego.\n\n` +
-        `🔑 **La palabra era:** ||${word}||\n` +
-        `🕵️ **El impostor era:** ${impostor.displayName}\n\n` +
-        `¡Gracias por jugar!`
-    );
-
-    await sendMessage(interaction, { embed });
-
-    logger.info('Impostor', `Juego terminado en sala ${roomKey} por el host`);
-}
 
 async function handleLeave(
     interaction: ChatInputCommandInteraction,
@@ -925,17 +903,181 @@ async function handlePlayers(
     for (const playerId of room.players) {
         const player = await interaction.client.users.fetch(playerId);
         const isHost = playerId === room.hostId;
-        playerNames.push(`${isHost ? '👑 ' : ''}**${player.displayName}**`);
+        const isAlive = room.started ? room.alivePlayers.has(playerId) : true;
+        const status = room.started ? (isAlive ? '✅' : '💀') : '';
+        playerNames.push(`${status} ${isHost ? '👑 ' : ''}**${player.displayName}**`);
     }
 
     const embed = createInfoEmbed(
         '👥 Jugadores en la sala',
         `**Total:** ${room.players.size}/10\n` +
+        `${room.started ? `**Vivos:** ${room.alivePlayers.size}\n` : ''}` +
         `**Estado:** ${room.started ? '🎮 En juego' : '⏳ Esperando'}\n\n` +
         playerNames.join('\n')
     );
 
     await sendMessage(interaction, { embed, ephemeral: true });
+}
+
+async function handleExpel(
+    interaction: ChatInputCommandInteraction,
+    roomKey: string
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) {
+        throw new CommandError(
+            ErrorType.NOT_FOUND,
+            'No hay sala activa',
+            '❌ No hay ninguna sala de juego activa en este canal.'
+        );
+    }
+
+    if (room.hostId !== interaction.user.id) {
+        throw new CommandError(
+            ErrorType.PERMISSION_ERROR,
+            'Usuario no es el host',
+            '❌ Solo el anfitrión puede expulsar jugadores.'
+        );
+    }
+
+    if (!room.started) {
+        throw new CommandError(
+            ErrorType.VALIDATION_ERROR,
+            'El juego no ha empezado',
+            '❌ El juego aún no ha comenzado.'
+        );
+    }
+
+    const target = interaction.options.getUser('jugador', true);
+
+    if (!room.alivePlayers.has(target.id)) {
+        throw new CommandError(
+            ErrorType.VALIDATION_ERROR,
+            'Jugador no está vivo',
+            '❌ Este jugador no está en el juego o ya fue expulsado.'
+        );
+    }
+
+    const wasImpostor = target.id === room.impostorId;
+    const votingWasActive = room.votingInProgress;
+
+    room.alivePlayers.delete(target.id);
+
+    if (room.votes.has(target.id)) {
+        room.votes.delete(target.id);
+    }
+
+    if (votingWasActive && room.votingMessage) {
+        try {
+            await room.votingMessage.edit({ components: [] });
+        } catch (error) {
+            logger.error('Impostor', 'Error al deshabilitar menú de votación tras expulsión', error instanceof Error ? error : new Error(String(error)));
+        }
+        room.votingInProgress = false;
+        room.votes.clear();
+    }
+
+    const resultEmbed = new EmbedBuilder()
+        .setColor(wasImpostor ? COLORS.SUCCESS : COLORS.WARNING)
+        .setTitle('👮 Expulsión Manual')
+        .setDescription(
+            `**${target.displayName}** ha sido expulsado por el anfitrión.\n\n` +
+            `${wasImpostor
+                ? `🎉 **¡${target.displayName} ERA EL IMPOSTOR!**\n\n**Los jugadores normales ganan!**`
+                : `⚠️ **${target.displayName} NO era el impostor.**\n\nEl juego continúa...`
+            }` +
+            `${votingWasActive ? '\n\n⚠️ La votación ha sido cancelada y se reiniciará automáticamente.' : ''}`
+        )
+        .setTimestamp();
+
+    await sendMessage(interaction, { embed: resultEmbed });
+
+    if (wasImpostor) {
+        await endGame(interaction.client, roomKey, false);
+        return;
+    }
+
+    const victoryCheck = await checkVictoryConditions(roomKey);
+    if (victoryCheck) {
+        await endGame(interaction.client, roomKey, true);
+        return;
+    }
+
+    if (votingWasActive && room.alivePlayers.size >= 2) {
+        await startVoting(interaction.client, roomKey, interaction.channelId);
+    }
+}
+
+async function handleEnd(
+    interaction: ChatInputCommandInteraction,
+    roomKey: string
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) {
+        throw new CommandError(
+            ErrorType.NOT_FOUND,
+            'No hay sala activa',
+            '❌ No hay ninguna sala de juego activa en este canal.'
+        );
+    }
+
+    if (room.hostId !== interaction.user.id) {
+        throw new CommandError(
+            ErrorType.PERMISSION_ERROR,
+            'Usuario no es el host',
+            '❌ Solo el anfitrión puede terminar el juego.'
+        );
+    }
+
+    if (!room.started) {
+        throw new CommandError(
+            ErrorType.VALIDATION_ERROR,
+            'El juego no ha empezado',
+            '❌ El juego aún no ha comenzado. Usa el botón "Salir" para abandonar la sala.'
+        );
+    }
+
+    const word = room.currentWord!;
+    const impostor = await interaction.client.users.fetch(room.impostorId!);
+
+    const embed = createInfoEmbed(
+        '🏁 Juego Terminado',
+        `El anfitrión ha terminado el juego.\n\n` +
+        `🔑 **La palabra era:** ||${word}||\n` +
+        `🕵️ **El impostor era:** ${impostor.displayName}\n\n` +
+        `¡Gracias por jugar!`
+    );
+
+    await sendMessage(interaction, { embed });
+
+    if (room.gameMessage) {
+        try {
+            await room.gameMessage.edit({ components: [] });
+        } catch (error) {
+            logger.error('Impostor', 'No se pudo deshabilitar botones del juego', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    if (room.votingMessage) {
+        try {
+            await room.votingMessage.edit({ components: [] });
+        } catch (error) {
+            logger.error('Impostor', 'No se pudo deshabilitar botones de votación', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    if (room.lobbyMessage) {
+        try {
+            await room.lobbyMessage.edit({ components: [] });
+        } catch (error) {
+            logger.error('Impostor', 'No se pudo deshabilitar botones del lobby', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    activeRooms.delete(roomKey);
+    logger.info('Impostor', `Juego terminado en sala ${roomKey} por el host`);
 }
 
 async function updateLobbyMessage(room: GameRoom, interactionMessage?: Message): Promise<void> {
@@ -1198,6 +1340,9 @@ async function handleStartButton(
     room.impostorId = impostorId;
     room.turnOrder = turnOrder;
     room.skipVotes.clear();
+    room.alivePlayers = new Set(playerIds);
+    room.votingInProgress = false;
+    room.votes.clear();
 
     const turnOrderText: string[] = [];
     for (let i = 0; i < turnOrder.length; i++) {
@@ -1265,7 +1410,7 @@ async function handleStartButton(
         `**📋 Orden de turnos:**\n${turnOrderText.join('\n')}\n\n` +
         `**Usa los botones para:**\n` +
         `• 🗳️ **Votar Skip** - Cambiar de palabra (requiere mayoría)\n` +
-        `• 🏁 **Terminar** - Terminar el juego (solo anfitrión)\n\n` +
+        `• 🗳️ **Empezar Votación** - Votar para expulsar a un jugador\n\n` +
         `¡Que comience el juego! 🎲`;
 
     if (failedDMs.length > 0) {
@@ -1478,7 +1623,107 @@ async function handleSkipButton(
     }
 }
 
-async function handleEndButton(
+async function createVoteSelectMenu(room: GameRoom, client: ChatInputCommandInteraction['client'] | ButtonInteraction['client']): Promise<ActionRowBuilder<StringSelectMenuBuilder>> {
+    const options: StringSelectMenuOptionBuilder[] = [];
+
+    for (const playerId of room.alivePlayers) {
+        const player = await client.users.fetch(playerId);
+        options.push(
+            new StringSelectMenuOptionBuilder()
+                .setLabel(player.displayName)
+                .setValue(playerId)
+        );
+    }
+
+    options.push(
+        new StringSelectMenuOptionBuilder()
+            .setLabel('Saltar voto (no expulsar a nadie)')
+            .setValue('skip')
+            .setDescription('Votar para no expulsar a nadie esta ronda')
+    );
+
+    const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('impostor_vote_select')
+        .setPlaceholder('Selecciona a quién expulsar')
+        .setMinValues(1)
+        .setMaxValues(1)
+        .addOptions(options);
+
+    return new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+}
+
+async function startVoting(
+    client: ButtonInteraction['client'],
+    roomKey: string,
+    channelId: string
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room || !room.started || room.votingInProgress) {
+        return;
+    }
+
+    room.votingInProgress = true;
+    room.votes.clear();
+
+    const alivePlayersList: string[] = [];
+    for (const playerId of room.alivePlayers) {
+        const player = await client.users.fetch(playerId);
+        alivePlayersList.push(`• ${player.displayName}`);
+    }
+
+    const embed = createInfoEmbed(
+        '🗳️ Votación Iniciada',
+        `Es hora de votar para expulsar a un jugador.\n\n` +
+        `**Jugadores vivos (${room.alivePlayers.size}):**\n${alivePlayersList.join('\n')}\n\n` +
+        `Todos los jugadores vivos deben votar usando el menú de abajo.\n` +
+        `**Votos:** ${room.votes.size}/${room.alivePlayers.size}`
+    );
+
+    const selectMenuRow = await createVoteSelectMenu(room, client);
+
+    const channel = client.channels.cache.get(channelId);
+    if (!channel || !('send' in channel)) return;
+
+    const voteMessage = await channel.send({
+        embeds: [embed],
+        components: [selectMenuRow]
+    });
+
+    room.votingMessage = voteMessage;
+
+    const collector = voteMessage.createMessageComponentCollector({
+        componentType: ComponentType.StringSelect,
+        time: 300000
+    });
+
+    collector.on('collect', async (selectInteraction: StringSelectMenuInteraction) => {
+        try {
+            if (selectInteraction.customId === 'impostor_vote_select') {
+                await handleVoteSelect(selectInteraction, roomKey);
+            }
+        } catch (error) {
+            logger.error('Impostor', 'Error en votación', error instanceof Error ? error : new Error(String(error)));
+            if (!selectInteraction.replied && !selectInteraction.deferred) {
+                await selectInteraction.reply({
+                    content: '❌ Ocurrió un error al procesar tu voto.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        }
+    });
+
+    collector.on('end', async () => {
+        if (activeRooms.has(roomKey)) {
+            const currentRoom = activeRooms.get(roomKey)!;
+            if (currentRoom.votingInProgress) {
+                currentRoom.votingInProgress = false;
+            }
+        }
+    });
+}
+
+async function handleStartVoteButton(
     interaction: ButtonInteraction,
     roomKey: string
 ): Promise<void> {
@@ -1492,14 +1737,6 @@ async function handleEndButton(
         return;
     }
 
-    if (room.hostId !== interaction.user.id) {
-        await interaction.reply({
-            content: '❌ Solo el anfitrión puede terminar el juego.',
-            flags: MessageFlags.Ephemeral
-        });
-        return;
-    }
-
     if (!room.started) {
         await interaction.reply({
             content: '❌ El juego aún no ha comenzado.',
@@ -1508,23 +1745,414 @@ async function handleEndButton(
         return;
     }
 
-    const word = room.currentWord!;
-    const impostor = await interaction.client.users.fetch(room.impostorId!);
+    if (room.votingInProgress) {
+        await interaction.reply({
+            content: '❌ Ya hay una votación en progreso.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
 
-    activeRooms.delete(roomKey);
+    await interaction.deferReply();
+
+    await startVoting(interaction.client, roomKey, interaction.channelId);
+
+    try {
+        await interaction.deleteReply();
+    } catch (error) {
+        logger.error('Impostor', 'Error al eliminar respuesta diferida', error instanceof Error ? error : new Error(String(error)));
+    }
+}
+
+async function handleVoteSelect(
+    interaction: StringSelectMenuInteraction,
+    roomKey: string
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) {
+        await interaction.reply({
+            content: '❌ Esta sala ya no está activa.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (!room.votingInProgress) {
+        await interaction.reply({
+            content: '❌ No hay votación en progreso.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (!room.alivePlayers.has(interaction.user.id)) {
+        await interaction.reply({
+            content: '❌ No puedes votar porque no estás en el juego o ya fuiste expulsado.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (room.votes.has(interaction.user.id)) {
+        await interaction.reply({
+            content: '❌ Ya has votado.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    const votedFor = interaction.values[0];
+    room.votes.set(interaction.user.id, votedFor);
 
     await interaction.reply({
-        content: `🏁 **Juego Terminado**\n\n` +
-            `🔑 **La palabra era:** ||${word}||\n` +
-            `🕵️ **El impostor era:** ${impostor.displayName}\n\n` +
-            `¡Gracias por jugar!`,
+        content: `✅ Tu voto ha sido registrado.\n📊 **Votos:** ${room.votes.size}/${room.alivePlayers.size}`,
+        flags: MessageFlags.Ephemeral
+    });
+
+    if (room.votingMessage) {
+        const alivePlayersList: string[] = [];
+        for (const playerId of room.alivePlayers) {
+            const player = await interaction.client.users.fetch(playerId);
+            const hasVoted = room.votes.has(playerId);
+            alivePlayersList.push(`${hasVoted ? '✅' : '⏳'} ${player.displayName}`);
+        }
+
+        const updatedEmbed = createInfoEmbed(
+            '🗳️ Votación en Progreso',
+            `Es hora de votar para expulsar a un jugador.\n\n` +
+            `**Jugadores vivos (${room.alivePlayers.size}):**\n${alivePlayersList.join('\n')}\n\n` +
+            `**Votos:** ${room.votes.size}/${room.alivePlayers.size}`
+        );
+
+        try {
+            await room.votingMessage.edit({ embeds: [updatedEmbed] });
+        } catch (error) {
+            logger.error('Impostor', 'Error al actualizar mensaje de votación', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    if (room.votes.size === room.alivePlayers.size) {
+        await processVotingResults(interaction, roomKey, interaction.client);
+    }
+}
+
+async function processVotingResults(
+    interaction: StringSelectMenuInteraction,
+    roomKey: string,
+    client: StringSelectMenuInteraction['client']
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) return;
+
+    room.votingInProgress = false;
+
+    const voteCounts = new Map<string, number>();
+
+    for (const [, votedFor] of room.votes) {
+        voteCounts.set(votedFor, (voteCounts.get(votedFor) || 0) + 1);
+    }
+
+    let maxVotes = 0;
+    const playersWithMaxVotes: string[] = [];
+
+    for (const [playerId, count] of voteCounts) {
+        if (playerId === 'skip') continue;
+
+        if (count > maxVotes) {
+            maxVotes = count;
+            playersWithMaxVotes.length = 0;
+            playersWithMaxVotes.push(playerId);
+        } else if (count === maxVotes) {
+            playersWithMaxVotes.push(playerId);
+        }
+    }
+
+    const skipVotes = voteCounts.get('skip') || 0;
+
+    if (room.votingMessage) {
+        try {
+            await room.votingMessage.edit({ components: [] });
+        } catch (error) {
+            logger.error('Impostor', 'Error al deshabilitar menú de votación', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    const channel = client.channels.cache.get(room.channelId);
+    if (!channel || !('send' in channel)) return;
+
+    if (playersWithMaxVotes.length === 0 || playersWithMaxVotes.length > 1 || skipVotes >= maxVotes) {
+        const tieMessage = playersWithMaxVotes.length > 1
+            ? `Hubo un empate entre ${playersWithMaxVotes.length} jugadores.`
+            : `La mayoría votó por no expulsar a nadie.`;
+
+        const aliveCount = room.alivePlayers.size;
+        const aliveList: string[] = [];
+        for (const playerId of room.alivePlayers) {
+            const player = await client.users.fetch(playerId);
+            aliveList.push(`• ${player.displayName}`);
+        }
+
+        const embed = createInfoEmbed(
+            '🗳️ Resultados de Votación',
+            `${tieMessage}\n\n**Nadie fue expulsado.**\n\n` +
+            `👥 **Jugadores vivos (${aliveCount}):**\n${aliveList.join('\n')}\n\n` +
+            `El juego continúa... Presiona "Siguiente Ronda" cuando estén listos.`
+        );
+
+        const nextRoundButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            new ButtonBuilder()
+                .setCustomId('impostor_next_round')
+                .setLabel('Siguiente Ronda')
+                .setEmoji('▶️')
+                .setStyle(ButtonStyle.Success)
+        );
+
+        const resultMessage = await channel.send({
+            embeds: [embed],
+            components: [nextRoundButton]
+        });
+
+        const collector = resultMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 600000
+        });
+
+        collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
+            if (buttonInteraction.customId === 'impostor_next_round') {
+                await handleNextRoundButton(buttonInteraction, roomKey);
+                collector.stop();
+            }
+        });
+
+        room.votes.clear();
+        return;
+    }
+
+    const expelledId = playersWithMaxVotes[0];
+    const expelled = await client.users.fetch(expelledId);
+    const wasImpostor = expelledId === room.impostorId;
+
+    room.alivePlayers.delete(expelledId);
+
+    room.votes.clear();
+
+    if (wasImpostor) {
+        const resultEmbed = new EmbedBuilder()
+            .setColor(COLORS.SUCCESS)
+            .setTitle('🗳️ Resultados de Votación')
+            .setDescription(
+                `**${expelled.displayName}** ha sido expulsado con **${maxVotes}** voto(s).\n\n` +
+                `🎉 **¡${expelled.displayName} ERA EL IMPOSTOR!**\n\n**Los jugadores normales ganan!**`
+            )
+            .setTimestamp();
+
+        await channel.send({ embeds: [resultEmbed] });
+        await endGame(client, roomKey, false);
+        return;
+    }
+
+    const victoryCheck = await checkVictoryConditions(roomKey);
+    if (victoryCheck) {
+        const resultEmbed = new EmbedBuilder()
+            .setColor(COLORS.DANGER)
+            .setTitle('🗳️ Resultados de Votación')
+            .setDescription(
+                `**${expelled.displayName}** ha sido expulsado con **${maxVotes}** voto(s).\n\n` +
+                `❌ **${expelled.displayName} NO era el impostor...**\n\n` +
+                `🕵️ **¡El impostor gana!** Solo quedan 2 jugadores.`
+            )
+            .setTimestamp();
+
+        await channel.send({ embeds: [resultEmbed] });
+        await endGame(client, roomKey, true);
+        return;
+    }
+
+    const aliveCount = room.alivePlayers.size;
+    const aliveList: string[] = [];
+    for (const playerId of room.alivePlayers) {
+        const player = await client.users.fetch(playerId);
+        aliveList.push(`• ${player.displayName}`);
+    }
+
+    const resultEmbed = new EmbedBuilder()
+        .setColor(COLORS.DANGER)
+        .setTitle('🗳️ Resultados de Votación')
+        .setDescription(
+            `**${expelled.displayName}** ha sido expulsado con **${maxVotes}** voto(s).\n\n` +
+            `❌ **${expelled.displayName} NO era el impostor...**\n\n` +
+            `👥 **Jugadores vivos (${aliveCount}):**\n${aliveList.join('\n')}\n\n` +
+            `El impostor sigue entre ustedes. Presiona "Siguiente Ronda" cuando estén listos.`
+        )
+        .setTimestamp();
+
+    const nextRoundButton = new ActionRowBuilder<ButtonBuilder>().addComponents(
+        new ButtonBuilder()
+            .setCustomId('impostor_next_round')
+            .setLabel('Siguiente Ronda')
+            .setEmoji('▶️')
+            .setStyle(ButtonStyle.Success)
+    );
+
+    const resultMessage = await channel.send({
+        embeds: [resultEmbed],
+        components: [nextRoundButton]
+    });
+
+    const collector = resultMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 600000
+    });
+
+    collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
+        if (buttonInteraction.customId === 'impostor_next_round') {
+            await handleNextRoundButton(buttonInteraction, roomKey);
+            collector.stop();
+        }
+    });
+}
+
+async function handleNextRoundButton(
+    interaction: ButtonInteraction,
+    roomKey: string
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) {
+        await interaction.reply({
+            content: '❌ Esta sala ya no está activa.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (!room.started) {
+        await interaction.reply({
+            content: '❌ El juego no está en curso.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    try {
+        await interaction.message.edit({ components: [] });
+    } catch (error) {
+        logger.error('Impostor', 'Error al deshabilitar botón de siguiente ronda', error instanceof Error ? error : new Error(String(error)));
+    }
+
+    room.skipVotes.clear();
+
+    const aliveCount = room.alivePlayers.size;
+    const aliveList: string[] = [];
+    for (const playerId of room.alivePlayers) {
+        const player = await interaction.client.users.fetch(playerId);
+        aliveList.push(`• ${player.displayName}`);
+    }
+
+    const roundEmbed = createInfoEmbed(
+        '▶️ Nueva Ronda',
+        `🎮 **El juego continúa**\n\n` +
+        `👥 **Jugadores vivos (${aliveCount}):**\n${aliveList.join('\n')}\n\n` +
+        `🔑 **Palabra:** ||${room.currentWord}||\n\n` +
+        `**Continúen dando pistas y discutiendo.**\n` +
+        `Cuando estén listos para votar de nuevo, usen el botón "Empezar Votación".`
+    );
+
+    const gameButtons = createGameButtons();
+
+    const newGameMessage = await interaction.reply({
+        embeds: [roundEmbed],
+        components: [gameButtons],
+        fetchReply: true
     });
 
     if (room.gameMessage) {
         try {
             await room.gameMessage.edit({ components: [] });
         } catch (error) {
-            logger.error('Impostor', 'No se pudo deshabilitar botones del juego terminado - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
+            logger.error('Impostor', 'Error al deshabilitar botones del mensaje anterior', error instanceof Error ? error : new Error(String(error)));
+        }
+    }
+
+    room.gameMessage = newGameMessage as Message;
+
+    const collector = newGameMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 7200000
+    });
+
+    collector.on('collect', async (buttonInteraction: ButtonInteraction) => {
+        try {
+            await handleButtonInteraction(buttonInteraction, roomKey);
+        } catch (error) {
+            logger.error('Impostor', 'Error en botón de la ronda', error instanceof Error ? error : new Error(String(error)));
+            if (!buttonInteraction.replied && !buttonInteraction.deferred) {
+                await buttonInteraction.reply({
+                    content: '❌ Ocurrió un error al procesar tu acción.',
+                    flags: MessageFlags.Ephemeral
+                });
+            }
+        }
+    });
+
+    collector.on('end', () => {
+        if (activeRooms.has(roomKey)) {
+            const currentRoom = activeRooms.get(roomKey);
+            if (currentRoom && !currentRoom.votingInProgress) {
+                logger.info('Impostor', `Collector de ronda terminado para sala ${roomKey}`);
+            }
+        }
+    });
+}
+
+async function checkVictoryConditions(
+    roomKey: string
+): Promise<boolean> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) return false;
+
+    if (room.alivePlayers.size <= 2) {
+        return true;
+    }
+
+    return false;
+}
+
+async function endGame(
+    client: StringSelectMenuInteraction['client'],
+    roomKey: string,
+    impostorWins: boolean
+): Promise<void> {
+    const room = activeRooms.get(roomKey);
+
+    if (!room) return;
+
+    const impostor = await client.users.fetch(room.impostorId!);
+    const word = room.currentWord!;
+
+    const embed = new EmbedBuilder()
+        .setColor(impostorWins ? COLORS.DANGER : COLORS.SUCCESS)
+        .setTitle(impostorWins ? '🕵️ ¡El Impostor Gana!' : '✅ ¡Los Jugadores Ganan!')
+        .setDescription(
+            impostorWins
+                ? `**${impostor.displayName}** (el impostor) ha ganado!\n\nQuedan muy pocos jugadores para votarlo.\n\n🔑 **La palabra era:** ||${word}||`
+                : `**${impostor.displayName}** era el impostor y ha sido descubierto!\n\n🔑 **La palabra era:** ||${word}||\n\n¡Gracias por jugar!`
+        )
+        .setTimestamp();
+
+    const channel = client.channels.cache.get(room.channelId);
+    if (channel && 'send' in channel) {
+        await channel.send({ embeds: [embed] });
+    }
+
+    if (room.gameMessage) {
+        try {
+            await room.gameMessage.edit({ components: [] });
+        } catch (error) {
+            logger.error('Impostor', 'No se pudo deshabilitar botones del juego', error instanceof Error ? error : new Error(String(error)));
         }
     }
 
@@ -1532,9 +2160,10 @@ async function handleEndButton(
         try {
             await room.lobbyMessage.edit({ components: [] });
         } catch (error) {
-            logger.error('Impostor', 'No se pudo deshabilitar botones del lobby - verifica permisos del bot', error instanceof Error ? error : new Error(String(error)));
+            logger.error('Impostor', 'No se pudo deshabilitar botones del lobby', error instanceof Error ? error : new Error(String(error)));
         }
     }
 
-    logger.info('Impostor', `Juego terminado en sala ${roomKey} por el host usando botón`);
+    activeRooms.delete(roomKey);
+    logger.info('Impostor', `Juego terminado en sala ${roomKey} - ${impostorWins ? 'Impostor gana' : 'Jugadores ganan'}`);
 }

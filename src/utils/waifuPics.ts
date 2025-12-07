@@ -1,4 +1,5 @@
 import { logger } from "./logger.js";
+import { getGifDimensions, validateGifDimensions } from "./gifDimensions.js";
 
 /* URL base de la API de Waifu.pics */
 const WAIFU_PICS_API_URL = 'https://api.waifu.pics/sfw';
@@ -43,21 +44,21 @@ export function isWaifuPicsSupported(query: string): boolean {
 /**
  * Obtiene un GIF aleatorio de waifu.pics basado en una acción
  * La API de waifu.pics devuelve un GIF aleatorio cada vez que se llama
- * Implementa reintentos para mejorar la probabilidad de obtener GIFs de calidad
+ * Implementa validación de dimensiones paralela para máxima velocidad
  *
  * @async
  * @param {string} query - Término de búsqueda (debe estar en WAIFU_PICS_ACTIONS)
- * @param {number} [maxRetries=3] - Número máximo de intentos para obtener un GIF
+ * @param {number} [parallelAttempts=5] - Número de solicitudes paralelas a realizar
  * @returns {Promise<string>} URL del GIF
- * @throws {Error} Si la acción no está soportada o la API falla
+ * @throws {Error} Si la acción no está soportada o no se encuentra un GIF válido
  *
  * @example
  * ```typescript
  * const gifUrl = await getWaifuPicsGif('anime hug');
- * // Retorna: 'https://cdn.waifu.pics/...'
+ * // Retorna: 'https://cdn.waifu.pics/...' (validado por dimensiones)
  * ```
  */
-export async function getWaifuPicsGif(query: string, maxRetries: number = 3): Promise<string> {
+export async function getWaifuPicsGif(query: string, parallelAttempts: number = 5): Promise<string> {
     try {
         // Verificar si la acción está soportada
         if (!isWaifuPicsSupported(query)) {
@@ -67,39 +68,63 @@ export async function getWaifuPicsGif(query: string, maxRetries: number = 3): Pr
         const action = WAIFU_PICS_ACTIONS[query];
         const url = `${WAIFU_PICS_API_URL}/${action}`;
 
-        let lastError: Error | null = null;
-
-        // Intentar múltiples veces para obtener un GIF
-        // waifu.pics generalmente tiene buena calidad, pero múltiples intentos
-        // aumentan la probabilidad de obtener un GIF óptimo
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
+        // Función para obtener y validar un GIF
+        const fetchAndValidateGif = async (attemptNum: number): Promise<string | null> => {
             try {
                 const response = await fetch(url);
 
                 if (!response.ok) {
-                    throw new Error(`Waifu.pics API error: ${response.status}`);
+                    logger.debug('WaifuPics', `Intento ${attemptNum}: API error ${response.status}`);
+                    return null;
                 }
 
                 const data = await response.json();
 
                 if (!data.url) {
-                    throw new Error('No se recibió URL en la respuesta de waifu.pics');
+                    logger.debug('WaifuPics', `Intento ${attemptNum}: No URL en respuesta`);
+                    return null;
                 }
 
-                logger.debug('WaifuPics', `GIF obtenido exitosamente en intento ${attempt}/${maxRetries}`);
+                // Validar dimensiones del GIF
+                const dimensions = await getGifDimensions(data.url);
+
+                if (!dimensions) {
+                    logger.debug('WaifuPics', `Intento ${attemptNum}: No se pudieron obtener dimensiones`);
+                    return null;
+                }
+
+                if (!validateGifDimensions(dimensions)) {
+                    logger.debug('WaifuPics', `Intento ${attemptNum}: GIF rechazado (${dimensions.width}x${dimensions.height})`);
+                    return null;
+                }
+
+                logger.info('WaifuPics', `GIF válido encontrado en intento ${attemptNum} (${dimensions.width}x${dimensions.height})`);
                 return data.url;
             } catch (error) {
-                lastError = error as Error;
-                if (attempt < maxRetries) {
-                    logger.debug('WaifuPics', `Intento ${attempt} falló, reintentando...`);
-                    // Pequeña pausa antes de reintentar
-                    await new Promise(resolve => setTimeout(resolve, 100));
-                }
+                logger.debug('WaifuPics', `Intento ${attemptNum}: Error - ${error}`);
+                return null;
             }
+        };
+
+        // Lanzar múltiples solicitudes en paralelo
+        logger.debug('WaifuPics', `Lanzando ${parallelAttempts} solicitudes paralelas`);
+        const promises = Array.from({ length: parallelAttempts }, (_, i) =>
+            fetchAndValidateGif(i + 1)
+        );
+
+        // Esperar a que al menos una tenga éxito
+        const results = await Promise.all(promises);
+
+        // Tomar el primer GIF válido
+        const validGif = results.find(result => result !== null);
+
+        if (validGif) {
+            return validGif;
         }
 
-        // Si llegamos aquí, todos los intentos fallaron
-        throw lastError || new Error('Error desconocido obteniendo GIF de waifu.pics');
+        // Si ninguno fue válido, lanzar error
+        logger.warn('WaifuPics', `No se encontró un GIF válido después de ${parallelAttempts} intentos paralelos`);
+        throw new Error('No se pudo obtener un GIF con dimensiones válidas de waifu.pics');
     } catch (error) {
         logger.error('WaifuPics', 'Error obteniendo GIF de waifu.pics', error);
         throw error;
