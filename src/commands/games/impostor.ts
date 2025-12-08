@@ -12,7 +12,8 @@ import {
     MessageFlags,
     StringSelectMenuBuilder,
     StringSelectMenuInteraction,
-    StringSelectMenuOptionBuilder
+    StringSelectMenuOptionBuilder,
+    GuildMember
 } from 'discord.js';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { SlashOnlyCommand } from '../../types/Command.js';
@@ -74,6 +75,13 @@ try {
 
 function getRoomKey(guildId: string, channelId: string): string {
     return `${guildId}-${channelId}`;
+}
+
+function getMemberDisplayName(member: GuildMember | any, user: User): string {
+    if (member && typeof member === 'object' && 'displayName' in member) {
+        return (member as GuildMember).displayName;
+    }
+    return user.displayName;
 }
 
 function getRandomWord(): string {
@@ -375,7 +383,7 @@ async function handleCreate(
     }
 
     const embed = createSuccessEmbed('🎮 Sala Creada',
-        `**${interaction.user.displayName}** ha creado una sala de juego!\n\n${howToPlayText}`
+        `**${getMemberDisplayName(interaction.member, interaction.user)}** ha creado una sala de juego!\n\n${howToPlayText}`
     );
 
     const buttons = createLobbyButtons(useCustomThemes);
@@ -472,7 +480,7 @@ async function handleJoin(
 
     const embed = createSuccessEmbed(
         '✅ Te has unido',
-        `**${interaction.user.displayName}** se ha unido a la partida!\n\n` +
+        `**${getMemberDisplayName(interaction.member, interaction.user)}** se ha unido a la partida!\n\n` +
         `👥 **Jugadores:** ${room.players.size}/10`
     );
 
@@ -585,8 +593,8 @@ async function handleStart(
         const playersWithoutProposal: string[] = [];
         for (const playerId of room.players) {
             if (!room.proposedWords.has(playerId)) {
-                const player = await interaction.client.users.fetch(playerId);
-                playersWithoutProposal.push(player.displayName);
+                const member = await interaction.guild!.members.fetch(playerId);
+                playersWithoutProposal.push(member.displayName);
             }
         }
 
@@ -629,14 +637,15 @@ async function handleStart(
 
     const turnOrderText: string[] = [];
     for (let i = 0; i < turnOrder.length; i++) {
-        const player = await interaction.client.users.fetch(turnOrder[i]);
-        turnOrderText.push(`${i + 1}. ${player.displayName}`);
+        const member = await interaction.guild!.members.fetch(turnOrder[i]);
+        turnOrderText.push(`${i + 1}. ${member.displayName}`);
     }
 
     const failedDMs: string[] = [];
 
     for (const playerId of playerIds) {
-        const player = await interaction.client.users.fetch(playerId);
+        const member = await interaction.guild!.members.fetch(playerId);
+        const player = member.user;
         const isImpostor = playerId === impostorId;
 
         const embed = new EmbedBuilder()
@@ -676,7 +685,7 @@ async function handleStart(
 
         const success = await sendDM(player, embed);
         if (!success) {
-            failedDMs.push(player.displayName);
+            failedDMs.push(member.displayName);
         }
     }
 
@@ -777,7 +786,8 @@ async function handleSkip(
         for (const playerId of playerIds) {
             if (playerId === room.impostorId) continue;
 
-            const player = await interaction.client.users.fetch(playerId);
+            const member = await interaction.guild!.members.fetch(playerId);
+            const player = member.user;
 
             const embed = new EmbedBuilder()
                 .setColor(COLORS.WARNING)
@@ -791,7 +801,7 @@ async function handleSkip(
 
             const success = await sendDM(player, embed);
             if (!success) {
-                failedDMs.push(player.displayName);
+                failedDMs.push(member.displayName);
             }
         }
 
@@ -811,7 +821,7 @@ async function handleSkip(
     } else {
         const embed = createInfoEmbed(
             '🗳️ Voto Registrado',
-            `**${interaction.user.displayName}** ha votado para cambiar la palabra.\n\n` +
+            `**${getMemberDisplayName(interaction.member, interaction.user)}** ha votado para cambiar la palabra.\n\n` +
             `📊 **Votos:** ${currentVotes}/${requiredVotes}\n` +
             `⏳ Faltan ${requiredVotes - currentVotes} voto(s) más para cambiar la palabra.`
         );
@@ -866,11 +876,11 @@ async function handleLeave(
     if (room.hostId === interaction.user.id) {
         const newHostId = Array.from(room.players)[0];
         room.hostId = newHostId;
-        const newHost = await interaction.client.users.fetch(newHostId);
+        const newHost = await interaction.guild!.members.fetch(newHostId);
 
         const embed = createInfoEmbed(
             '🚪 Jugador salió',
-            `**${interaction.user.displayName}** ha salido de la sala.\n` +
+            `**${getMemberDisplayName(interaction.member, interaction.user)}** ha salido de la sala.\n` +
             `👑 **Nuevo anfitrión:** ${newHost.displayName}\n` +
             `👥 **Jugadores:** ${room.players.size}/10`
         );
@@ -901,11 +911,11 @@ async function handlePlayers(
 
     const playerNames: string[] = [];
     for (const playerId of room.players) {
-        const player = await interaction.client.users.fetch(playerId);
+        const member = await interaction.guild!.members.fetch(playerId);
         const isHost = playerId === room.hostId;
         const isAlive = room.started ? room.alivePlayers.has(playerId) : true;
         const status = room.started ? (isAlive ? '✅' : '💀') : '';
-        playerNames.push(`${status} ${isHost ? '👑 ' : ''}**${player.displayName}**`);
+        playerNames.push(`${status} ${isHost ? '👑 ' : ''}**${member.displayName}**`);
     }
 
     const embed = createInfoEmbed(
@@ -949,7 +959,8 @@ async function handleExpel(
         );
     }
 
-    const target = interaction.options.getUser('jugador', true);
+    const targetUser = interaction.options.getUser('jugador', true);
+    const target = await interaction.guild!.members.fetch(targetUser.id);
 
     if (!room.alivePlayers.has(target.id)) {
         throw new CommandError(
@@ -1040,7 +1051,7 @@ async function handleEnd(
     }
 
     const word = room.currentWord!;
-    const impostor = await interaction.client.users.fetch(room.impostorId!);
+    const impostor = await interaction.guild!.members.fetch(room.impostorId!);
 
     const embed = createInfoEmbed(
         '🏁 Juego Terminado',
@@ -1108,10 +1119,10 @@ async function updateLobbyMessage(room: GameRoom, interactionMessage?: Message):
 
     const playerNames: string[] = [];
     for (const playerId of room.players) {
-        const player = await messageToEdit.client.users.fetch(playerId);
+        const member = await messageToEdit.guild!.members.fetch(playerId);
         const isHost = playerId === room.hostId;
         const hasProposed = room.proposedWords.has(playerId);
-        playerNames.push(`${isHost ? '👑 ' : ''}${player.displayName}${room.useCustomThemes ? (hasProposed ? ' ✅' : ' ⏳') : ''}`);
+        playerNames.push(`${isHost ? '👑 ' : ''}${member.displayName}${room.useCustomThemes ? (hasProposed ? ' ✅' : ' ⏳') : ''}`);
     }
 
     let modeText = '';
@@ -1207,7 +1218,7 @@ async function handleJoinButton(
     room.players.add(interaction.user.id);
 
     await interaction.reply({
-        content: `✅ **${interaction.user.displayName}** se ha unido a la partida!`,
+        content: `✅ **${getMemberDisplayName(interaction.member, interaction.user)}** se ha unido a la partida!`,
         flags: MessageFlags.Ephemeral
     });
 
@@ -1302,8 +1313,8 @@ async function handleStartButton(
         const playersWithoutProposal: string[] = [];
         for (const playerId of room.players) {
             if (!room.proposedWords.has(playerId)) {
-                const player = await interaction.client.users.fetch(playerId);
-                playersWithoutProposal.push(player.displayName);
+                const member = await interaction.guild!.members.fetch(playerId);
+                playersWithoutProposal.push(member.displayName);
             }
         }
 
@@ -1346,14 +1357,15 @@ async function handleStartButton(
 
     const turnOrderText: string[] = [];
     for (let i = 0; i < turnOrder.length; i++) {
-        const player = await interaction.client.users.fetch(turnOrder[i]);
-        turnOrderText.push(`${i + 1}. ${player.displayName}`);
+        const member = await interaction.guild!.members.fetch(turnOrder[i]);
+        turnOrderText.push(`${i + 1}. ${member.displayName}`);
     }
 
     const failedDMs: string[] = [];
 
     for (const playerId of playerIds) {
-        const player = await interaction.client.users.fetch(playerId);
+        const member = await interaction.guild!.members.fetch(playerId);
+        const player = member.user;
         const isImpostor = playerId === impostorId;
 
         const embed = new EmbedBuilder()
@@ -1393,7 +1405,7 @@ async function handleStartButton(
 
         const success = await sendDM(player, embed);
         if (!success) {
-            failedDMs.push(player.displayName);
+            failedDMs.push(member.displayName);
         }
     }
 
@@ -1515,15 +1527,15 @@ async function handleLeaveButton(
     if (room.hostId === interaction.user.id) {
         const newHostId = Array.from(room.players)[0];
         room.hostId = newHostId;
-        const newHost = await interaction.client.users.fetch(newHostId);
+        const newHost = await interaction.guild!.members.fetch(newHostId);
 
         await interaction.reply({
-            content: `🚪 **${interaction.user.displayName}** ha salido de la sala.\n👑 **Nuevo anfitrión:** ${newHost.displayName}`,
+            content: `🚪 **${getMemberDisplayName(interaction.member, interaction.user)}** ha salido de la sala.\n👑 **Nuevo anfitrión:** ${newHost.displayName}`,
             flags: MessageFlags.Ephemeral
             });
     } else {
         await interaction.reply({
-            content: `🚪 **${interaction.user.displayName}** ha salido de la sala.`,
+            content: `🚪 **${getMemberDisplayName(interaction.member, interaction.user)}** ha salido de la sala.`,
             flags: MessageFlags.Ephemeral
             });
     }
@@ -1588,7 +1600,8 @@ async function handleSkipButton(
         for (const playerId of playerIds) {
             if (playerId === room.impostorId) continue;
 
-            const player = await interaction.client.users.fetch(playerId);
+            const member = await interaction.guild!.members.fetch(playerId);
+            const player = member.user;
 
             const embed = new EmbedBuilder()
                 .setColor(COLORS.WARNING)
@@ -1602,7 +1615,7 @@ async function handleSkipButton(
 
             const success = await sendDM(player, embed);
             if (!success) {
-                failedDMs.push(player.displayName);
+                failedDMs.push(member.displayName);
             }
         }
 
@@ -1618,19 +1631,20 @@ async function handleSkipButton(
         await interaction.editReply({ content: skipMessage });
     } else {
         await interaction.reply({
-            content: `🗳️ **${interaction.user.displayName}** ha votado para cambiar la palabra.\n📊 **Votos:** ${currentVotes}/${requiredVotes}`,
+            content: `🗳️ **${getMemberDisplayName(interaction.member, interaction.user)}** ha votado para cambiar la palabra.\n📊 **Votos:** ${currentVotes}/${requiredVotes}`,
             });
     }
 }
 
-async function createVoteSelectMenu(room: GameRoom, client: ChatInputCommandInteraction['client'] | ButtonInteraction['client']): Promise<ActionRowBuilder<StringSelectMenuBuilder>> {
+async function createVoteSelectMenu(room: GameRoom, client: ChatInputCommandInteraction['client'] | ButtonInteraction['client'], guildId: string): Promise<ActionRowBuilder<StringSelectMenuBuilder>> {
     const options: StringSelectMenuOptionBuilder[] = [];
+    const guild = client.guilds.cache.get(guildId);
 
     for (const playerId of room.alivePlayers) {
-        const player = await client.users.fetch(playerId);
+        const member = await guild!.members.fetch(playerId);
         options.push(
             new StringSelectMenuOptionBuilder()
-                .setLabel(player.displayName)
+                .setLabel(member.displayName)
                 .setValue(playerId)
         );
     }
@@ -1666,10 +1680,11 @@ async function startVoting(
     room.votingInProgress = true;
     room.votes.clear();
 
+    const guild = client.guilds.cache.get(room.guildId);
     const alivePlayersList: string[] = [];
     for (const playerId of room.alivePlayers) {
-        const player = await client.users.fetch(playerId);
-        alivePlayersList.push(`• ${player.displayName}`);
+        const member = await guild!.members.fetch(playerId);
+        alivePlayersList.push(`• ${member.displayName}`);
     }
 
     const embed = createInfoEmbed(
@@ -1680,7 +1695,7 @@ async function startVoting(
         `**Votos:** ${room.votes.size}/${room.alivePlayers.size}`
     );
 
-    const selectMenuRow = await createVoteSelectMenu(room, client);
+    const selectMenuRow = await createVoteSelectMenu(room, client, room.guildId);
 
     const channel = client.channels.cache.get(channelId);
     if (!channel || !('send' in channel)) return;
@@ -1811,11 +1826,12 @@ async function handleVoteSelect(
     });
 
     if (room.votingMessage) {
+        const guild = interaction.client.guilds.cache.get(room.guildId);
         const alivePlayersList: string[] = [];
         for (const playerId of room.alivePlayers) {
-            const player = await interaction.client.users.fetch(playerId);
+            const member = await guild!.members.fetch(playerId);
             const hasVoted = room.votes.has(playerId);
-            alivePlayersList.push(`${hasVoted ? '✅' : '⏳'} ${player.displayName}`);
+            alivePlayersList.push(`${hasVoted ? '✅' : '⏳'} ${member.displayName}`);
         }
 
         const updatedEmbed = createInfoEmbed(
@@ -1887,11 +1903,12 @@ async function processVotingResults(
             ? `Hubo un empate entre ${playersWithMaxVotes.length} jugadores.`
             : `La mayoría votó por no expulsar a nadie.`;
 
+        const guild = client.guilds.cache.get(room.guildId);
         const aliveCount = room.alivePlayers.size;
         const aliveList: string[] = [];
         for (const playerId of room.alivePlayers) {
-            const player = await client.users.fetch(playerId);
-            aliveList.push(`• ${player.displayName}`);
+            const member = await guild!.members.fetch(playerId);
+            aliveList.push(`• ${member.displayName}`);
         }
 
         const embed = createInfoEmbed(
@@ -1931,7 +1948,8 @@ async function processVotingResults(
     }
 
     const expelledId = playersWithMaxVotes[0];
-    const expelled = await client.users.fetch(expelledId);
+    const guild = client.guilds.cache.get(room.guildId);
+    const expelled = await guild!.members.fetch(expelledId);
     const wasImpostor = expelledId === room.impostorId;
 
     room.alivePlayers.delete(expelledId);
@@ -1973,8 +1991,8 @@ async function processVotingResults(
     const aliveCount = room.alivePlayers.size;
     const aliveList: string[] = [];
     for (const playerId of room.alivePlayers) {
-        const player = await client.users.fetch(playerId);
-        aliveList.push(`• ${player.displayName}`);
+        const member = await guild!.members.fetch(playerId);
+        aliveList.push(`• ${member.displayName}`);
     }
 
     const resultEmbed = new EmbedBuilder()
@@ -2047,15 +2065,14 @@ async function handleNextRoundButton(
     const aliveCount = room.alivePlayers.size;
     const aliveList: string[] = [];
     for (const playerId of room.alivePlayers) {
-        const player = await interaction.client.users.fetch(playerId);
-        aliveList.push(`• ${player.displayName}`);
+        const member = await interaction.guild!.members.fetch(playerId);
+        aliveList.push(`• ${member.displayName}`);
     }
 
     const roundEmbed = createInfoEmbed(
         '▶️ Nueva Ronda',
         `🎮 **El juego continúa**\n\n` +
         `👥 **Jugadores vivos (${aliveCount}):**\n${aliveList.join('\n')}\n\n` +
-        `🔑 **Palabra:** ||${room.currentWord}||\n\n` +
         `**Continúen dando pistas y discutiendo.**\n` +
         `Cuando estén listos para votar de nuevo, usen el botón "Empezar Votación".`
     );
@@ -2130,7 +2147,8 @@ async function endGame(
 
     if (!room) return;
 
-    const impostor = await client.users.fetch(room.impostorId!);
+    const guild = client.guilds.cache.get(room.guildId);
+    const impostor = await guild!.members.fetch(room.impostorId!);
     const word = room.currentWord!;
 
     const embed = new EmbedBuilder()
