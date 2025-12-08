@@ -772,6 +772,9 @@ async function handleSkip(
     const currentVotes = room.skipVotes.size;
 
     if (currentVotes >= requiredVotes) {
+        // Limpiar votos INMEDIATAMENTE para evitar votos concurrentes
+        room.skipVotes.clear();
+
         await interaction.deferReply();
 
         const oldWord = room.currentWord;
@@ -779,7 +782,6 @@ async function handleSkip(
         const playerIds = Array.from(room.players);
 
         room.currentWord = newWord;
-        room.skipVotes.clear();
 
         const failedDMs: string[] = [];
 
@@ -1587,13 +1589,15 @@ async function handleSkipButton(
     const currentVotes = room.skipVotes.size;
 
     if (currentVotes >= requiredVotes) {
+        // Limpiar votos INMEDIATAMENTE para evitar votos concurrentes
+        room.skipVotes.clear();
+
         await interaction.deferReply();
 
         const newWord = room.useAI ? await generateThemeWithAI() : getRandomWord();
         const playerIds = Array.from(room.players);
 
         room.currentWord = newWord;
-        room.skipVotes.clear();
 
         const failedDMs: string[] = [];
 
@@ -1692,6 +1696,7 @@ async function startVoting(
         `Es hora de votar para expulsar a un jugador.\n\n` +
         `**Jugadores vivos (${room.alivePlayers.size}):**\n${alivePlayersList.join('\n')}\n\n` +
         `Todos los jugadores vivos deben votar usando el menú de abajo.\n` +
+        `⏱️ **Tiempo límite:** 10 minutos\n` +
         `**Votos:** ${room.votes.size}/${room.alivePlayers.size}`
     );
 
@@ -1709,7 +1714,7 @@ async function startVoting(
 
     const collector = voteMessage.createMessageComponentCollector({
         componentType: ComponentType.StringSelect,
-        time: 300000
+        time: 600000  // 10 minutos
     });
 
     collector.on('collect', async (selectInteraction: StringSelectMenuInteraction) => {
@@ -1755,6 +1760,14 @@ async function handleStartVoteButton(
     if (!room.started) {
         await interaction.reply({
             content: '❌ El juego aún no ha comenzado.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (room.hostId !== interaction.user.id) {
+        await interaction.reply({
+            content: '❌ Solo el anfitrión puede iniciar la votación.',
             flags: MessageFlags.Ephemeral
         });
         return;
@@ -1838,6 +1851,7 @@ async function handleVoteSelect(
             '🗳️ Votación en Progreso',
             `Es hora de votar para expulsar a un jugador.\n\n` +
             `**Jugadores vivos (${room.alivePlayers.size}):**\n${alivePlayersList.join('\n')}\n\n` +
+            `⏱️ **Tiempo límite:** 10 minutos\n` +
             `**Votos:** ${room.votes.size}/${room.alivePlayers.size}`
         );
 
@@ -2049,6 +2063,14 @@ async function handleNextRoundButton(
     if (!room.started) {
         await interaction.reply({
             content: '❌ El juego no está en curso.',
+            flags: MessageFlags.Ephemeral
+        });
+        return;
+    }
+
+    if (room.hostId !== interaction.user.id) {
+        await interaction.reply({
+            content: '❌ Solo el anfitrión puede iniciar la siguiente ronda.',
             flags: MessageFlags.Ephemeral
         });
         return;
