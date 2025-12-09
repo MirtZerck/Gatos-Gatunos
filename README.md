@@ -5,6 +5,7 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 ## 🚀 Características
 
 - **Sistema de IA Avanzado**: Conversaciones naturales con Gemini 2.0 Flash, memoria a corto/mediano/largo plazo
+- **Sistema Premium Completo**: 3 tiers (Básico, Pro, Ultra) con códigos de canje, donaciones Ko-fi y votaciones (Top.gg, DBL)
 - **Sistema de Música Completo**: Reproducción con Lavalink (YouTube, Spotify, SoundCloud), control de volumen, cola, repetición
 - **Comandos Slash y Prefijo**: Soporte para ambos tipos de comandos con conversión automática
 - **Sistema de Ayuda Interactivo**: Menú con categorías, botones de navegación y paginación
@@ -13,7 +14,7 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 - **Comandos Personalizados por Servidor**: Sistema completo de comandos personalizados con propuestas y gestión de moderadores
 - **Interacciones con GIFs**: Más de 30 comandos de interacción con usuarios usando Tenor API
 - **Sistema de Solicitudes**: Gestión de solicitudes de interacción con botones de aceptar/rechazar
-- **Sistema de Cooldowns**: Prevención de spam con cooldowns configurables por comando
+- **Sistema de Cooldowns**: Prevención de spam con cooldowns configurables por comando (reducidos con premium)
 - **Estadísticas de Interacciones**: Registro y seguimiento de interacciones entre usuarios usando Firebase
 - **Gestión de Eventos**: Sistema de eventos completamente modular
 - **Sistema de Logging**: Logger configurable con niveles (debug, info, warn, error)
@@ -21,7 +22,8 @@ Un bot de Discord moderno y versátil construido con TypeScript y Discord.js v14
 - **TypeScript**: Código type-safe y mantenible con tipado completo
 - **Optimización de Interacciones**: Manejo inteligente de deferReply para evitar timeouts
 - **Firebase Integration**: Integración con Firebase Realtime Database para almacenamiento persistente
-- **Comandos de Desarrollador**: Herramientas para gestionar memoria de IA y estadísticas del sistema
+- **Servidor de Webhooks**: Sistema de webhooks para Ko-fi, Top.gg y Discord Bot List
+- **Comandos de Desarrollador**: Herramientas para gestionar memoria de IA, estadísticas y sistema premium
 
 ## 📋 Requisitos
 

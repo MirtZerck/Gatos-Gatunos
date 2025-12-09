@@ -7,9 +7,10 @@ Bienvenido a Hikari Koizumi, tu asistente virtual con inteligencia artificial en
 1. [¿Qué puede hacer Hikari?](#qué-puede-hacer-hikari)
 2. [Cómo usar la IA](#cómo-usar-la-ia)
 3. [Comandos Disponibles](#comandos-disponibles)
-4. [Sistema de Memoria](#sistema-de-memoria)
-5. [Limitaciones y Cooldowns](#limitaciones-y-cooldowns)
-6. [Preguntas Frecuentes](#preguntas-frecuentes)
+4. [Sistema Premium](#sistema-premium)
+5. [Sistema de Memoria](#sistema-de-memoria)
+6. [Limitaciones y Cooldowns](#limitaciones-y-cooldowns)
+7. [Preguntas Frecuentes](#preguntas-frecuentes)
 
 ---
 
@@ -169,6 +170,95 @@ Cuéntame sobre ti
 | `/moderation kick @usuario [razón]` | `expulsar` | Expulsa a un usuario | Expulsar Miembros |
 | `/moderation ban @usuario [días] [razón]` | `banear` | Banea a un usuario | Banear Miembros |
 | `/moderation timeout @usuario <minutos> [razón]` | `silenciar`, `mute` | Silencia temporalmente | Aislar Miembros |
+
+---
+
+## 👑 Sistema Premium
+
+Hikari ofrece un sistema premium con beneficios exclusivos para apoyar el desarrollo del bot.
+
+### ¿Qué es Premium?
+
+El sistema premium tiene **3 tiers** (niveles) que te otorgan diferentes beneficios:
+
+#### 🥉 Premium Básico
+- **-25% de cooldown** en todos los comandos
+- Acceso a comandos premium básicos
+- Insignia de premium en perfil
+- Prioridad en cola de música
+
+#### 🥈 Premium Pro
+- **-50% de cooldown** en todos los comandos
+- Acceso a comandos premium pro
+- Funciones exclusivas de IA
+- Filtros avanzados de música
+- Insignia premium pro
+
+#### 🥇 Premium Ultra
+- **-75% de cooldown** en todos los comandos
+- Acceso a TODOS los comandos premium
+- Sin límites en comandos personalizados
+- Prioridad máxima en soporte
+- Insignia premium ultra
+
+### Cómo Obtener Premium
+
+#### 🎫 Opción 1: Códigos de Canje
+```
+/premium redeem CODIGO-XXX-XXX
+```
+Los códigos pueden ser:
+- Regalos de los desarrolladores
+- Premios de eventos y sorteos
+- Recompensas por contribuciones
+
+#### ⭐ Opción 2: Votar en Listas de Bots
+Vota por Hikari en:
+- **Top.gg**: 12 horas de Premium Básico (24h fin de semana)
+- **Discord Bot List**: 12 horas de Premium Básico
+
+¡Puedes votar cada 12 horas!
+
+#### 💝 Opción 3: Donar en Ko-fi
+Apoya el desarrollo del bot:
+- **$3-4.99**: Premium Básico por 30 días
+- **$5-9.99**: Premium Pro por 30 días
+- **$10-24.99**: Premium Ultra por 30 días
+- **$25+**: Premium Ultra permanente
+
+### Comandos Premium
+
+```
+/premium status        # Ver tu estado premium actual
+/premium info         # Información detallada sobre tiers
+/premium redeem       # Canjear un código premium
+```
+
+**También funciona con prefix:**
+```
+*premium status
+*premium info
+*premium redeem CODIGO-XXX-XXX
+```
+
+### Preguntas Frecuentes sobre Premium
+
+**¿El premium expira?**
+- Los códigos y donaciones pueden ser temporales o permanentes
+- Los votos otorgan 12-24 horas
+- Recibirás notificaciones antes de que expire
+
+**¿Se acumula el tiempo de premium?**
+- Sí, si ya tienes premium y votas, se extiende la duración
+- Si canjeas un código mejor, se actualiza tu tier
+
+**¿Puedo transferir mi premium?**
+- No, el premium está ligado a tu cuenta de Discord
+
+**¿Qué pasa si mi premium expira?**
+- Recibirás un DM 3 días antes, 1 día antes, y cuando expire
+- Puedes renovar votando, donando o con un código nuevo
+- No pierdes ningún dato o progreso
 
 ---
 

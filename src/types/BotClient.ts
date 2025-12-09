@@ -73,11 +73,17 @@ export class BotClient extends Client {
     /** Sistema de premium */
     public premiumManager?: import('../managers/PremiumManager.js').PremiumManager;
 
-    // TODO: Descomentar cuando se implementen estos managers
-    // public redeemCodeManager?: import('../managers/RedeemCodeManager.js').RedeemCodeManager;
-    // public donationManager?: import('../managers/DonationManager.js').DonationManager;
-    // public voteManager?: import('../managers/VoteManager.js').VoteManager;
-    // public webhookServer?: import('../server/webhookServer.js').WebhookServer;
+    /** Sistema de códigos de canje premium */
+    public redeemCodeManager?: import('../managers/RedeemCodeManager.js').RedeemCodeManager;
+
+    /** Sistema de procesamiento de donaciones (Ko-fi) */
+    public donationManager?: import('../managers/DonationManager.js').DonationManager;
+
+    /** Sistema de procesamiento de votos (Top.gg, DBL) */
+    public voteManager?: import('../managers/VoteManager.js').VoteManager;
+
+    /** Servidor de webhooks para premium */
+    public webhookServer?: import('../server/webhookServer.js').WebhookServer;
 
     constructor(options: ClientOptions) {
         super(options);

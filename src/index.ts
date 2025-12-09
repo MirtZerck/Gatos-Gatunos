@@ -55,6 +55,39 @@ async function main() {
             const discordAutomodManager = new DiscordAutomodManager();
             client.discordAutomodManager = discordAutomodManager;
             logger.info('Bot', 'Sistema de AutoMod listo');
+
+            const { PremiumManager } = await import('./managers/PremiumManager.js');
+            const premiumManager = new PremiumManager(firebaseAdminManager, client);
+            client.premiumManager = premiumManager;
+            logger.info('Bot', 'Sistema premium listo');
+
+            const { RedeemCodeManager } = await import('./managers/RedeemCodeManager.js');
+            const redeemCodeManager = new RedeemCodeManager(firebaseAdminManager);
+            client.redeemCodeManager = redeemCodeManager;
+            logger.info('Bot', 'Sistema de códigos de canje listo');
+
+            const { DonationManager } = await import('./managers/DonationManager.js');
+            const donationManager = new DonationManager(firebaseAdminManager, client);
+            client.donationManager = donationManager;
+            logger.info('Bot', 'Sistema de donaciones listo');
+
+            const { VoteManager } = await import('./managers/VoteManager.js');
+            const voteManager = new VoteManager(firebaseAdminManager, client);
+            client.voteManager = voteManager;
+            logger.info('Bot', 'Sistema de votos listo');
+
+            if (config.premium.enabled) {
+                await premiumManager.startExpirationChecker();
+                logger.info('Bot', 'Checker de expiración premium iniciado');
+            }
+
+            if (config.premium.enableWebhookServer) {
+                const { WebhookServer } = await import('./server/webhookServer.js');
+                const webhookServer = new WebhookServer(client, config.premium.webhookServerPort);
+                client.webhookServer = webhookServer;
+                await webhookServer.start();
+                logger.info('Bot', `Servidor de webhooks iniciado en puerto ${config.premium.webhookServerPort}`);
+            }
         } catch (error) {
             logger.error('Bot', 'Error conectando con Firebase Admin SDK', error);
             logger.warn('Bot', 'El bot continuará sin funcionalidades que requieren Firebase');
@@ -127,6 +160,9 @@ async function main() {
         musicManager?.destroy();
         if (client.aiManager) {
             await client.aiManager.destroy();
+        }
+        if (client.webhookServer) {
+            await client.webhookServer.stop();
         }
         client.destroy();
         process.exit(0);

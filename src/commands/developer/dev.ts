@@ -459,7 +459,7 @@ async function handlePremium(message: Message, args: string[]): Promise<void> {
     const action = args[0]?.toLowerCase();
 
     if (!action) {
-        await message.reply(`❌ Especifica una acción: grant, revoke, check, stats`);
+        await message.reply(`❌ Especifica una acción: grant, revoke, check, stats, generate, codes, delete-code`);
         return;
     }
 
@@ -475,6 +475,18 @@ async function handlePremium(message: Message, args: string[]): Promise<void> {
             break;
         case 'stats':
             await handlePremiumStats(message, client);
+            break;
+        case 'generate':
+        case 'gen':
+            await handlePremiumGenerateCode(message, args.slice(1), client);
+            break;
+        case 'codes':
+        case 'list':
+            await handlePremiumListCodes(message, args.slice(1), client);
+            break;
+        case 'delete-code':
+        case 'delcode':
+            await handlePremiumDeleteCode(message, args.slice(1), client);
             break;
         default:
             await message.reply(`❌ Acción no válida: **${action}**`);
@@ -769,4 +781,246 @@ async function handlePremiumStats(message: Message, client: BotClient): Promise<
 
         await message.reply({ embeds: [embed] });
     }
+}
+
+async function handlePremiumGenerateCode(message: Message, args: string[], client: BotClient): Promise<void> {
+    if (!client.redeemCodeManager) {
+        await message.reply('❌ El sistema de códigos no está disponible.');
+        return;
+    }
+
+    const tierArg = args[0]?.toLowerCase();
+    const typeArg = args[1]?.toLowerCase();
+
+    if (!tierArg || !typeArg) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(
+                AnsiFormatter.error('✘ Uso incorrecto') + '\n\n' +
+                AnsiFormatter.format('Uso:', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev premium generate <tier> <tipo> [días]`) + '\n\n' +
+                AnsiFormatter.format('Tiers:', ANSI.BRIGHT_CYAN) + ' basic, pro, ultra\n' +
+                AnsiFormatter.format('Tipos:', ANSI.BRIGHT_CYAN) + ' temp, permanent'
+            )
+            : '❌ **Uso:** `*dev premium generate <tier> <tipo> [días]`\n**Tiers:** basic, pro, ultra\n**Tipos:** temp, permanent';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    let tier: PremiumTier;
+    switch (tierArg) {
+        case 'basic':
+        case 'basico':
+            tier = PremiumTier.BASIC;
+            break;
+        case 'pro':
+            tier = PremiumTier.PRO;
+            break;
+        case 'ultra':
+            tier = PremiumTier.ULTRA;
+            break;
+        default:
+            await message.reply(`❌ Tier inválido: **${tierArg}**`);
+            return;
+    }
+
+    let type: PremiumType;
+    let duration: number | undefined;
+
+    switch (typeArg) {
+        case 'temp':
+        case 'temporal':
+            type = PremiumType.TEMPORARY;
+            const days = parseInt(args[2]);
+            if (!days || days <= 0) {
+                await message.reply('❌ Debes especificar la duración en días para códigos temporales.');
+                return;
+            }
+            duration = days * 86400000;
+            break;
+        case 'perm':
+        case 'permanent':
+        case 'permanente':
+            type = PremiumType.PERMANENT;
+            duration = undefined;
+            break;
+        default:
+            await message.reply(`❌ Tipo inválido: **${typeArg}**`);
+            return;
+    }
+
+    const code = await client.redeemCodeManager.generateCode({
+        tier,
+        type,
+        duration,
+        createdBy: message.author.id
+    });
+
+    if (isDevFormatMessage(message)) {
+        let output = '';
+        output += AnsiFormatter.header('╔════════════════════════════════════════════╗') + '\n';
+        output += AnsiFormatter.header('║    CÓDIGO GENERADO                         ║') + '\n';
+        output += AnsiFormatter.header('╚════════════════════════════════════════════╝') + '\n\n';
+
+        output += AnsiFormatter.format('📋 CÓDIGO', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.format(`  ${code.code}`, ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n\n';
+
+        output += AnsiFormatter.format('ℹ️  DETALLES', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.key('  Tier  ') + ': ' + AnsiFormatter.value(tier) + '\n';
+        output += AnsiFormatter.key('  Tipo  ') + ': ' + AnsiFormatter.value(type) + '\n';
+        if (duration) {
+            const days = Math.ceil(duration / 86400000);
+            output += AnsiFormatter.key('  Duración') + ': ' + AnsiFormatter.value(`${days} días`) + '\n';
+        }
+
+        await message.reply(AnsiFormatter.codeBlock(output));
+    } else {
+        const tierName = tier === PremiumTier.BASIC ? 'Básico' : tier === PremiumTier.PRO ? 'Pro' : 'Ultra';
+        const embed = new EmbedBuilder()
+            .setTitle('✅ Código Generado')
+            .setColor(COLORS.SUCCESS)
+            .addFields(
+                {
+                    name: '📋 Código',
+                    value: `\`${code.code}\``,
+                    inline: false
+                },
+                {
+                    name: 'Tier',
+                    value: tierName,
+                    inline: true
+                },
+                {
+                    name: 'Tipo',
+                    value: type === PremiumType.PERMANENT ? 'Permanente' : 'Temporal',
+                    inline: true
+                }
+            )
+            .setTimestamp();
+
+        if (duration) {
+            const days = Math.ceil(duration / 86400000);
+            embed.addFields({
+                name: 'Duración',
+                value: `${days} días`,
+                inline: true
+            });
+        }
+
+        await message.reply({ embeds: [embed] });
+    }
+}
+
+async function handlePremiumListCodes(message: Message, args: string[], client: BotClient): Promise<void> {
+    if (!client.redeemCodeManager) {
+        await message.reply('❌ El sistema de códigos no está disponible.');
+        return;
+    }
+
+    const filter = args[0]?.toLowerCase() || 'active';
+    let codes;
+
+    switch (filter) {
+        case 'active':
+        case 'activos':
+            codes = await client.redeemCodeManager.getActiveCodes();
+            break;
+        case 'used':
+        case 'usados':
+            codes = await client.redeemCodeManager.getUsedCodes();
+            break;
+        case 'all':
+        case 'todos':
+            codes = await client.redeemCodeManager.getAllCodes();
+            break;
+        default:
+            await message.reply(`❌ Filtro inválido: **${filter}**\nUsa: active, used, all`);
+            return;
+    }
+
+    if (codes.length === 0) {
+        const noCodesMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.warning('⚠ No hay códigos para mostrar'))
+            : '⚠️ No hay códigos para mostrar.';
+        await message.reply(noCodesMsg);
+        return;
+    }
+
+    if (isDevFormatMessage(message)) {
+        let output = '';
+        output += AnsiFormatter.header('╔════════════════════════════════════════════╗') + '\n';
+        output += AnsiFormatter.header(`║    CÓDIGOS (${filter.toUpperCase()})${' '.repeat(Math.max(0, 32 - filter.length))}║`) + '\n';
+        output += AnsiFormatter.header('╚════════════════════════════════════════════╝') + '\n\n';
+
+        for (const code of codes.slice(0, 10)) {
+            output += AnsiFormatter.format('•', ANSI.BRIGHT_YELLOW) + ' ';
+            output += AnsiFormatter.format(code.code, ANSI.BRIGHT_GREEN, ANSI.BOLD);
+            output += AnsiFormatter.dim(` [${code.tier}] `);
+
+            if (code.used) {
+                output += AnsiFormatter.error('USADO');
+            } else {
+                output += AnsiFormatter.success('ACTIVO');
+            }
+
+            output += '\n';
+        }
+
+        if (codes.length > 10) {
+            output += '\n' + AnsiFormatter.dim(`... y ${codes.length - 10} más`);
+        }
+
+        await message.reply(AnsiFormatter.codeBlock(output));
+    } else {
+        const codesList = codes.slice(0, 10).map(code => {
+            const status = code.used ? '❌ USADO' : '✅ ACTIVO';
+            return `• \`${code.code}\` [${code.tier}] ${status}`;
+        }).join('\n');
+
+        const embed = new EmbedBuilder()
+            .setTitle(`📋 Códigos Premium (${filter})`)
+            .setDescription(codesList + (codes.length > 10 ? `\n\n... y ${codes.length - 10} más` : ''))
+            .setColor(COLORS.INFO)
+            .setFooter({ text: `Total: ${codes.length} códigos` })
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
+    }
+}
+
+async function handlePremiumDeleteCode(message: Message, args: string[], client: BotClient): Promise<void> {
+    if (!client.redeemCodeManager) {
+        await message.reply('❌ El sistema de códigos no está disponible.');
+        return;
+    }
+
+    const code = args[0];
+
+    if (!code) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(
+                AnsiFormatter.error('✘ Debes proporcionar un código') + '\n\n' +
+                AnsiFormatter.format('Uso:', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev premium delete-code <código>`)
+            )
+            : '❌ **Uso:** `*dev premium delete-code <código>`';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    const deleted = await client.redeemCodeManager.deleteCode(code);
+
+    if (!deleted) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(AnsiFormatter.error(`✘ Código no encontrado o ya usado: ${code}`))
+            : `❌ Código no encontrado o ya usado: \`${code}\``;
+        await message.reply(errorMsg);
+        return;
+    }
+
+    const successMsg = isDevFormatMessage(message)
+        ? AnsiFormatter.codeBlock(AnsiFormatter.success(`✓ Código eliminado: ${code}`))
+        : `✅ Código eliminado: \`${code}\``;
+    await message.reply(successMsg);
 }
