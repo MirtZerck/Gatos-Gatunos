@@ -123,10 +123,54 @@ class TriviaService {
         return decoded;
     }
 
+    private async translateToSpanish(question: TriviaQuestion): Promise<TriviaQuestion> {
+        try {
+            // Función auxiliar para traducir un texto usando MyMemory API
+            const translateText = async (text: string): Promise<string> => {
+                // Escapar el texto para URL
+                const encodedText = encodeURIComponent(text);
+                const url = `https://api.mymemory.translated.net/get?q=${encodedText}&langpair=en|es`;
+
+                const response = await fetch(url);
+
+                if (!response.ok) {
+                    throw new Error(`MyMemory API error: ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                if (data.responseStatus !== 200) {
+                    throw new Error(`Translation failed: ${data.responseStatus}`);
+                }
+
+                return data.responseData.translatedText;
+            };
+
+            // Traducir solo pregunta y categoría (NO las respuestas)
+            const [translatedQuestion, translatedCategory] = await Promise.all([
+                translateText(question.question),
+                translateText(question.category)
+            ]);
+
+            logger.info('TriviaService', 'Pregunta traducida exitosamente con MyMemory API');
+
+            return {
+                ...question,
+                question: translatedQuestion,
+                category: translatedCategory
+                // correctAnswer e incorrectAnswers se mantienen en inglés
+            };
+        } catch (error) {
+            logger.warn('TriviaService', 'Error traduciendo pregunta, usando original', error instanceof Error ? error : new Error(String(error)));
+            return question;
+        }
+    }
+
     private async fetchQuestionsFromAPI(
         difficulty: 'easy' | 'medium' | 'hard',
         amount: number,
-        token?: string
+        token?: string,
+        translate: boolean = false
     ): Promise<TriviaQuestion[]> {
         try {
             await this.waitForRateLimit();
@@ -157,6 +201,14 @@ class TriviaService {
                 category: this.decodeHtmlEntities(q.category)
             }));
 
+            // Traducir preguntas al español solo si se solicita (durante el juego)
+            if (translate) {
+                const translatedQuestions = await Promise.all(
+                    questions.map(q => this.translateToSpanish(q))
+                );
+                return translatedQuestions;
+            }
+
             return questions;
         } catch (error) {
             logger.error('TriviaService', 'Error fetching from API', error instanceof Error ? error : new Error(String(error)));
@@ -175,11 +227,14 @@ class TriviaService {
         if (availableFromCache.length > 0) {
             const question = availableFromCache[Math.floor(Math.random() * availableFromCache.length)];
             this.fillCache(difficulty);
-            return this.prepareQuestion(question);
+            // Traducir la pregunta del caché antes de usarla
+            const translatedQuestion = await this.translateToSpanish(question);
+            return this.prepareQuestion(translatedQuestion);
         }
 
         try {
-            const questions = await this.fetchQuestionsFromAPI(difficulty, 1, token);
+            // Activar traducción al obtener preguntas durante el juego
+            const questions = await this.fetchQuestionsFromAPI(difficulty, 1, token, true);
 
             if (questions.length > 0) {
                 return this.prepareQuestion(questions[0]);
@@ -220,20 +275,22 @@ class TriviaService {
                 hard: 'difícil, conocimiento avanzado o especializado'
             };
 
-            const prompt = `Genera UNA pregunta de trivia de dificultad ${difficultyDescriptions[difficulty]}.
+            const prompt = `Genera UNA pregunta de trivia de dificultad ${difficultyDescriptions[difficulty]} EN ESPAÑOL.
 
 Formato JSON exacto:
 {
-  "question": "La pregunta aquí",
-  "correctAnswer": "Respuesta correcta",
-  "incorrectAnswers": ["Incorrecta 1", "Incorrecta 2", "Incorrecta 3"],
-  "category": "Categoría"
+  "question": "La pregunta aquí en español",
+  "correctAnswer": "Respuesta correcta en español",
+  "incorrectAnswers": ["Incorrecta 1 en español", "Incorrecta 2 en español", "Incorrecta 3 en español"],
+  "category": "Categoría en español"
 }
 
 Reglas:
+- IMPORTANTE: Todo el contenido debe estar en ESPAÑOL
 - Exactamente 3 respuestas incorrectas
 - Todas las respuestas deben ser plausibles
 - La pregunta debe ser clara y directa
+- Usa español neutro (no regionalizado)
 - Responde SOLO con el JSON, sin texto adicional`;
 
             const result = await model.generateContent(prompt);
@@ -268,11 +325,12 @@ Reglas:
         try {
             const model = this.genAI.getGenerativeModel({ model: 'gemini-2.5-flash-lite' });
 
-            const prompt = `Para esta pregunta de trivia: "${question.question}"
-Categoría: ${question.category}
+            const prompt = `For this trivia question: "${question.question}"
+Category: ${question.category}
 
-Genera una consulta de búsqueda (máximo 5 palabras) para encontrar una imagen relevante.
-Responde SOLO con la consulta, sin comillas ni texto adicional.`;
+Generate a search query IN ENGLISH (maximum 5 words) to find a relevant image on Tenor.
+The query must be in ENGLISH for better image search results.
+Respond ONLY with the English query, without quotes or additional text.`;
 
             const result = await model.generateContent(prompt);
             const searchQuery = result.response.text().trim().replace(/['"]/g, '');

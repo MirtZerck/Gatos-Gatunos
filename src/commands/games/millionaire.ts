@@ -63,15 +63,13 @@ async function createRoom(interaction: ChatInputCommandInteraction): Promise<voi
         );
     }
 
-    const withHost = interaction.options.getBoolean('con_anfitrion') ?? false;
-
     const room: MillionaireGameRoom = {
-        hostId: withHost ? '' : interaction.user.id,
+        hostId: '',
         playerId: '',
         channelId: interaction.channelId,
         guildId: interaction.guildId,
         started: false,
-        hasHost: withHost,
+        hasHost: true,
         currentQuestionIndex: 0,
         currentPrize: 0,
         safeHavenReached: 0,
@@ -110,6 +108,8 @@ async function createRoom(interaction: ChatInputCommandInteraction): Promise<voi
                 await handleVolunteerHost(i, room);
             } else if (i.customId === 'millionaire_start') {
                 await handleStart(i, room);
+            } else if (i.customId === 'millionaire_leave') {
+                await handleLeaveRoom(i, room);
             } else if (i.customId === 'millionaire_cancel') {
                 await handleCancel(i, room, roomKey);
             }
@@ -127,7 +127,7 @@ async function createRoom(interaction: ChatInputCommandInteraction): Promise<voi
         }
     });
 
-    logger.info('Millionaire', `Sala creada en ${roomKey} (${withHost ? 'con' : 'sin'} anfitrión)`);
+    logger.info('Millionaire', `Sala creada en ${roomKey} (anfitrión opcional)`);
 }
 
 function createLobbyEmbed(room: MillionaireGameRoom, creator: User): EmbedBuilder {
@@ -137,20 +137,13 @@ function createLobbyEmbed(room: MillionaireGameRoom, creator: User): EmbedBuilde
         .setDescription('¡Responde 15 preguntas de trivia y gana hasta **$1,000,000**!')
         .addFields(
             {
-                name: '🎮 Modo',
-                value: room.hasHost ? 'Con Anfitrión' : 'Automático',
-                inline: true
-            },
-            {
                 name: '🎯 Concursante',
                 value: room.playerId ? `<@${room.playerId}>` : 'Esperando...',
                 inline: true
             },
             {
                 name: '🎬 Anfitrión',
-                value: room.hasHost
-                    ? (room.hostId ? `<@${room.hostId}>` : 'Esperando...')
-                    : 'N/A',
+                value: room.hostId ? `<@${room.hostId}>` : 'Ninguno (Opcional)',
                 inline: true
             }
         )
@@ -179,7 +172,7 @@ function createLobbyButtons(room: MillionaireGameRoom): ActionRowBuilder<ButtonB
         .setLabel('Ser Anfitrión')
         .setStyle(ButtonStyle.Secondary)
         .setEmoji('🎬')
-        .setDisabled(!room.hasHost || !!room.hostId);
+        .setDisabled(!!room.hostId);
 
     const startButton = new ButtonBuilder()
         .setCustomId('millionaire_start')
@@ -188,9 +181,15 @@ function createLobbyButtons(room: MillionaireGameRoom): ActionRowBuilder<ButtonB
         .setEmoji('▶️')
         .setDisabled(!canStartGame(room));
 
+    const leaveButton = new ButtonBuilder()
+        .setCustomId('millionaire_leave')
+        .setLabel('Abandonar Sala')
+        .setStyle(ButtonStyle.Danger)
+        .setEmoji('🚪');
+
     const cancelButton = new ButtonBuilder()
         .setCustomId('millionaire_cancel')
-        .setLabel('Cancelar')
+        .setLabel('Cancelar Juego')
         .setStyle(ButtonStyle.Danger)
         .setEmoji('❌');
 
@@ -198,14 +197,13 @@ function createLobbyButtons(room: MillionaireGameRoom): ActionRowBuilder<ButtonB
         joinButton,
         volunteerButton,
         startButton,
+        leaveButton,
         cancelButton
     );
 }
 
 function canStartGame(room: MillionaireGameRoom): boolean {
-    if (!room.playerId) return false;
-    if (room.hasHost && !room.hostId) return false;
-    return true;
+    return !!room.playerId;
 }
 
 async function handleJoin(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -217,7 +215,7 @@ async function handleJoin(interaction: ButtonInteraction, room: MillionaireGameR
         return;
     }
 
-    if (room.hasHost && room.hostId === interaction.user.id) {
+    if (room.hostId === interaction.user.id) {
         await interaction.reply({
             content: '❌ No puedes ser concursante y anfitrión al mismo tiempo.',
             ephemeral: true
@@ -239,14 +237,6 @@ async function handleJoin(interaction: ButtonInteraction, room: MillionaireGameR
 }
 
 async function handleVolunteerHost(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
-    if (!room.hasHost) {
-        await interaction.reply({
-            content: '❌ Esta sala no requiere anfitrión.',
-            ephemeral: true
-        });
-        return;
-    }
-
     if (room.hostId) {
         await interaction.reply({
             content: '❌ Ya hay un anfitrión en la sala.',
@@ -276,11 +266,46 @@ async function handleVolunteerHost(interaction: ButtonInteraction, room: Million
     logger.info('Millionaire', `${interaction.user.tag} se unió como anfitrión`);
 }
 
+async function handleLeaveRoom(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    const userId = interaction.user.id;
+    let wasInRoom = false;
+    let role = '';
+
+    if (room.playerId === userId) {
+        room.playerId = '';
+        wasInRoom = true;
+        role = 'concursante';
+    }
+
+    if (room.hostId === userId) {
+        room.hostId = '';
+        wasInRoom = true;
+        role = role ? 'concursante y anfitrión' : 'anfitrión';
+    }
+
+    if (!wasInRoom) {
+        await interaction.reply({
+            content: '❌ No estás en la sala.',
+            ephemeral: true
+        });
+        return;
+    }
+
+    const embed = createLobbyEmbed(room, interaction.user);
+    const buttons = createLobbyButtons(room);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [buttons]
+    });
+
+    logger.info('Millionaire', `${interaction.user.tag} abandonó la sala (${role})`);
+}
+
 async function handleStart(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
     if (!canStartGame(room)) {
         await interaction.reply({
-            content: '❌ No se puede iniciar el juego. Asegúrate de que haya un concursante' +
-                (room.hasHost ? ' y un anfitrión.' : '.'),
+            content: '❌ No se puede iniciar el juego. Asegúrate de que haya un concursante.',
             ephemeral: true
         });
         return;
@@ -288,8 +313,7 @@ async function handleStart(interaction: ButtonInteraction, room: MillionaireGame
 
     const isCreatorOrParticipant =
         interaction.user.id === room.playerId ||
-        interaction.user.id === room.hostId ||
-        (!room.hasHost && interaction.user.id === room.hostId);
+        interaction.user.id === room.hostId;
 
     if (!isCreatorOrParticipant) {
         await interaction.reply({
@@ -1182,12 +1206,6 @@ export const millionaire: SlashOnlyCommand = {
             subcommand
                 .setName('crear')
                 .setDescription('Crea una nueva sala de juego')
-                .addBooleanOption(option =>
-                    option
-                        .setName('con_anfitrion')
-                        .setDescription('¿Requiere un anfitrión para dirigir el juego?')
-                        .setRequired(false)
-                )
         )
         .addSubcommand(subcommand =>
             subcommand
@@ -1322,9 +1340,8 @@ async function showRules(interaction: ChatInputCommandInteraction): Promise<void
                 value: 'Tienes 2 minutos para responder cada pregunta.'
             },
             {
-                name: '🎮 Modos de Juego',
-                value: '**Automático:** El bot maneja todo automáticamente\n' +
-                    '**Con Anfitrión:** Un jugador dirige el juego al estilo del programa de TV'
+                name: '🎬 Anfitrión (Opcional)',
+                value: 'Opcionalmente, otro jugador puede unirse como anfitrión para dirigir el juego al estilo del programa de TV.'
             },
             {
                 name: '🚪 Retirarse',
