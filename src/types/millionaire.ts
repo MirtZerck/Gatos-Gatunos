@@ -1,4 +1,4 @@
-import { Message } from 'discord.js';
+import { Message, InteractionCollector, ButtonInteraction } from 'discord.js';
 
 export interface MillionaireGameRoom {
     hostId: string;
@@ -23,6 +23,8 @@ export interface MillionaireGameRoom {
     timeoutId?: NodeJS.Timeout;
     eliminatedAnswers?: string[];
     sessionToken?: string;
+    currentCollector?: InteractionCollector<ButtonInteraction>;
+    questionStartTime?: number;
 }
 
 export interface TriviaQuestion {

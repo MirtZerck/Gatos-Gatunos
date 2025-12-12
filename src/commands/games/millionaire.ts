@@ -13,7 +13,10 @@ import {
     ModalBuilder,
     TextInputBuilder,
     TextInputStyle,
-    ModalSubmitInteraction
+    ModalSubmitInteraction,
+    InteractionCollector,
+    StringSelectMenuBuilder,
+    StringSelectMenuInteraction
 } from 'discord.js';
 import { SlashOnlyCommand } from '../../types/Command.js';
 import { BotClient } from '../../types/BotClient.js';
@@ -37,9 +40,9 @@ function getRoomKey(guildId: string, channelId: string): string {
     return `${guildId}-${channelId}`;
 }
 
-function getMemberDisplayName(member: GuildMember | any, user: User): string {
+function getMemberDisplayName(member: GuildMember | null | undefined, user: User): string {
     if (member && typeof member === 'object' && 'displayName' in member) {
-        return (member as GuildMember).displayName;
+        return member.displayName;
     }
     return user.displayName;
 }
@@ -401,6 +404,7 @@ async function displayQuestion(
         room.currentQuestion = question;
         room.usedQuestionIds.add(question.id);
         room.eliminatedAnswers = [];
+        room.questionStartTime = Date.now();
 
         const embed = createQuestionEmbed(room, question, prize.amount);
         const buttons = createQuestionButtons(room);
@@ -421,8 +425,10 @@ async function displayQuestion(
 
         const collector = message.createMessageComponentCollector({
             componentType: ComponentType.Button,
-            time: 120000
+            time: 180000
         });
+
+        room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
 
         collector.on('collect', async (i: ButtonInteraction) => {
             if (i.user.id !== room.playerId) {
@@ -489,6 +495,8 @@ function createQuestionEmbed(
         }
     }
 
+    const endTime = room.questionStartTime ? Math.floor((room.questionStartTime + 180000) / 1000) : Math.floor((Date.now() + 180000) / 1000);
+
     const embed = new EmbedBuilder()
         .setColor(COLORS.INFO)
         .setTitle(`💰 PREGUNTA ${room.currentQuestionIndex} - ${formatPrize(prizeAmount)} 💰`)
@@ -500,7 +508,7 @@ function createQuestionEmbed(
             },
             {
                 name: '⏱️ Tiempo restante',
-                value: '2:00',
+                value: `<t:${endTime}:R>`,
                 inline: true
             },
             {
@@ -728,7 +736,7 @@ async function handleCorrectAnswer(interaction: ButtonInteraction, room: Million
         collector.stop();
     });
 
-    collector.on('end', async (collected: any, reason: string) => {
+    collector.on('end', async (collected, reason) => {
         if (reason === 'time' && collected.size === 0) {
             room.currentQuestionIndex++;
             await displayQuestion(interaction, room);
@@ -754,7 +762,7 @@ async function handleIncorrectAnswer(
         components: []
     });
 
-    await endGame(interaction, room, false);
+    await endGame(interaction, room, false, undefined, finalWinnings, true);
 }
 
 async function handleCashout(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -768,7 +776,7 @@ async function handleCashout(interaction: ButtonInteraction, room: MillionaireGa
         components: []
     });
 
-    await endGame(interaction, room, false);
+    await endGame(interaction, room, false, undefined, room.currentPrize, true);
 }
 
 async function handleQuit(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -784,7 +792,7 @@ async function handleQuit(interaction: ButtonInteraction, room: MillionaireGameR
         components: []
     });
 
-    await endGame(interaction, room, false);
+    await endGame(interaction, room, false, undefined, finalWinnings, true);
 }
 
 async function handleTimeout(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -802,7 +810,7 @@ async function handleTimeout(interaction: ButtonInteraction, room: MillionaireGa
         });
     }
 
-    await endGame(interaction, room, false);
+    await endGame(interaction, room, false, undefined, finalWinnings, true);
 }
 
 async function handleLifeline(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -878,6 +886,7 @@ async function handleAskAudience(interaction: ButtonInteraction, room: Millionai
             content: '❌ Error al usar comodín.',
             ephemeral: true
         });
+        room.lifelines.askAudience = true;
         return;
     }
 
@@ -885,56 +894,127 @@ async function handleAskAudience(interaction: ButtonInteraction, room: Millionai
         answer => !room.eliminatedAnswers?.includes(answer)
     );
 
-    const percentages = generateAudiencePercentages(
-        answers,
-        room.currentQuestion.correctAnswer
-    );
-
-    let resultsText = '📊 **RESULTADOS DE LA AUDIENCIA** 📊\n\n';
     const letters = ['A', 'B', 'C', 'D'];
+    const availableLetters: string[] = [];
 
-    for (let i = 0; i < answers.length; i++) {
-        const percentage = percentages.get(answers[i]) || 0;
-        const barLength = Math.round(percentage / 5);
-        const bar = '█'.repeat(barLength) + '░'.repeat(20 - barLength);
-        resultsText += `${letters[i]}) ${answers[i]}:\n${bar} ${percentage}%\n\n`;
-    }
-
-    const embed = new EmbedBuilder()
-        .setColor(COLORS.INFO)
-        .setDescription(resultsText);
-
-    await interaction.reply({
-        embeds: [embed],
-        ephemeral: false
-    });
-
-    logger.info('Millionaire', 'Pregunta al público usado');
-}
-
-function generateAudiencePercentages(
-    answers: string[],
-    correctAnswer: string
-): Map<string, number> {
-    const percentages = new Map<string, number>();
-    const correctPercentage = 60 + Math.floor(Math.random() * 16);
-
-    percentages.set(correctAnswer, correctPercentage);
-
-    let remaining = 100 - correctPercentage;
-    const otherAnswers = answers.filter(a => a !== correctAnswer);
-
-    for (let i = 0; i < otherAnswers.length; i++) {
-        if (i === otherAnswers.length - 1) {
-            percentages.set(otherAnswers[i], remaining);
-        } else {
-            const percentage = Math.floor(Math.random() * (remaining - (otherAnswers.length - i - 1)));
-            percentages.set(otherAnswers[i], percentage);
-            remaining -= percentage;
+    for (let i = 0; i < room.currentQuestion.allAnswers.length; i++) {
+        if (!room.eliminatedAnswers?.includes(room.currentQuestion.allAnswers[i])) {
+            availableLetters.push(letters[i]);
         }
     }
 
-    return percentages;
+    const voteButtons: ButtonBuilder[] = [];
+    for (const letter of availableLetters) {
+        voteButtons.push(
+            new ButtonBuilder()
+                .setCustomId(`millionaire_vote_${letter}`)
+                .setLabel(`Votar ${letter}`)
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
+
+    const voteRow = new ActionRowBuilder<ButtonBuilder>().addComponents(voteButtons);
+
+    const endTime = Math.floor((Date.now() + 30000) / 1000);
+    const voteEmbed = new EmbedBuilder()
+        .setColor(COLORS.INFO)
+        .setTitle('📊 PREGUNTA AL PÚBLICO 📊')
+        .setDescription(
+            `¡La audiencia está votando!\n\n` +
+            `**Pregunta:** ${room.currentQuestion.question}\n\n` +
+            `**Opciones:**\n` +
+            availableLetters.map((letter, idx) => {
+                const answerIndex = letters.indexOf(letter);
+                return `${letter}) ${room.currentQuestion?.allAnswers?.[answerIndex]}`;
+            }).join('\n') +
+            `\n\n⏱️ Votación termina: <t:${endTime}:R>`
+        )
+        .setFooter({ text: 'Solo espectadores pueden votar' });
+
+    const voteMessage = await interaction.reply({
+        embeds: [voteEmbed],
+        components: [voteRow],
+        fetchReply: true
+    });
+
+    const votes = new Map<string, number>();
+    availableLetters.forEach(letter => votes.set(letter, 0));
+
+    const voters = new Set<string>();
+
+    const voteCollector = voteMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 30000
+    });
+
+    voteCollector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id === room.playerId) {
+            await i.reply({
+                content: '❌ El concursante no puede votar.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (room.hostId && i.user.id === room.hostId) {
+            await i.reply({
+                content: '❌ El anfitrión no puede votar.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (voters.has(i.user.id)) {
+            await i.reply({
+                content: '❌ Ya has votado.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        const votedLetter = i.customId.split('_')[2];
+        const currentVotes = votes.get(votedLetter) || 0;
+        votes.set(votedLetter, currentVotes + 1);
+        voters.add(i.user.id);
+
+        await i.reply({
+            content: `✅ Has votado por la opción **${votedLetter}**`,
+            ephemeral: true
+        });
+    });
+
+    voteCollector.on('end', async () => {
+        const totalVotes = Array.from(votes.values()).reduce((a, b) => a + b, 0);
+
+        let resultsText = '📊 **RESULTADOS DE LA VOTACIÓN** 📊\n\n';
+
+        if (totalVotes === 0) {
+            resultsText += 'No hubo votos de la audiencia.';
+        } else {
+            resultsText += `Total de votos: **${totalVotes}**\n\n`;
+
+            for (const letter of availableLetters) {
+                const answerIndex = letters.indexOf(letter);
+                const answer = room.currentQuestion?.allAnswers?.[answerIndex];
+                const voteCount = votes.get(letter) || 0;
+                const percentage = Math.round((voteCount / totalVotes) * 100);
+                const barLength = Math.round(percentage / 5);
+                const bar = '█'.repeat(barLength) + '░'.repeat(20 - barLength);
+                resultsText += `${letter}) ${answer}:\n${bar} ${percentage}% (${voteCount} votos)\n\n`;
+            }
+        }
+
+        const resultsEmbed = new EmbedBuilder()
+            .setColor(COLORS.INFO)
+            .setDescription(resultsText);
+
+        await voteMessage.edit({
+            embeds: [resultsEmbed],
+            components: []
+        });
+    });
+
+    logger.info('Millionaire', 'Pregunta al público usado');
 }
 
 async function handleCallFriend(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -946,61 +1026,129 @@ async function handleCallFriend(interaction: ButtonInteraction, room: Millionair
         return;
     }
 
-    const modal = new ModalBuilder()
-        .setCustomId('millionaire_friend_modal')
-        .setTitle('Llamar a un Amigo');
-
-    const friendInput = new TextInputBuilder()
-        .setCustomId('friend_mention')
-        .setLabel('Menciona a tu amigo (@usuario)')
-        .setStyle(TextInputStyle.Short)
-        .setPlaceholder('@amigo')
-        .setRequired(true);
-
-    modal.addComponents(
-        new ActionRowBuilder<TextInputBuilder>().addComponents(friendInput)
-    );
-
-    await interaction.showModal(modal);
-
-    try {
-        const modalSubmit = await interaction.awaitModalSubmit({
-            time: 60000,
-            filter: i => i.customId === 'millionaire_friend_modal' && i.user.id === interaction.user.id
-        });
-
-        await handleFriendModalSubmit(modalSubmit, room);
-    } catch (error) {
-        logger.warn('Millionaire', 'Timeout esperando modal de amigo');
-    }
-}
-
-async function handleFriendModalSubmit(
-    interaction: ModalSubmitInteraction,
-    room: MillionaireGameRoom
-): Promise<void> {
-    room.lifelines.callFriend = false;
-
-    const friendMention = interaction.fields.getTextInputValue('friend_mention');
-    const userId = friendMention.match(/\d+/)?.[0];
-
-    if (!userId) {
+    if (!interaction.guild) {
         await interaction.reply({
-            content: '❌ Mención inválida. Usa el formato @usuario',
+            content: '❌ Este comodín solo funciona en servidores.',
             ephemeral: true
         });
         return;
     }
 
     try {
-        const friend = await interaction.client.users.fetch(userId);
+        const members = await interaction.guild.members.fetch();
+        const eligibleMembers = members.filter(
+            member => !member.user.bot &&
+                     member.id !== room.playerId &&
+                     member.id !== room.hostId
+        );
 
-        if (friend.bot) {
+        if (eligibleMembers.size === 0) {
             await interaction.reply({
-                content: '❌ No puedes llamar a un bot.',
+                content: '❌ No hay miembros disponibles para llamar.',
                 ephemeral: true
             });
             return;
+        }
+
+        const memberOptions = eligibleMembers
+            .first(25)
+            .map(member => ({
+                label: member.displayName,
+                description: `@${member.user.username}`,
+                value: member.id
+            }));
+
+        const selectMenu = new StringSelectMenuBuilder()
+            .setCustomId('millionaire_select_friend')
+            .setPlaceholder('Selecciona un amigo para llamar')
+            .addOptions(memberOptions);
+
+        const row = new ActionRowBuilder<StringSelectMenuBuilder>().addComponents(selectMenu);
+
+        const cancelButton = new ButtonBuilder()
+            .setCustomId('millionaire_cancel_friend')
+            .setLabel('Cancelar')
+            .setStyle(ButtonStyle.Danger);
+
+        const buttonRow = new ActionRowBuilder<ButtonBuilder>().addComponents(cancelButton);
+
+        const selectMessage = await interaction.reply({
+            content: '📞 **Llamar a un Amigo**\nSelecciona a quién quieres llamar:',
+            components: [row, buttonRow],
+            ephemeral: true,
+            fetchReply: true
+        });
+
+        const collector = selectMessage.createMessageComponentCollector({
+            time: 60000
+        });
+
+        collector.on('collect', async (i) => {
+            if (i.user.id !== interaction.user.id) {
+                await i.reply({
+                    content: '❌ Solo el concursante puede seleccionar.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            if (i.customId === 'millionaire_cancel_friend') {
+                await i.update({
+                    content: '❌ Llamada cancelada. El comodín sigue disponible.',
+                    components: []
+                });
+                collector.stop();
+                return;
+            }
+
+            if (i.isStringSelectMenu() && i.customId === 'millionaire_select_friend') {
+                const friendId = i.values[0];
+                collector.stop();
+                await processFriendCall(i, room, friendId);
+            }
+        });
+
+        collector.on('end', async (collected) => {
+            if (collected.size === 0) {
+                await selectMessage.edit({
+                    content: '⏱️ Tiempo agotado. El comodín sigue disponible.',
+                    components: []
+                });
+            }
+        });
+
+    } catch (error) {
+        logger.error('Millionaire', 'Error en handleCallFriend', error instanceof Error ? error : new Error(String(error)));
+        await interaction.reply({
+            content: '❌ Error al procesar el comodín. Intenta nuevamente.',
+            ephemeral: true
+        });
+    }
+}
+
+async function processFriendCall(
+    interaction: StringSelectMenuInteraction,
+    room: MillionaireGameRoom,
+    friendId: string
+): Promise<void> {
+    try {
+        const friend = await interaction.client.users.fetch(friendId);
+
+        if (friend.bot) {
+            await interaction.update({
+                content: '❌ No puedes llamar a un bot. El comodín sigue disponible.',
+                components: []
+            });
+            return;
+        }
+
+        const letters = ['A', 'B', 'C', 'D'];
+        const availableAnswers: string[] = [];
+
+        for (let i = 0; i < (room.currentQuestion?.allAnswers?.length || 0); i++) {
+            if (!room.eliminatedAnswers?.includes(room.currentQuestion?.allAnswers?.[i] || '')) {
+                availableAnswers.push(`${letters[i]}) ${room.currentQuestion?.allAnswers?.[i]}`);
+            }
         }
 
         const questionEmbed = new EmbedBuilder()
@@ -1009,63 +1157,68 @@ async function handleFriendModalSubmit(
             .setDescription(
                 `**${interaction.user.displayName}** te está llamando para pedirte ayuda.\n\n` +
                 `**Pregunta:** ${room.currentQuestion?.question}\n\n` +
-                `**Respuestas:**\n` +
-                `A) ${room.currentQuestion?.allAnswers?.[0]}\n` +
-                `B) ${room.currentQuestion?.allAnswers?.[1]}\n` +
-                `C) ${room.currentQuestion?.allAnswers?.[2]}\n` +
-                `D) ${room.currentQuestion?.allAnswers?.[3]}\n\n` +
-                `Responde con la letra que creas correcta (A, B, C, o D). Tienes 30 segundos.`
-            );
+                `**Respuestas:**\n${availableAnswers.join('\n')}\n\n` +
+                `Responde con la letra que creas correcta. Tienes 45 segundos.`
+            )
+            .setFooter({ text: 'Responde solo con la letra (A, B, C o D)' });
 
         const friendMessage = await friend.send({ embeds: [questionEmbed] });
 
-        await interaction.reply({
-            content: `📞 Llamando a ${friend.displayName}... Esperando respuesta (30s)`,
-            ephemeral: false
+        room.lifelines.callFriend = false;
+
+        await interaction.update({
+            content: `📞 Llamando a **${friend.displayName}**... Esperando respuesta (45s)`,
+            components: []
+        });
+
+        const channel = await interaction.client.channels.fetch(room.channelId);
+        if (!channel?.isTextBased() || !('send' in channel)) return;
+
+        await channel.send({
+            content: `📞 **${interaction.user.displayName}** está llamando a **${friend.displayName}**...`
         });
 
         if (!('createMessageCollector' in friendMessage.channel)) {
-            await interaction.reply({
-                content: '❌ No se pudo establecer comunicación con el amigo.',
-                ephemeral: true
+            await channel.send({
+                content: '❌ No se pudo establecer comunicación con el amigo.'
             });
-            room.lifelines.callFriend = true;
             return;
         }
 
         const dmCollector = friendMessage.channel.createMessageCollector({
-            filter: (m: any) => m.author.id === friend.id,
-            time: 30000,
+            filter: (m) => m.author.id === friend.id,
+            time: 45000,
             max: 1
         });
 
-        dmCollector.on('collect', async (message: any) => {
+        dmCollector.on('collect', async (message) => {
             const response = message.content.toUpperCase().trim();
             const validAnswers = ['A', 'B', 'C', 'D'];
 
             if (validAnswers.includes(response)) {
-                await interaction.followUp({
+                await channel.send({
                     content: `📞 **${friend.displayName}** dice: "Creo que es la **${response}**"`
                 });
             } else {
-                await interaction.followUp({
+                await channel.send({
                     content: `📞 **${friend.displayName}**: "${message.content}"`
                 });
             }
         });
 
-        dmCollector.on('end', async (collected: any) => {
+        dmCollector.on('end', async (collected) => {
             if (collected.size === 0) {
-                await interaction.followUp({
+                await channel.send({
                     content: `📞 ${friend.displayName} no respondió a tiempo.`
                 });
             }
         });
 
     } catch (error) {
-        await interaction.reply({
-            content: '❌ No se pudo contactar a ese usuario. Puede que tenga los DMs cerrados.',
-            ephemeral: true
+        logger.error('Millionaire', 'Error procesando llamada', error instanceof Error ? error : new Error(String(error)));
+        await interaction.update({
+            content: '❌ No se pudo contactar a ese usuario. Puede que tenga los DMs cerrados. El comodín sigue disponible.',
+            components: []
         });
         room.lifelines.callFriend = true;
     }
@@ -1083,6 +1236,16 @@ async function handleChangeQuestion(interaction: ButtonInteraction, room: Millio
     }
 
     room.lifelines.changeQuestion = false;
+
+    if (room.currentCollector) {
+        room.currentCollector.stop('lifeline_used');
+    }
+
+    if (room.gameMessage) {
+        await room.gameMessage.edit({
+            components: []
+        });
+    }
 
     await interaction.reply({
         content: '🔄 Cambiando pregunta...',
@@ -1103,20 +1266,75 @@ async function handleChangeQuestion(interaction: ButtonInteraction, room: Millio
         room.currentQuestion = newQuestion;
         room.usedQuestionIds.add(newQuestion.id);
         room.eliminatedAnswers = [];
+        room.questionStartTime = Date.now();
 
         const prize = getPrizeForLevel(room.currentQuestionIndex);
         const embed = createQuestionEmbed(room, newQuestion, prize?.amount || 0);
         const buttons = createQuestionButtons(room);
 
-        if (room.gameMessage) {
-            await room.gameMessage.edit({
-                embeds: [embed],
-                components: buttons
-            });
+        const channel = await interaction.client.channels.fetch(room.channelId);
+        if (!channel?.isTextBased() || !('send' in channel)) {
+            throw new Error('Canal no válido');
         }
+
+        const newMessage = await channel.send({
+            content: '🔄 **Nueva Pregunta:**',
+            embeds: [embed],
+            components: buttons
+        });
+
+        room.gameMessage = newMessage;
+
+        if (room.hasHost && room.hostId) {
+            await sendHostPanel(interaction, room, newQuestion, prize?.amount || 0);
+        }
+
+        const collector = newMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 180000
+        });
+
+        room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+            if (i.user.id !== room.playerId) {
+                await i.reply({
+                    content: '❌ Solo el concursante puede responder.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            try {
+                if (i.customId.startsWith('millionaire_answer_')) {
+                    await handleAnswer(i, room);
+                    collector.stop();
+                } else if (i.customId === 'millionaire_cashout') {
+                    await handleCashout(i, room);
+                    collector.stop();
+                } else if (i.customId === 'millionaire_quit') {
+                    await handleQuit(i, room);
+                    collector.stop();
+                } else if (i.customId.startsWith('millionaire_lifeline_')) {
+                    await handleLifeline(i, room);
+                }
+            } catch (error) {
+                logger.error('Millionaire', 'Error en game collector', error instanceof Error ? error : new Error(String(error)));
+                const errorEmbed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
+                await i.reply({ embeds: [errorEmbed], ephemeral: true }).catch(() => {});
+                collector.stop();
+            }
+        });
+
+        collector.on('end', async (collected, reason) => {
+            if (reason === 'time') {
+                await handleTimeout(interaction, room);
+            }
+        });
 
         logger.info('Millionaire', 'Cambiar pregunta usado');
     } catch (error) {
+        logger.error('Millionaire', 'Error cambiando pregunta', error instanceof Error ? error : new Error(String(error)));
         await interaction.followUp({
             content: '❌ Error al cambiar la pregunta.',
             ephemeral: true
@@ -1129,31 +1347,37 @@ async function endGame(
     interaction: ButtonInteraction,
     room: MillionaireGameRoom,
     isWinner: boolean,
-    errorMessage?: string
+    errorMessage?: string,
+    customWinnings?: number,
+    skipFinalMessage?: boolean
 ): Promise<void> {
     const roomKey = getRoomKey(room.guildId, room.channelId);
 
-    const finalWinnings = isWinner ? room.currentPrize : room.safeHavenReached;
+    const finalWinnings = customWinnings !== undefined
+        ? customWinnings
+        : (isWinner ? room.currentPrize : room.safeHavenReached);
 
-    let embed: EmbedBuilder;
+    if (!skipFinalMessage) {
+        let embed: EmbedBuilder;
 
-    if (errorMessage) {
-        embed = createErrorEmbed('❌ Fin del Juego', errorMessage);
-    } else if (isWinner) {
-        embed = createSuccessEmbed(
-            '🎉 ¡GANADOR MILLONARIO! 🎉',
-            `¡Felicidades <@${room.playerId}>! Has ganado **${formatPrize(finalWinnings)}**`
-        );
-    } else {
-        embed = createInfoEmbed(
-            '🎮 Fin del Juego',
-            `Gracias por jugar, <@${room.playerId}>. Total ganado: **${formatPrize(finalWinnings)}**`
-        );
-    }
+        if (errorMessage) {
+            embed = createErrorEmbed('❌ Fin del Juego', errorMessage);
+        } else if (isWinner) {
+            embed = createSuccessEmbed(
+                '🎉 ¡GANADOR MILLONARIO! 🎉',
+                `¡Felicidades <@${room.playerId}>! Has ganado **${formatPrize(finalWinnings)}**`
+            );
+        } else {
+            embed = createInfoEmbed(
+                '🎮 Fin del Juego',
+                `Gracias por jugar, <@${room.playerId}>. Total ganado: **${formatPrize(finalWinnings)}**`
+            );
+        }
 
-    const channel = await interaction.client.channels.fetch(room.channelId);
-    if (channel?.isTextBased() && 'send' in channel) {
-        await channel.send({ embeds: [embed] });
+        const channel = await interaction.client.channels.fetch(room.channelId);
+        if (channel?.isTextBased() && 'send' in channel) {
+            await channel.send({ embeds: [embed] });
+        }
     }
 
     if (room.playerId && !errorMessage) {
@@ -1337,7 +1561,7 @@ async function showRules(interaction: ChatInputCommandInteraction): Promise<void
             },
             {
                 name: '⏱️ Tiempo',
-                value: 'Tienes 2 minutos para responder cada pregunta.'
+                value: 'Tienes 3 minutos para responder cada pregunta.'
             },
             {
                 name: '🎬 Anfitrión (Opcional)',
