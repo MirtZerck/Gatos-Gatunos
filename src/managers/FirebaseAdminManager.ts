@@ -1,5 +1,6 @@
 import admin from 'firebase-admin';
 import { logger } from '../utils/logger.js';
+import { MillionaireStats, GameEndData, LeaderboardEntry } from '../types/millionaire.js';
 
 /**
  * Configuración de Firebase Admin SDK
@@ -236,6 +237,148 @@ export class FirebaseAdminManager {
     getRef(path: string): admin.database.Reference {
         this.ensureInitialized();
         return this.database!.ref(path);
+    }
+
+    async updateMillionaireStats(userId: string, gameData: GameEndData): Promise<void> {
+        this.ensureInitialized();
+
+        try {
+            const userRef = this.database!.ref(`millionaire/leaderboard/${userId}`);
+            const snapshot = await userRef.get();
+
+            const now = Date.now();
+
+            if (snapshot.exists()) {
+                const current = snapshot.val() as MillionaireStats;
+
+                const updates: Partial<MillionaireStats> = {
+                    gamesPlayed: (current.gamesPlayed || 0) + 1,
+                    totalWinnings: (current.totalWinnings || 0) + gameData.winnings,
+                    questionsAnswered: (current.questionsAnswered || 0) + gameData.questionsAnswered,
+                    correctAnswers: (current.correctAnswers || 0) + gameData.correctAnswers,
+                    lastPlayed: now
+                };
+
+                if (gameData.level > (current.highestLevel || 0)) {
+                    updates.highestLevel = gameData.level;
+                }
+
+                if (gameData.winnings > (current.highestWinning || 0)) {
+                    updates.highestWinning = gameData.winnings;
+                }
+
+                if (gameData.lifelinesUsed.fiftyFifty) {
+                    updates.lifelinesUsed = {
+                        ...current.lifelinesUsed,
+                        fiftyFifty: (current.lifelinesUsed?.fiftyFifty || 0) + 1
+                    };
+                }
+                if (gameData.lifelinesUsed.askAudience) {
+                    updates.lifelinesUsed = {
+                        ...updates.lifelinesUsed,
+                        ...current.lifelinesUsed,
+                        askAudience: (current.lifelinesUsed?.askAudience || 0) + 1
+                    };
+                }
+                if (gameData.lifelinesUsed.callFriend) {
+                    updates.lifelinesUsed = {
+                        ...updates.lifelinesUsed,
+                        ...current.lifelinesUsed,
+                        callFriend: (current.lifelinesUsed?.callFriend || 0) + 1
+                    };
+                }
+                if (gameData.lifelinesUsed.changeQuestion) {
+                    updates.lifelinesUsed = {
+                        ...updates.lifelinesUsed,
+                        ...current.lifelinesUsed,
+                        changeQuestion: (current.lifelinesUsed?.changeQuestion || 0) + 1
+                    };
+                }
+
+                await userRef.update(updates);
+            } else {
+                const newStats: MillionaireStats = {
+                    gamesPlayed: 1,
+                    totalWinnings: gameData.winnings,
+                    highestLevel: gameData.level,
+                    highestWinning: gameData.winnings,
+                    questionsAnswered: gameData.questionsAnswered,
+                    correctAnswers: gameData.correctAnswers,
+                    lastPlayed: now,
+                    lifelinesUsed: {
+                        fiftyFifty: gameData.lifelinesUsed.fiftyFifty ? 1 : 0,
+                        askAudience: gameData.lifelinesUsed.askAudience ? 1 : 0,
+                        callFriend: gameData.lifelinesUsed.callFriend ? 1 : 0,
+                        changeQuestion: gameData.lifelinesUsed.changeQuestion ? 1 : 0
+                    }
+                };
+                await userRef.set(newStats);
+            }
+
+            logger.info('FirebaseAdminManager', `Estadísticas de Millonario actualizadas para ${userId}`);
+        } catch (error) {
+            logger.error('FirebaseAdminManager', 'Error actualizando estadísticas de Millonario', error);
+            throw error;
+        }
+    }
+
+    async getMillionaireLeaderboard(
+        sortBy: 'totalWinnings' | 'highestLevel' = 'totalWinnings',
+        limit: number = 10
+    ): Promise<LeaderboardEntry[]> {
+        this.ensureInitialized();
+
+        try {
+            const leaderboardRef = this.database!.ref('millionaire/leaderboard');
+            const snapshot = await leaderboardRef.get();
+
+            if (!snapshot.exists()) {
+                return [];
+            }
+
+            const entries: LeaderboardEntry[] = [];
+            snapshot.forEach((child) => {
+                const data = child.val() as MillionaireStats;
+                entries.push({
+                    userId: child.key!,
+                    totalWinnings: data.totalWinnings || 0,
+                    highestLevel: data.highestLevel || 0,
+                    highestWinning: data.highestWinning || 0,
+                    gamesPlayed: data.gamesPlayed || 0
+                });
+            });
+
+            entries.sort((a, b) => {
+                if (sortBy === 'totalWinnings') {
+                    return b.totalWinnings - a.totalWinnings;
+                } else {
+                    return b.highestLevel - a.highestLevel;
+                }
+            });
+
+            return entries.slice(0, limit);
+        } catch (error) {
+            logger.error('FirebaseAdminManager', 'Error obteniendo leaderboard de Millonario', error);
+            return [];
+        }
+    }
+
+    async getPlayerMillionaireStats(userId: string): Promise<MillionaireStats | null> {
+        this.ensureInitialized();
+
+        try {
+            const userRef = this.database!.ref(`millionaire/leaderboard/${userId}`);
+            const snapshot = await userRef.get();
+
+            if (snapshot.exists()) {
+                return snapshot.val() as MillionaireStats;
+            }
+
+            return null;
+        } catch (error) {
+            logger.error('FirebaseAdminManager', 'Error obteniendo estadísticas de jugador', error);
+            return null;
+        }
     }
 
     /**
