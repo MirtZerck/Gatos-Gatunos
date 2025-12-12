@@ -34,7 +34,7 @@ export const moderation: HybridCommand = {
     data: new SlashCommandBuilder()
         .setName('moderation')
         .setDescription('Comandos de moderación del servidor')
-        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)        
+        .setDefaultMemberPermissions(PermissionFlagsBits.ModerateMembers)
         .addSubcommand(subcommand =>
             subcommand
                 .setName('kick')
@@ -326,6 +326,12 @@ async function handleUntimeoutSlash(interaction: ChatInputCommandInteraction): P
 }
 
 async function handleKickPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.KickMembers],
+        ['Expulsar Miembros']
+    );
+
     if (args.length === 0) {
         await message.reply(
             `❌ **Uso:** \`${config.prefix}kick <usuario> [razón]\`\n\n` +
@@ -362,6 +368,12 @@ async function handleKickPrefix(message: Message, args: string[]): Promise<void>
 }
 
 async function handleBanPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.BanMembers],
+        ['Banear Miembros']
+    );
+
     if (args.length === 0) {
         await message.reply(
             `❌ **Uso:** \`${config.prefix}ban <usuario> [días] [razón]\`\n\n` +
@@ -404,6 +416,12 @@ async function handleBanPrefix(message: Message, args: string[]): Promise<void> 
 }
 
 async function handleTimeoutPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.ModerateMembers],
+        ['Moderar Miembros']
+    );
+
     if (args.length < 2) {
         await message.reply(
             `❌ **Uso:** \`${config.prefix}timeout <usuario> <minutos> [razón]\`\n\n` +
@@ -446,6 +464,12 @@ async function handleTimeoutPrefix(message: Message, args: string[]): Promise<vo
 }
 
 async function handleUntimeoutPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.ModerateMembers],
+        ['Moderar Miembros']
+    );
+
     if (args.length === 0) {
         await message.reply(`❌ **Uso:** \`${config.prefix}untimeout <usuario> [razón]\``);
         return;
@@ -724,6 +748,12 @@ async function handleWarnClearSlash(interaction: ChatInputCommandInteraction): P
 }
 
 async function handleWarnPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.ModerateMembers],
+        ['Moderar Miembros']
+    );
+
     if (args.length < 2) {
         await message.reply(`❌ **Uso:** \`${config.prefix}warn <usuario> <razón>\``);
         return;
@@ -745,6 +775,12 @@ async function handleWarnPrefix(message: Message, args: string[]): Promise<void>
 }
 
 async function handleWarnsPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.ModerateMembers],
+        ['Moderar Miembros']
+    );
+
     if (args.length === 0) {
         await message.reply(`❌ **Uso:** \`${config.prefix}warns <usuario>\``);
         return;
@@ -765,6 +801,12 @@ async function handleWarnsPrefix(message: Message, args: string[]): Promise<void
 }
 
 async function handleWarnRemovePrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.ModerateMembers],
+        ['Moderar Miembros']
+    );
+
     if (args.length < 2) {
         await message.reply(`❌ **Uso:** \`${config.prefix}warn-remove <usuario> <id>\``);
         return;
@@ -785,6 +827,12 @@ async function handleWarnRemovePrefix(message: Message, args: string[]): Promise
 }
 
 async function handleWarnClearPrefix(message: Message, args: string[]): Promise<void> {
+    Validators.validateUserPermissions(
+        message.member as GuildMember,
+        [PermissionFlagsBits.Administrator],
+        ['Administrador']
+    );
+
     if (args.length === 0) {
         await message.reply(`❌ **Uso:** \`${config.prefix}warn-clear <usuario>\``);
         return;
@@ -929,8 +977,8 @@ async function executeWarns(
         .map((w, i) => {
             const date = new Date(w.timestamp);
             return `**${i + 1}.** ${w.reason}\n` +
-                   `   └ Por: ${w.moderatorTag} | <t:${Math.floor(w.timestamp / 1000)}:R>\n` +
-                   `   └ ID: \`${w.id.slice(0, 8)}\``;
+                `   └ Por: ${w.moderatorTag} | <t:${Math.floor(w.timestamp / 1000)}:R>\n` +
+                `   └ ID: \`${w.id.slice(0, 8)}\``;
         })
         .join('\n\n');
 

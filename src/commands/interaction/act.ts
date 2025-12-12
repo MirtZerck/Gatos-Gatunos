@@ -157,7 +157,7 @@ export const act: HybridCommand = {
         { name: 'dance', aliases: ['bailar'], description: 'Baila (solo o con alguien)' },
         { name: 'sing', aliases: ['cantar'], description: 'Canta (solo o con alguien)' },
         { name: 'highfive', aliases: ['chocalos'], description: 'Choca los cinco' },
-        { name: 'wave', aliases: ['saludar', 'saludo'], description: 'Saluda' },
+        { name: 'wave', aliases: ['saludar', 'saludo', 'hi', 'hola'], description: 'Saluda' },
         { name: 'bow', aliases: ['reverencia'], description: 'Haz una reverencia' },
         { name: 'clap', aliases: ['aplaudir'], description: 'Aplaude' },
         { name: 'cheer', aliases: ['animar'], description: 'Anima' },

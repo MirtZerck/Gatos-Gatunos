@@ -162,7 +162,7 @@ export class MemoryManager {
     }
 
     private buildSystemPrompt(userData: UserMemoryData | null): string {
-        let prompt = 'Eres Hikari Koizumi, una asistente virtual amigable y servicial.';
+        let prompt = 'Eres Hitori Gotoh, una asistente virtual amigable y servicial.';
 
         if (userData) {
             const name = userData.profile.preferredNickname || userData.profile.displayName;

@@ -34,8 +34,8 @@ const ACTION_QUERIES = {
 
 type ActionType = keyof typeof ACTION_QUERIES;
 
-const REQUIRE_REQUEST: ActionType[] = ['hug', 'kiss', 'pat', 'cuddle'];
-const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'bite', 'tickle', 'bonk', 'boop', 'spank'];
+const REQUIRE_REQUEST: ActionType[] = ['hug', 'kiss', 'cuddle'];
+const DIRECT_ACTIONS: ActionType[] = ['slap', 'poke', 'pat','bite', 'tickle', 'bonk', 'boop', 'spank'];
 
 const ACTION_CONFIG: Record<ActionType, {
     emoji: string;

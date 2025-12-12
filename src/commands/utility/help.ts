@@ -183,7 +183,7 @@ async function buildCategoryMenuMessage(client: BotClient, userId?: string) {
     const embed = new EmbedBuilder()
         .setTitle('📚 Sistema de Ayuda')
         .setDescription(
-            '¡Bienvenido al sistema de ayuda de Hikari Koizumi!\n\n' +
+            '¡Bienvenido al sistema de ayuda de Hitori Gotoh!\n\n' +
             '**Selecciona una categoría** del menú desplegable para ver sus comandos.\n\n' +
             '**Otras opciones:**\n' +
             `• Usa \`/help comando:<nombre>\` para ver detalles de un comando\n` +
