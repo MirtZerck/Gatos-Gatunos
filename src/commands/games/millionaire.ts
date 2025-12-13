@@ -36,6 +36,70 @@ import {
 
 const activeRooms = new Map<string, MillionaireGameRoom>();
 
+// Host message templates for different moments
+const HOST_MESSAGES = {
+    questionIntros: [
+        'Veamos la siguiente pregunta...',
+        'Muy bien, ahora viene una pregunta de {category}...',
+        'Atención, pregunta por ${amount}...',
+        'Siguiente pregunta. Escucha con atención...',
+        'Vamos con la pregunta número {level}...',
+        'Interesante. La próxima pregunta es...'
+    ],
+
+    afterSelection: [
+        'Has elegido {option}...',
+        'Interesante elección, {option}...',
+        '{option}... veamos...',
+        'Elegiste {option}. Muy bien...',
+        'Opción {option}. Interesante...',
+        '{option} es tu respuesta...'
+    ],
+
+    askingFinal: [
+        '¿Es tu respuesta final?',
+        '¿Estás seguro de {option}?',
+        '¿Definitivamente {option}?',
+        '¿{option} es tu respuesta final?',
+        '¿Vas con {option}?',
+        '¿Te quedas con {option}?'
+    ],
+
+    correctReveal: [
+        '¡Correcto! Has ganado ${amount}!',
+        '¡Excelente! La respuesta correcta era {answer}',
+        '¡Así se hace! ${amount} son tuyos',
+        '¡Muy bien! Has acertado. ${amount}',
+        '¡Correcto! La respuesta era {answer}. Has ganado ${amount}',
+        '¡Fantástico! ${amount} para ti'
+    ],
+
+    incorrectReveal: [
+        'Lo siento, la respuesta correcta era {answer}...',
+        'Incorrecto. Te llevas ${amount}',
+        'No es correcta. La respuesta era {answer}',
+        'Lo lamento. La correcta era {answer}. Te vas con ${amount}',
+        'No... la respuesta correcta era {answer}',
+        'Desafortunadamente no. Era {answer}. Te llevas ${amount}'
+    ]
+};
+
+function getHostMessage(
+    type: 'questionIntros' | 'afterSelection' | 'askingFinal' | 'correctReveal' | 'incorrectReveal',
+    replacements?: { [key: string]: string }
+): string {
+    const messages = HOST_MESSAGES[type];
+    let message = messages[Math.floor(Math.random() * messages.length)];
+
+    if (replacements) {
+        for (const [key, value] of Object.entries(replacements)) {
+            message = message.replace(`{${key}}`, value);
+        }
+    }
+
+    return message;
+}
+
 function getRoomKey(guildId: string, channelId: string): string {
     return `${guildId}-${channelId}`;
 }
@@ -404,72 +468,109 @@ async function displayQuestion(
         room.currentQuestion = question;
         room.usedQuestionIds.add(question.id);
         room.eliminatedAnswers = [];
-        room.questionStartTime = Date.now();
-
-        const embed = createQuestionEmbed(room, question, prize.amount);
-        const buttons = createQuestionButtons(room);
-
-        const channel = await interaction.client.channels.fetch(room.channelId);
-        if (!channel?.isTextBased() || !('send' in channel)) return;
-
-        const message = await channel.send({
-            embeds: [embed],
-            components: buttons
-        });
-
-        room.gameMessage = message;
 
         if (room.hasHost && room.hostId) {
-            await sendHostPanel(interaction, room, question, prize.amount);
+            await displayQuestionWithHost(interaction, room, question, prize.amount);
+        } else {
+            await displayQuestionAutomatic(interaction, room, question, prize.amount);
         }
-
-        const collector = message.createMessageComponentCollector({
-            componentType: ComponentType.Button,
-            time: 180000
-        });
-
-        room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
-
-        collector.on('collect', async (i: ButtonInteraction) => {
-            if (i.user.id !== room.playerId) {
-                await i.reply({
-                    content: '❌ Solo el concursante puede responder.',
-                    ephemeral: true
-                });
-                return;
-            }
-
-            try {
-                if (i.customId.startsWith('millionaire_answer_')) {
-                    await handleAnswer(i, room);
-                    collector.stop();
-                } else if (i.customId === 'millionaire_cashout') {
-                    await handleCashout(i, room);
-                    collector.stop();
-                } else if (i.customId === 'millionaire_quit') {
-                    await handleQuit(i, room);
-                    collector.stop();
-                } else if (i.customId.startsWith('millionaire_lifeline_')) {
-                    await handleLifeline(i, room);
-                }
-            } catch (error) {
-                logger.error('Millionaire', 'Error en game collector', error instanceof Error ? error : new Error(String(error)));
-                const embed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
-                await i.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
-                collector.stop();
-            }
-        });
-
-        collector.on('end', async (collected, reason) => {
-            if (reason === 'time') {
-                await handleTimeout(interaction, room);
-            }
-        });
 
     } catch (error) {
         logger.error('Millionaire', 'Error obteniendo pregunta', error instanceof Error ? error : new Error(String(error)));
         await endGame(interaction, room, false, 'Error obteniendo pregunta');
     }
+}
+
+async function displayQuestionAutomatic(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.questionStartTime = Date.now();
+
+    const embed = createQuestionEmbed(room, question, prizeAmount);
+    const buttons = createQuestionButtons(room);
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const message = await channel.send({
+        embeds: [embed],
+        components: buttons
+    });
+
+    room.gameMessage = message;
+
+    const collector = message.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 180000
+    });
+
+    room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.playerId) {
+            await i.reply({
+                content: '❌ Solo el concursante puede responder.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        try {
+            if (i.customId.startsWith('millionaire_answer_')) {
+                await handleAnswer(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_cashout') {
+                await handleCashout(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_quit') {
+                await handleQuit(i, room);
+                collector.stop();
+            } else if (i.customId.startsWith('millionaire_lifeline_')) {
+                await handleLifeline(i, room);
+            }
+        } catch (error) {
+            logger.error('Millionaire', 'Error en game collector', error instanceof Error ? error : new Error(String(error)));
+            const embed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
+            await i.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
+            collector.stop();
+        }
+    });
+
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            await handleTimeout(interaction, room);
+        }
+    });
+}
+
+async function displayQuestionWithHost(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.hostPanelState = 'WAITING_QUESTION_READ';
+    room.questionRevealed = false;
+    room.optionsRevealed = 0;
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const waitingEmbed = createInfoEmbed(
+        `💰 PREGUNTA ${room.currentQuestionIndex} - ${formatPrize(prizeAmount)} 💰`,
+        '🎬 El anfitrión está preparando la pregunta...\n\nEsperando...'
+    );
+
+    const message = await channel.send({
+        embeds: [waitingEmbed]
+    });
+
+    room.gameMessage = message;
+
+    await initializeHostPanelForQuestion(interaction, room, question, prizeAmount);
 }
 
 function createQuestionEmbed(
@@ -610,6 +711,944 @@ function createQuestionButtons(room: MillionaireGameRoom): ActionRowBuilder<Butt
     return rows;
 }
 
+async function initializeHostPanelForQuestion(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    if (!room.hostId) return;
+
+    try {
+        const host = await interaction.client.users.fetch(room.hostId);
+
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.INFO)
+            .setTitle('🎬 PANEL DE ANFITRIÓN')
+            .setDescription(
+                `**Pregunta ${room.currentQuestionIndex}** de 15 - ${formatPrize(prizeAmount)}\n\n` +
+                `**Pregunta:** ${question.question}\n\n` +
+                `**✅ Respuesta Correcta:** ${question.correctAnswer}\n` +
+                `**Categoría:** ${question.category}\n\n` +
+                `¿Deseas leer la pregunta dramáticamente o revelar todo de una vez?`
+            );
+
+        const readButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_read_question')
+            .setLabel('📖 Leer Pregunta')
+            .setStyle(ButtonStyle.Primary);
+
+        const skipButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_skip_intro')
+            .setLabel('⏭️ Revelar Todo')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(readButton, skipButton);
+
+        if (room.hostPanelMessage) {
+            await room.hostPanelMessage.edit({
+                embeds: [embed],
+                components: [row]
+            });
+        } else {
+            room.hostPanelMessage = await host.send({
+                embeds: [embed],
+                components: [row]
+            });
+        }
+
+        const collector = room.hostPanelMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 180000
+        });
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+            if (i.user.id !== room.hostId) {
+                await i.reply({
+                    content: '❌ Solo el anfitrión puede usar estos controles.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            if (i.customId === 'millionaire_host_read_question') {
+                await handleHostReadQuestion(i, room, question, prizeAmount);
+            } else if (i.customId === 'millionaire_host_skip_intro') {
+                await handleHostSkipIntro(i, room, question, prizeAmount);
+            }
+
+            collector.stop();
+        });
+
+        collector.on('end', async (collected) => {
+            if (collected.size === 0) {
+                await handleHostSkipIntro(interaction, room, question, prizeAmount);
+            }
+        });
+
+    } catch (error) {
+        logger.warn('Millionaire', 'No se pudo inicializar panel del anfitrión');
+        await displayQuestionAutomatic(interaction, room, question, prizeAmount);
+    }
+}
+
+async function handleHostReadQuestion(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.hostPanelState = 'QUESTION_READ';
+
+    await interaction.update({
+        content: '📖 Leyendo pregunta...',
+        components: []
+    });
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const readingEmbed = createInfoEmbed(
+        `💰 PREGUNTA ${room.currentQuestionIndex} - ${formatPrize(prizeAmount)} 💰`,
+        '🎬 **Anfitrión está leyendo la pregunta...**\n\n' +
+        '_Preparando revelación..._'
+    );
+
+    if (room.gameMessage) {
+        await room.gameMessage.edit({ embeds: [readingEmbed] });
+    }
+
+    await showHostRevealQuestionPanel(interaction, room, question, prizeAmount);
+}
+
+async function showHostRevealQuestionPanel(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    if (!room.hostId || !room.hostPanelMessage) return;
+
+    const embed = new EmbedBuilder()
+        .setColor(COLORS.INFO)
+        .setTitle('🎬 REVELAR PREGUNTA')
+        .setDescription(
+            `¿Listo para revelar la pregunta a los espectadores?`
+        );
+
+    const revealButton = new ButtonBuilder()
+        .setCustomId('millionaire_host_reveal_question')
+        .setLabel('📢 Revelar Pregunta')
+        .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(revealButton);
+
+    await room.hostPanelMessage.edit({
+        embeds: [embed],
+        components: [row]
+    });
+
+    const collector = room.hostPanelMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 180000
+    });
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.hostId) {
+            await i.reply({
+                content: '❌ Solo el anfitrión puede usar estos controles.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (i.customId === 'millionaire_host_reveal_question') {
+            await handleHostRevealQuestion(i, room, question, prizeAmount);
+        }
+
+        collector.stop();
+    });
+}
+
+async function handleHostRevealQuestion(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.hostPanelState = 'QUESTION_REVEALED';
+    room.questionRevealed = true;
+
+    await interaction.update({
+        content: '📢 Revelando pregunta...',
+        components: []
+    });
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const difficultyEmojis = {
+        easy: '🟢',
+        medium: '🟡',
+        hard: '🔴'
+    };
+
+    const questionEmbed = new EmbedBuilder()
+        .setColor(COLORS.INFO)
+        .setTitle(`💰 PREGUNTA ${room.currentQuestionIndex} - ${formatPrize(prizeAmount)} 💰`)
+        .setDescription('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+        .addFields({
+            name: `${difficultyEmojis[question.difficulty]} ${question.category}`,
+            value: `**${question.question}**\n\n🎬 _Anfitrión revelará las opciones..._`
+        });
+
+    if (question.imageUrl) {
+        questionEmbed.setImage(question.imageUrl);
+    }
+
+    if (room.gameMessage) {
+        await room.gameMessage.edit({ embeds: [questionEmbed] });
+    }
+
+    await showHostRevealOptionsPanel(interaction, room, question, prizeAmount);
+}
+
+async function showHostRevealOptionsPanel(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    if (!room.hostId || !room.hostPanelMessage) return;
+
+    const embed = new EmbedBuilder()
+        .setColor(COLORS.INFO)
+        .setTitle('🎬 REVELAR OPCIONES')
+        .setDescription(
+            `¿Cómo deseas revelar las opciones?`
+        );
+
+    const autoButton = new ButtonBuilder()
+        .setCustomId('millionaire_host_reveal_auto')
+        .setLabel('🎬 Auto (una cada 2s)')
+        .setStyle(ButtonStyle.Primary);
+
+    const manualButton = new ButtonBuilder()
+        .setCustomId('millionaire_host_reveal_manual')
+        .setLabel('🎯 Manual (Control Total)')
+        .setStyle(ButtonStyle.Success);
+
+    const allButton = new ButtonBuilder()
+        .setCustomId('millionaire_host_reveal_all')
+        .setLabel('⏭️ Mostrar Todas')
+        .setStyle(ButtonStyle.Secondary);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(autoButton, manualButton, allButton);
+
+    await room.hostPanelMessage.edit({
+        embeds: [embed],
+        components: [row]
+    });
+
+    const collector = room.hostPanelMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 180000
+    });
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.hostId) {
+            await i.reply({
+                content: '❌ Solo el anfitrión puede usar estos controles.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (i.customId === 'millionaire_host_reveal_auto') {
+            await handleHostRevealOptionsAuto(i, room, question, prizeAmount);
+        } else if (i.customId === 'millionaire_host_reveal_manual') {
+            await handleHostRevealOptionsManual(i, room, question, prizeAmount);
+        } else if (i.customId === 'millionaire_host_reveal_all') {
+            await handleHostRevealOptionsAll(i, room, question, prizeAmount);
+        }
+
+        collector.stop();
+    });
+}
+
+async function handleHostRevealOptionsAuto(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.hostPanelState = 'OPTIONS_REVEALING';
+
+    await interaction.update({
+        content: '🎬 Revelando opciones automáticamente...',
+        components: []
+    });
+
+    await revealOptionsProgressively(room, question, prizeAmount);
+    await finalizeQuestionReveal(interaction, room, question, prizeAmount);
+}
+
+async function handleHostRevealOptionsAll(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.optionsRevealed = 4;
+
+    await interaction.update({
+        content: '⏭️ Mostrando todas las opciones...',
+        components: []
+    });
+
+    await revealOptionsProgressively(room, question, prizeAmount, true);
+    await finalizeQuestionReveal(interaction, room, question, prizeAmount);
+}
+
+async function handleHostRevealOptionsManual(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.hostPanelState = 'OPTIONS_REVEALING_MANUAL';
+    room.revealMode = 'manual';
+
+    // Initialize time control if needed
+    if (!room.timeControl) {
+        room.timeControl = {
+            pausedTotal: 0,
+            maxPauseDuration: 60000, // 1 minuto máximo
+            pausesRemaining: 2,
+            isPaused: false
+        };
+    }
+
+    await showManualRevealPanel(interaction, room, question, prizeAmount);
+}
+
+async function showManualRevealPanel(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    if (!room.hostPanelMessage || !question.allAnswers) return;
+
+    const letters = ['A', 'B', 'C', 'D'];
+    const revealed = room.optionsRevealed || 0;
+
+    // Create status text
+    let statusText = '**Opciones:**\n';
+    for (let i = 0; i < 4; i++) {
+        if (i < revealed) {
+            statusText += `✅ ${letters[i]}) ${question.allAnswers[i]}\n`;
+        } else {
+            statusText += `⏸️ ${letters[i]}) ???\n`;
+        }
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(COLORS.INFO)
+        .setTitle('🎯 MODO CONTROL TOTAL')
+        .setDescription(
+            `Presiona los botones para revelar cada opción:\n\n${statusText}\n` +
+            `**Reveladas:** ${revealed}/4`
+        );
+
+    const buttons: ButtonBuilder[] = [];
+
+    // Create button for each unrevealed option
+    for (let i = revealed; i < 4; i++) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId(`millionaire_host_reveal_option_${letters[i]}`)
+                .setLabel(`Revelar ${letters[i]}`)
+                .setStyle(ButtonStyle.Primary)
+                .setDisabled(i !== revealed) // Only enable the next option
+        );
+    }
+
+    // Add "Reveal All Now" button if not all revealed
+    if (revealed < 4) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId('millionaire_host_reveal_all_now')
+                .setLabel('⏭️ Revelar Todas Ya')
+                .setStyle(ButtonStyle.Secondary)
+        );
+    }
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(buttons);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [row]
+    });
+
+    // Set up collector for manual reveals
+    if (room.hostPanelCollector) {
+        room.hostPanelCollector.stop();
+    }
+
+    const collector = room.hostPanelMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 300000 // 5 minutes for manual mode
+    });
+
+    room.hostPanelCollector = collector as InteractionCollector<ButtonInteraction>;
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.hostId) {
+            await i.reply({
+                content: '❌ Solo el anfitrión puede usar estos controles.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (i.customId === 'millionaire_host_reveal_all_now') {
+            collector.stop();
+            await handleHostRevealAllNow(i, room, question, prizeAmount);
+        } else if (i.customId.startsWith('millionaire_host_reveal_option_')) {
+            const letter = i.customId.split('_').pop() as string;
+            await handleHostRevealSingleOption(i, room, question, prizeAmount, letter);
+        }
+    });
+
+    collector.on('end', (collected, reason) => {
+        if (reason === 'time' && room.optionsRevealed !== 4) {
+            // Emergency mode: reveal all if host times out
+            room.emergencyMode = true;
+            handleEmergencyReveal(room, question, prizeAmount);
+        }
+    });
+}
+
+async function handleHostRevealSingleOption(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number,
+    letter: string
+): Promise<void> {
+    if (!question.allAnswers) return;
+
+    const currentRevealed = room.optionsRevealed || 0;
+    room.optionsRevealed = currentRevealed + 1;
+
+    // Update game message with new option
+    await updateGameMessageWithOptions(room, question, prizeAmount);
+
+    // If all options revealed, finalize
+    if (room.optionsRevealed === 4) {
+        if (room.hostPanelCollector) {
+            room.hostPanelCollector.stop();
+        }
+
+        await interaction.update({
+            content: '✅ Todas las opciones reveladas. El jugador ya puede responder.',
+            components: []
+        });
+
+        await finalizeQuestionReveal(interaction, room, question, prizeAmount);
+    } else {
+        // Show panel again with next option available
+        await showManualRevealPanel(interaction, room, question, prizeAmount);
+    }
+}
+
+async function handleHostRevealAllNow(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.optionsRevealed = 4;
+
+    await interaction.update({
+        content: '⏭️ Revelando todas las opciones restantes...',
+        components: []
+    });
+
+    await updateGameMessageWithOptions(room, question, prizeAmount);
+    await finalizeQuestionReveal(interaction, room, question, prizeAmount);
+}
+
+async function updateGameMessageWithOptions(
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    if (!room.gameMessage || !question.allAnswers) return;
+
+    const letters = ['A', 'B', 'C', 'D'];
+    const revealed = room.optionsRevealed || 0;
+    const difficultyEmojis = {
+        easy: '🟢',
+        medium: '🟡',
+        hard: '🔴'
+    };
+
+    let answersText = '';
+    for (let i = 0; i < revealed; i++) {
+        answersText += `**${letters[i]})** ${question.allAnswers[i]}\n`;
+    }
+
+    if (revealed < 4) {
+        answersText += '\n🎬 _Esperando que el anfitrión revele más opciones..._';
+    }
+
+    const questionEmbed = new EmbedBuilder()
+        .setColor(COLORS.INFO)
+        .setTitle(`💰 PREGUNTA ${room.currentQuestionIndex + 1} - $${prizeAmount.toLocaleString()} 💰`)
+        .addFields(
+            {
+                name: `${difficultyEmojis[question.difficulty]} Categoría`,
+                value: question.category,
+                inline: true
+            }
+        )
+        .setDescription(`**${question.question}**\n\n${answersText}`);
+
+    await room.gameMessage.edit({ embeds: [questionEmbed] });
+}
+
+async function handleEmergencyReveal(
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    console.log(`[Millionaire] Emergency mode activated for room ${room.channelId}`);
+
+    room.optionsRevealed = 4;
+    await updateGameMessageWithOptions(room, question, prizeAmount);
+
+    // Continue with automatic mode - send message to channel
+    const channel = room.gameMessage?.channel;
+    if (channel && 'send' in channel) {
+        await channel.send({
+            content: '⚠️ El anfitrión no respondió a tiempo. Continuando en modo automático.',
+            embeds: []
+        });
+
+        // Start the question timer and enable buttons
+        room.questionStartTime = Date.now();
+
+        const buttons = createQuestionButtons(room);
+
+        if (room.gameMessage) {
+            await room.gameMessage.edit({ components: buttons });
+        }
+
+        // Set up collector for emergency mode
+        const collector = room.gameMessage!.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 180000
+        });
+
+        room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+            if (i.user.id !== room.playerId) {
+                await i.reply({
+                    content: '❌ Solo el concursante puede responder.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            try {
+                if (i.customId.startsWith('millionaire_answer_')) {
+                    await handleAnswer(i, room);
+                    collector.stop();
+                } else if (i.customId === 'millionaire_cashout') {
+                    await handleCashout(i, room);
+                    collector.stop();
+                } else if (i.customId === 'millionaire_quit') {
+                    await handleQuit(i, room);
+                    collector.stop();
+                } else if (i.customId.startsWith('millionaire_lifeline_')) {
+                    await handleLifeline(i, room);
+                }
+            } catch (error) {
+                logger.error('Millionaire', 'Error en emergency collector', error instanceof Error ? error : new Error(String(error)));
+            }
+        });
+    }
+}
+
+async function handleHostSkipIntro(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.questionRevealed = true;
+    room.optionsRevealed = 4;
+
+    await interaction.update({
+        content: '⏭️ Revelando todo...',
+        components: []
+    });
+
+    await displayQuestionAutomatic(interaction, room, question, prizeAmount);
+}
+
+async function revealOptionsProgressively(
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number,
+    instant: boolean = false
+): Promise<void> {
+    const channel = await room.gameMessage?.channel;
+    if (!channel || !('send' in channel)) return;
+
+    const letters = ['A', 'B', 'C', 'D'];
+    const difficultyEmojis = {
+        easy: '🟢',
+        medium: '🟡',
+        hard: '🔴'
+    };
+
+    const safeHaven = getLastSafeHaven(room.currentQuestionIndex);
+
+    for (let i = room.optionsRevealed || 0; i < 4; i++) {
+        if (!instant && i > 0) {
+            await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+
+        room.optionsRevealed = i + 1;
+
+        let answersText = '';
+        for (let j = 0; j <= i; j++) {
+            answersText += `**${letters[j]})** ${question.allAnswers?.[j]}\n`;
+        }
+
+        if (i < 3) {
+            answersText += '\n🎬 _Revelando más opciones..._';
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.INFO)
+            .setTitle(`💰 PREGUNTA ${room.currentQuestionIndex} - ${formatPrize(prizeAmount)} 💰`)
+            .setDescription('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━')
+            .addFields({
+                name: `${difficultyEmojis[question.difficulty]} ${question.category}`,
+                value: `**${question.question}**\n\n${answersText}`
+            });
+
+        if (i === 3) {
+            const endTime = Math.floor((Date.now() + 180000) / 1000);
+            embed.addFields(
+                {
+                    name: '⏱️ Tiempo restante',
+                    value: `<t:${endTime}:R>`,
+                    inline: true
+                },
+                {
+                    name: '🏦 Punto seguro',
+                    value: formatPrize(safeHaven),
+                    inline: true
+                }
+            );
+        }
+
+        if (question.imageUrl) {
+            embed.setImage(question.imageUrl);
+        }
+
+        if (room.gameMessage) {
+            await room.gameMessage.edit({ embeds: [embed] });
+        }
+    }
+}
+
+async function finalizeQuestionReveal(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    room.hostPanelState = 'WAITING_PLAYER';
+    room.questionStartTime = Date.now();
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const buttons = createQuestionButtons(room);
+
+    if (room.gameMessage) {
+        await room.gameMessage.edit({ components: buttons });
+    }
+
+    if (room.hostPanelMessage && room.hostId) {
+        // Initialize time control if not already done
+        if (!room.timeControl) {
+            room.timeControl = {
+                startedAt: Date.now(),
+                pausedTotal: 0,
+                maxPauseDuration: 60000,
+                pausesRemaining: 2,
+                isPaused: false
+            };
+        } else {
+            room.timeControl.startedAt = Date.now();
+        }
+
+        await updateHostPanelWithTimeControls(room);
+    }
+
+    const collector = room.gameMessage!.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 180000
+    });
+
+    room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.playerId) {
+            await i.reply({
+                content: '❌ Solo el concursante puede responder.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        try {
+            if (i.customId.startsWith('millionaire_answer_')) {
+                await handleAnswer(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_cashout') {
+                await handleCashout(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_quit') {
+                await handleQuit(i, room);
+                collector.stop();
+            } else if (i.customId.startsWith('millionaire_lifeline_')) {
+                await handleLifeline(i, room);
+            }
+        } catch (error) {
+            logger.error('Millionaire', 'Error en game collector', error instanceof Error ? error : new Error(String(error)));
+            const embed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
+            await i.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
+            collector.stop();
+        }
+    });
+
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            await handleTimeout(interaction, room);
+        }
+    });
+}
+
+async function updateHostPanelWithTimeControls(room: MillionaireGameRoom): Promise<void> {
+    if (!room.hostPanelMessage || !room.timeControl) return;
+
+    const timeControl = room.timeControl;
+    const pauseTimeUsed = timeControl.pausedTotal;
+    const pauseTimeRemaining = timeControl.maxPauseDuration - pauseTimeUsed;
+    const pauseMinutesRemaining = Math.floor(pauseTimeRemaining / 1000 / 60);
+    const pauseSecondsRemaining = Math.floor((pauseTimeRemaining / 1000) % 60);
+
+    const embed = new EmbedBuilder()
+        .setColor(timeControl.isPaused ? COLORS.WARNING : COLORS.SUCCESS)
+        .setTitle(timeControl.isPaused ? '⏸️ TIEMPO EN PAUSA' : '✅ Pregunta Revelada')
+        .setDescription(
+            `Todas las opciones han sido reveladas.\n\n` +
+            `${timeControl.isPaused ? '⏸️ **TIEMPO PAUSADO**' : '⏱️ El tiempo está corriendo...'}\n` +
+            `Esperando que el jugador seleccione una respuesta.\n\n` +
+            `**Control de Tiempo:**\n` +
+            `⏱️ Pausas restantes: ${timeControl.pausesRemaining}\n` +
+            `⏱️ Tiempo de pausa disponible: ${pauseMinutesRemaining}m ${pauseSecondsRemaining}s`
+        );
+
+    const buttons: ButtonBuilder[] = [];
+
+    if (timeControl.isPaused) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId('millionaire_host_resume_time')
+                .setLabel('▶️ Reanudar Tiempo')
+                .setStyle(ButtonStyle.Success)
+        );
+    } else if (timeControl.pausesRemaining > 0 && pauseTimeRemaining > 0) {
+        buttons.push(
+            new ButtonBuilder()
+                .setCustomId('millionaire_host_pause_time')
+                .setLabel('⏸️ Pausar Tiempo')
+                .setStyle(ButtonStyle.Primary)
+        );
+    }
+
+    // Emergency button to switch to automatic mode
+    buttons.push(
+        new ButtonBuilder()
+            .setCustomId('millionaire_host_emergency_auto')
+            .setLabel('⚠️ Modo Automático')
+            .setStyle(ButtonStyle.Danger)
+    );
+
+    const rows = buttons.length > 0 ? [new ActionRowBuilder<ButtonBuilder>().addComponents(buttons)] : [];
+
+    await room.hostPanelMessage.edit({
+        embeds: [embed],
+        components: rows
+    });
+
+    // Set up collector for time control buttons
+    if (room.hostPanelCollector) {
+        room.hostPanelCollector.stop();
+    }
+
+    if (buttons.length > 0) {
+        const collector = room.hostPanelMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 180000
+        });
+
+        room.hostPanelCollector = collector as InteractionCollector<ButtonInteraction>;
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+            if (i.user.id !== room.hostId) {
+                await i.reply({
+                    content: '❌ Solo el anfitrión puede usar estos controles.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            if (i.customId === 'millionaire_host_pause_time') {
+                await handleHostPauseTime(i, room);
+            } else if (i.customId === 'millionaire_host_resume_time') {
+                await handleHostResumeTime(i, room);
+            } else if (i.customId === 'millionaire_host_emergency_auto') {
+                await handleHostEmergencyAuto(i, room);
+            }
+        });
+    }
+}
+
+async function handleHostPauseTime(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom
+): Promise<void> {
+    if (!room.timeControl || room.timeControl.isPaused) return;
+
+    const timeControl = room.timeControl;
+
+    // Check if can pause
+    if (timeControl.pausesRemaining <= 0) {
+        await interaction.reply({
+            content: '❌ Ya no tienes pausas disponibles.',
+            ephemeral: true
+        });
+        return;
+    }
+
+    const pauseTimeRemaining = timeControl.maxPauseDuration - timeControl.pausedTotal;
+    if (pauseTimeRemaining <= 0) {
+        await interaction.reply({
+            content: '❌ Ya has usado todo el tiempo de pausa disponible.',
+            ephemeral: true
+        });
+        return;
+    }
+
+    // Pause the time
+    timeControl.isPaused = true;
+    timeControl.pausedAt = Date.now();
+    timeControl.pausesRemaining--;
+
+    await interaction.deferUpdate();
+    await updateHostPanelWithTimeControls(room);
+
+    // Notify channel
+    const channel = room.gameMessage?.channel;
+    if (channel && 'send' in channel) {
+        await channel.send({
+            content: '⏸️ El anfitrión ha pausado el tiempo. El jugador puede seguir pensando sin presión temporal.',
+            embeds: []
+        });
+    }
+}
+
+async function handleHostResumeTime(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom
+): Promise<void> {
+    if (!room.timeControl || !room.timeControl.isPaused || !room.timeControl.pausedAt) return;
+
+    const timeControl = room.timeControl;
+
+    // Calculate pause duration (pausedAt is checked above)
+    const pauseDuration = Date.now() - timeControl.pausedAt!;
+    timeControl.pausedTotal += pauseDuration;
+
+    // Check if exceeded max pause time
+    if (timeControl.pausedTotal > timeControl.maxPauseDuration) {
+        timeControl.pausedTotal = timeControl.maxPauseDuration;
+    }
+
+    // Resume
+    timeControl.isPaused = false;
+    timeControl.pausedAt = undefined;
+
+    // Adjust questionStartTime to account for the pause
+    if (room.questionStartTime) {
+        room.questionStartTime += pauseDuration;
+    }
+
+    await interaction.deferUpdate();
+    await updateHostPanelWithTimeControls(room);
+
+    // Notify channel
+    const channel = room.gameMessage?.channel;
+    if (channel && 'send' in channel) {
+        const remainingPauseTime = timeControl.maxPauseDuration - timeControl.pausedTotal;
+        const minutes = Math.floor(remainingPauseTime / 1000 / 60);
+        const seconds = Math.floor((remainingPauseTime / 1000) % 60);
+
+        await channel.send({
+            content: `▶️ El anfitrión ha reanudado el tiempo.\n` +
+                     `⏱️ Tiempo de pausa restante: ${minutes}m ${seconds}s | Pausas restantes: ${timeControl.pausesRemaining}`,
+            embeds: []
+        });
+    }
+}
+
+async function handleHostEmergencyAuto(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom
+): Promise<void> {
+    room.emergencyMode = true;
+
+    await interaction.update({
+        content: '⚠️ Modo automático activado. El anfitrión ha dejado el control del juego.',
+        components: []
+    });
+
+    // Stop all host collectors
+    if (room.hostPanelCollector) {
+        room.hostPanelCollector.stop();
+    }
+
+    // Notify channel
+    const channel = room.gameMessage?.channel;
+    if (channel && 'send' in channel) {
+        await channel.send({
+            content: '⚠️ El anfitrión ha activado el modo automático. El juego continúa sin intervención del anfitrión.',
+            embeds: []
+        });
+    }
+}
+
 async function sendHostPanel(
     interaction: ButtonInteraction,
     room: MillionaireGameRoom,
@@ -658,12 +1697,385 @@ async function handleAnswer(interaction: ButtonInteraction, room: MillionaireGam
     }
 
     const selectedAnswer = room.currentQuestion.allAnswers[index];
-    const isCorrect = selectedAnswer === room.currentQuestion.correctAnswer;
+
+    if (room.hasHost && room.hostId) {
+        await handleAnswerWithHost(interaction, room, selectedLetter, selectedAnswer);
+    } else {
+        const isCorrect = selectedAnswer === room.currentQuestion.correctAnswer;
+        if (isCorrect) {
+            await handleCorrectAnswer(interaction, room);
+        } else {
+            await handleIncorrectAnswer(interaction, room, selectedAnswer);
+        }
+    }
+}
+
+async function handleAnswerWithHost(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    selectedLetter: string,
+    selectedAnswer: string
+): Promise<void> {
+    room.playerSelectedAnswer = selectedLetter;
+    room.awaitingFinalAnswer = true;
+
+    const isCorrect = selectedAnswer === room.currentQuestion?.correctAnswer;
+
+    const selectionEmbed = createInfoEmbed(
+        '🤔 Respuesta Seleccionada',
+        `**${interaction.user.displayName}** ha seleccionado la opción **${selectedLetter}**\n\n` +
+        `🎬 Esperando confirmación del anfitrión...`
+    );
+
+    await interaction.update({
+        embeds: [selectionEmbed],
+        components: []
+    });
+
+    await updateHostPanelWithSelection(interaction, room, selectedLetter, selectedAnswer, isCorrect);
+}
+
+async function updateHostPanelWithSelection(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    selectedLetter: string,
+    selectedAnswer: string,
+    isCorrect: boolean
+): Promise<void> {
+    if (!room.hostId) return;
+
+    try {
+        const host = await interaction.client.users.fetch(room.hostId);
+
+        const statusEmoji = isCorrect ? '✅' : '❌';
+        const prize = getPrizeForLevel(room.currentQuestionIndex);
+
+        const embed = new EmbedBuilder()
+            .setColor(isCorrect ? COLORS.SUCCESS : COLORS.DANGER)
+            .setTitle('⚠️ JUGADOR SELECCIONÓ RESPUESTA')
+            .setDescription(
+                `**Pregunta ${room.currentQuestionIndex}** - ${formatPrize(prize?.amount || 0)}\n\n` +
+                `**Pregunta:** ${room.currentQuestion?.question}\n\n` +
+                `**Opción seleccionada:** ${selectedLetter}) ${selectedAnswer} ${statusEmoji}\n` +
+                `**Respuesta correcta:** ${room.currentQuestion?.correctAnswer}\n\n` +
+                `¿Qué deseas hacer?`
+            );
+
+        const askFinalButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_ask_final')
+            .setLabel('❓ "¿Respuesta Final?"')
+            .setStyle(ButtonStyle.Primary);
+
+        const validateButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_validate')
+            .setLabel('✅ Validar Directamente')
+            .setStyle(ButtonStyle.Success);
+
+        const allowChangeButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_allow_change')
+            .setLabel('🔄 Permitir Cambiar')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(
+            askFinalButton,
+            validateButton,
+            allowChangeButton
+        );
+
+        if (room.hostPanelMessage) {
+            await room.hostPanelMessage.edit({
+                embeds: [embed],
+                components: [row]
+            });
+        } else {
+            room.hostPanelMessage = await host.send({
+                embeds: [embed],
+                components: [row]
+            });
+        }
+
+        const collector = room.hostPanelMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 180000
+        });
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+            if (i.user.id !== room.hostId) {
+                await i.reply({
+                    content: '❌ Solo el anfitrión puede usar estos controles.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            if (i.customId === 'millionaire_host_ask_final') {
+                await handleHostAskFinal(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_host_validate') {
+                await handleHostValidate(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_host_allow_change') {
+                await handleHostAllowChange(i, room);
+                collector.stop();
+            }
+        });
+
+    } catch (error) {
+        logger.warn('Millionaire', 'No se pudo actualizar panel del anfitrión');
+    }
+}
+
+async function handleHostAskFinal(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    await interaction.update({
+        content: '📨 Preguntando al jugador si es su respuesta final...',
+        components: []
+    });
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const confirmEmbed = new EmbedBuilder()
+        .setColor(COLORS.WARNING)
+        .setTitle('❓ Confirmación de Respuesta')
+        .setDescription(
+            `🎬 **Anfitrión:** <@${room.playerId}>, has elegido la opción **${room.playerSelectedAnswer}**...\n\n` +
+            `**¿Es tu respuesta final?**`
+        );
+
+    const yesButton = new ButtonBuilder()
+        .setCustomId('millionaire_final_yes')
+        .setLabel('✅ Sí, respuesta final')
+        .setStyle(ButtonStyle.Success);
+
+    const noButton = new ButtonBuilder()
+        .setCustomId('millionaire_final_no')
+        .setLabel('🔄 No, quiero cambiar')
+        .setStyle(ButtonStyle.Danger);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(yesButton, noButton);
+
+    const confirmMessage = await channel.send({
+        embeds: [confirmEmbed],
+        components: [row]
+    });
+
+    const collector = confirmMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 60000
+    });
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.playerId) {
+            await i.reply({
+                content: '❌ Solo el concursante puede responder.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (i.customId === 'millionaire_final_yes') {
+            await handleFinalAnswerConfirmed(i, room);
+        } else if (i.customId === 'millionaire_final_no') {
+            await handleFinalAnswerRejected(i, room);
+        }
+
+        collector.stop();
+    });
+
+    collector.on('end', async (collected) => {
+        if (collected.size === 0) {
+            await confirmMessage.edit({
+                content: '⏱️ Tiempo agotado. Se asume respuesta final.',
+                components: []
+            });
+            await handleFinalAnswerConfirmed(interaction, room);
+        }
+    });
+}
+
+async function handleHostValidate(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    await interaction.update({
+        content: '⚡ Validando respuesta directamente...',
+        components: []
+    });
+
+    await handleFinalAnswerConfirmed(interaction, room);
+}
+
+async function handleHostAllowChange(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    await interaction.update({
+        content: '🔄 Permitiendo cambio de respuesta...',
+        components: []
+    });
+
+    room.playerSelectedAnswer = undefined;
+    room.awaitingFinalAnswer = false;
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    await channel.send({
+        content: `🎬 **Anfitrión:** <@${room.playerId}>, puedes cambiar tu respuesta.`
+    });
+
+    if (room.gameMessage && room.currentQuestion) {
+        const prize = getPrizeForLevel(room.currentQuestionIndex);
+        const embed = createQuestionEmbed(room, room.currentQuestion, prize?.amount || 0);
+        const buttons = createQuestionButtons(room);
+
+        await room.gameMessage.edit({
+            embeds: [embed],
+            components: buttons
+        });
+    }
+}
+
+async function handleFinalAnswerConfirmed(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    room.awaitingFinalAnswer = false;
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    if (room.hasHost && room.hostId) {
+        await updateHostPanelForReveal(interaction, room);
+    } else {
+        await revealAnswer(interaction, room);
+    }
+}
+
+async function handleFinalAnswerRejected(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    room.playerSelectedAnswer = undefined;
+    room.awaitingFinalAnswer = false;
+
+    await interaction.update({
+        content: '🔄 Puedes cambiar tu respuesta.',
+        components: []
+    });
+
+    if (room.gameMessage && room.currentQuestion) {
+        const prize = getPrizeForLevel(room.currentQuestionIndex);
+        const embed = createQuestionEmbed(room, room.currentQuestion, prize?.amount || 0);
+        const buttons = createQuestionButtons(room);
+
+        await room.gameMessage.edit({
+            embeds: [embed],
+            components: buttons
+        });
+    }
+}
+
+async function updateHostPanelForReveal(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    if (!room.hostId) return;
+
+    try {
+        const host = await interaction.client.users.fetch(room.hostId);
+
+        const letters = ['A', 'B', 'C', 'D'];
+        const index = letters.indexOf(room.playerSelectedAnswer || '');
+        const selectedAnswer = room.currentQuestion?.allAnswers?.[index];
+        const isCorrect = selectedAnswer === room.currentQuestion?.correctAnswer;
+
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.INFO)
+            .setTitle('🎭 Listo para Revelar')
+            .setDescription(
+                `El jugador ha confirmado su respuesta: **${room.playerSelectedAnswer}**\n\n` +
+                `Resultado: **${isCorrect ? '✅ CORRECTA' : '❌ INCORRECTA'}**\n\n` +
+                `¿Cómo deseas revelar el resultado?`
+            );
+
+        const revealButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_reveal')
+            .setLabel('📢 Revelar Ahora')
+            .setStyle(ButtonStyle.Primary);
+
+        const suspenseButton = new ButtonBuilder()
+            .setCustomId('millionaire_host_suspense')
+            .setLabel('⏱️ Crear Suspenso (5s)')
+            .setStyle(ButtonStyle.Secondary);
+
+        const row = new ActionRowBuilder<ButtonBuilder>().addComponents(revealButton, suspenseButton);
+
+        if (room.hostPanelMessage) {
+            await room.hostPanelMessage.edit({
+                embeds: [embed],
+                components: [row]
+            });
+        } else {
+            room.hostPanelMessage = await host.send({
+                embeds: [embed],
+                components: [row]
+            });
+        }
+
+        const collector = room.hostPanelMessage.createMessageComponentCollector({
+            componentType: ComponentType.Button,
+            time: 60000
+        });
+
+        collector.on('collect', async (i: ButtonInteraction) => {
+            if (i.user.id !== room.hostId) {
+                await i.reply({
+                    content: '❌ Solo el anfitrión puede usar estos controles.',
+                    ephemeral: true
+                });
+                return;
+            }
+
+            if (i.customId === 'millionaire_host_reveal') {
+                await i.update({
+                    content: '📢 Revelando resultado...',
+                    components: []
+                });
+                await revealAnswer(i, room);
+            } else if (i.customId === 'millionaire_host_suspense') {
+                await i.update({
+                    content: '⏱️ Creando suspenso...',
+                    components: []
+                });
+                await createSuspenseAndReveal(i, room);
+            }
+
+            collector.stop();
+        });
+
+        collector.on('end', async (collected) => {
+            if (collected.size === 0) {
+                await revealAnswer(interaction, room);
+            }
+        });
+
+    } catch (error) {
+        logger.warn('Millionaire', 'No se pudo actualizar panel del anfitrión');
+        await revealAnswer(interaction, room);
+    }
+}
+
+async function createSuspenseAndReveal(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    const suspenseEmbed = new EmbedBuilder()
+        .setColor(COLORS.WARNING)
+        .setDescription('🎬 **Anfitrión:** Veamos si es correcta...\n\n⏱️ ...');
+
+    await channel.send({ embeds: [suspenseEmbed] });
+
+    await new Promise(resolve => setTimeout(resolve, 5000));
+
+    await revealAnswer(interaction, room);
+}
+
+async function revealAnswer(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    const letters = ['A', 'B', 'C', 'D'];
+    const index = letters.indexOf(room.playerSelectedAnswer || '');
+    const selectedAnswer = room.currentQuestion?.allAnswers?.[index];
+    const isCorrect = selectedAnswer === room.currentQuestion?.correctAnswer;
 
     if (isCorrect) {
         await handleCorrectAnswer(interaction, room);
     } else {
-        await handleIncorrectAnswer(interaction, room, selectedAnswer);
+        await handleIncorrectAnswer(interaction, room, selectedAnswer || '');
     }
 }
 
