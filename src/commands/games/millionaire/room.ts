@@ -16,6 +16,7 @@ import { sendMessage, createInfoEmbed, createErrorEmbed } from '../../../utils/m
 import { logger } from '../../../utils/logger.js';
 import { triviaService } from '../../../services/TriviaService.js';
 import { formatPrize } from '../../../config/millionairePrizes.js';
+import { startGame } from './game.js';
 
 // This will be imported from state.ts once it's created
 const activeRooms = new Map<string, MillionaireGameRoom>();
@@ -576,14 +577,6 @@ async function showStats(interaction: ChatInputCommandInteraction): Promise<void
         .setTimestamp(stats.lastPlayed);
 
     await interaction.editReply({ embeds: [embed] });
-}
-
-// NOTE: startGame and displayQuestion functions need to be defined or imported
-// These are called by handleStart but were not in the list of functions to extract
-async function startGame(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
-    // This function needs to be imported from the main millionaire.ts file
-    // or implemented here. It was called by handleStart but not in the extraction list.
-    throw new Error('startGame function not yet implemented - needs to be extracted from millionaire.ts');
 }
 
 export {

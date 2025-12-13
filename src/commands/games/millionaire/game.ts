@@ -18,15 +18,8 @@ import { createQuestionEmbed } from './embeds.js';
 import { createQuestionButtons } from './buttons.js';
 import { getHostMessage } from './constants.js';
 import { initializeHostPanelForQuestion, updateHostPanelWithTimeControls } from './host.js';
-
-// Import handler functions that are called from game functions
-// These will need to be imported from the main millionaire.ts file or extracted to separate modules
-declare function handleAnswer(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void>;
-declare function handleCashout(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void>;
-declare function handleQuit(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void>;
-declare function handleLifeline(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void>;
-declare function handleTimeout(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void>;
-declare function endGame(interaction: ButtonInteraction, room: MillionaireGameRoom, won: boolean, reason?: string): Promise<void>;
+import { handleAnswer, handleCashout, handleQuit, handleTimeout, endGame } from './answers.js';
+import { handleLifeline } from './lifelines.js';
 
 /**
  * Inicia el juego de Millionaire
