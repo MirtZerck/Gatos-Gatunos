@@ -17,18 +17,8 @@ import { logger } from '../../../utils/logger.js';
 import { triviaService } from '../../../services/TriviaService.js';
 import { formatPrize } from '../../../config/millionairePrizes.js';
 import { startGame } from './game.js';
-
-// This will be imported from state.ts once it's created
-const activeRooms = new Map<string, MillionaireGameRoom>();
-
-// Helper functions that need to be in this file
-function getRoomKey(guildId: string, channelId: string): string {
-    return `${guildId}-${channelId}`;
-}
-
-function canStartGame(room: MillionaireGameRoom): boolean {
-    return !!room.playerId;
-}
+import { activeRooms } from './state.js';
+import { getRoomKey, canStartGame } from './utils.js';
 
 function createLobbyEmbed(room: MillionaireGameRoom, creator: User): EmbedBuilder {
     const embed = new EmbedBuilder()
@@ -589,6 +579,5 @@ export {
     abandonGame,
     showRules,
     showLeaderboard,
-    showStats,
-    getRoomKey
+    showStats
 };
