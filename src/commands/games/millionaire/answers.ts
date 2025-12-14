@@ -81,6 +81,18 @@ export async function handleFinalAnswerConfirmed(interaction: ButtonInteraction,
     const channel = await interaction.client.channels.fetch(room.channelId);
     if (!channel?.isTextBased() || !('send' in channel)) return;
 
+    // Respond to player's interaction to prevent "Interaction Failed"
+    const confirmEmbed = createInfoEmbed(
+        '✅ Respuesta Confirmada',
+        `Has confirmado tu respuesta: **${room.playerSelectedAnswer}**\n\n` +
+        `🎬 El anfitrión revelará el resultado...`
+    );
+
+    await interaction.update({
+        embeds: [confirmEmbed],
+        components: []
+    });
+
     if (room.hasHost && room.hostId) {
         await updateHostPanelForReveal(interaction, room);
     } else {
@@ -89,23 +101,71 @@ export async function handleFinalAnswerConfirmed(interaction: ButtonInteraction,
 }
 
 export async function handleFinalAnswerRejected(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
+    // Save previous selection BEFORE clearing it
+    const previousSelection = room.playerSelectedAnswer;
+
     room.playerSelectedAnswer = undefined;
     room.awaitingFinalAnswer = false;
 
     await interaction.update({
-        content: '🔄 Puedes cambiar tu respuesta.',
+        content: '🔄 Cambio de respuesta solicitado.',
         components: []
     });
 
-    if (room.gameMessage && room.currentQuestion) {
+    // Notify host if present
+    if (room.hasHost && room.hostId) {
+        try {
+            const host = await interaction.client.users.fetch(room.hostId);
+
+            const hostNotifyEmbed = createInfoEmbed(
+                '🔄 Jugador Cambió de Opinión',
+                `**<@${room.playerId}>** decidió cambiar su respuesta.\n\n` +
+                `**Pregunta:** ${room.currentQuestion?.question}\n` +
+                `**Respuesta correcta:** ${room.currentQuestion?.correctAnswer}\n` +
+                `**Selección anterior:** ${previousSelection || 'Ninguna'}`
+            );
+
+            if (room.hostPanelMessage) {
+                await room.hostPanelMessage.edit({
+                    embeds: [hostNotifyEmbed],
+                    components: []
+                });
+            } else {
+                await host.send({ embeds: [hostNotifyEmbed] });
+            }
+        } catch (error) {
+            logger.warn('Millionaire', 'No se pudo notificar al anfitrión del cambio');
+        }
+    }
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    if (room.currentQuestion) {
         const prize = getPrizeForLevel(room.currentQuestionIndex);
         const embed = createQuestionEmbed(room, room.currentQuestion, prize?.amount || 0);
         const buttons = createQuestionButtons(room);
 
-        await room.gameMessage.edit({
+        // Send a NEW message instead of editing to make it visible
+        const changeEmbed = createInfoEmbed(
+            '🔄 Cambio de Respuesta',
+            `**<@${room.playerId}>** ha decidido cambiar su respuesta.\n\n` +
+            `Aquí está la pregunta nuevamente:`
+        );
+
+        await channel.send({ embeds: [changeEmbed] });
+
+        const newMessage = await channel.send({
             embeds: [embed],
             components: buttons
         });
+
+        // Update game message reference
+        room.gameMessage = newMessage;
+
+        // Recreate collector for the new message
+        const { recreateCollectorForQuestion } = await import('./game.js');
+        await recreateCollectorForQuestion(room);
     }
 }
 
@@ -164,20 +224,17 @@ export async function handleCorrectAnswer(interaction: ButtonInteraction | null,
 
     const embed = createSuccessEmbed(
         '✅ ¡Respuesta Correcta!',
-        `Has ganado **${formatPrize(prize.amount)}**!`
+        `**<@${room.playerId}>** ha respondido correctamente!\n\n` +
+        `**Ganancia:** ${formatPrize(prize.amount)}` +
+        (prize.isSafeHaven ? '\n\n🏦 **¡PUNTO SEGURO ALCANZADO!**' : '')
     );
 
-    if (interaction) {
-        await interaction.update({
-            embeds: [embed],
-            components: []
-        });
-    } else if (room.gameMessage) {
-        await room.gameMessage.edit({
-            embeds: [embed],
-            components: []
-        });
-    }
+    // Get the channel to send a NEW visible message
+    const channel = room.gameMessage?.channel || (interaction ? await interaction.client.channels.fetch(room.channelId) : null);
+    if (!channel || !('send' in channel)) return;
+
+    // Send NEW message for better visibility instead of editing
+    await channel.send({ embeds: [embed] });
 
     if (room.currentQuestionIndex >= 15) {
         await endGame(interaction, room, true);
@@ -198,10 +255,7 @@ export async function handleCorrectAnswer(interaction: ButtonInteraction | null,
 
     const row = new ActionRowBuilder<ButtonBuilder>().addComponents(continueButton, cashoutButton);
 
-    // Get the channel to send follow-up message
-    const channel = room.gameMessage?.channel;
-    if (!channel || !('send' in channel)) return;
-
+    // Send follow-up message with options
     const message = interaction
         ? await interaction.followUp({
             content: '¿Qué deseas hacer?',
@@ -263,21 +317,18 @@ export async function handleIncorrectAnswer(
 
     const embed = createErrorEmbed(
         '❌ Respuesta Incorrecta',
-        `La respuesta correcta era: **${room.currentQuestion?.correctAnswer}**\n\n` +
-        `Te llevas: **${formatPrize(finalWinnings)}**`
+        `**<@${room.playerId}>** ha respondido incorrectamente.\n\n` +
+        `**Respuesta seleccionada:** ${selectedAnswer}\n` +
+        `**Respuesta correcta:** ${room.currentQuestion?.correctAnswer}\n\n` +
+        `**Ganancia final:** ${formatPrize(finalWinnings)}`
     );
 
-    if (interaction) {
-        await interaction.update({
-            embeds: [embed],
-            components: []
-        });
-    } else if (room.gameMessage) {
-        await room.gameMessage.edit({
-            embeds: [embed],
-            components: []
-        });
-    }
+    // Get the channel to send a NEW visible message
+    const channel = room.gameMessage?.channel || (interaction ? await interaction.client.channels.fetch(room.channelId) : null);
+    if (!channel || !('send' in channel)) return;
+
+    // Send NEW message for better visibility instead of editing
+    await channel.send({ embeds: [embed] });
 
     await endGame(interaction, room, false, undefined, finalWinnings, true);
 }

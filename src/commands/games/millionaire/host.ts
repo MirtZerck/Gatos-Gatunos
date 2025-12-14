@@ -539,22 +539,90 @@ export async function handleHostRevealSingleOption(
     // Update game message with new option
     await updateGameMessageWithOptions(room, question, prizeAmount);
 
-    // If all options revealed, finalize
+    // If all options revealed, show activation panel
     if (room.optionsRevealed === 4) {
         if (room.hostPanelCollector) {
             room.hostPanelCollector.stop();
         }
 
-        await interaction.update({
-            content: '✅ Todas las opciones reveladas. El jugador ya puede responder.',
-            components: []
-        });
-
-        await finalizeQuestionReveal(interaction, room, question, prizeAmount);
+        await showHostActivateButtonsPanel(interaction, room, question, prizeAmount);
     } else {
         // Show panel again with next option available
         await showManualRevealPanel(interaction, room, question, prizeAmount);
     }
+}
+
+/**
+ * Muestra el panel para que el anfitrión active los botones después de revelar todas las opciones
+ */
+export async function showHostActivateButtonsPanel(
+    interaction: ButtonInteraction,
+    room: MillionaireGameRoom,
+    question: TriviaQuestion,
+    prizeAmount: number
+): Promise<void> {
+    if (!room.hostPanelMessage || !question.allAnswers) return;
+
+    const letters = ['A', 'B', 'C', 'D'];
+    let optionsText = '**Todas las opciones reveladas:**\n';
+    for (let i = 0; i < 4; i++) {
+        optionsText += `${letters[i]}) ${question.allAnswers[i]}\n`;
+    }
+
+    const embed = new EmbedBuilder()
+        .setColor(COLORS.SUCCESS)
+        .setTitle('✅ OPCIONES COMPLETAMENTE REVELADAS')
+        .setDescription(
+            `**Pregunta:** ${question.question}\n` +
+            `**Respuesta correcta:** ${question.correctAnswer}\n\n` +
+            `${optionsText}\n` +
+            `Cuando estés listo, activa los botones para que el jugador pueda responder:`
+        );
+
+    const activateButton = new ButtonBuilder()
+        .setCustomId('millionaire_host_activate_buttons')
+        .setLabel('▶️ Activar Botones e Iniciar Tiempo')
+        .setStyle(ButtonStyle.Success);
+
+    const row = new ActionRowBuilder<ButtonBuilder>().addComponents(activateButton);
+
+    await interaction.update({
+        embeds: [embed],
+        components: [row]
+    });
+
+    const collector = room.hostPanelMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: 300000 // 5 minutes
+    });
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.hostId) {
+            await i.reply({
+                content: '❌ Solo el anfitrión puede usar estos controles.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        if (i.customId === 'millionaire_host_activate_buttons') {
+            await i.update({
+                content: '▶️ Activando botones e iniciando tiempo...',
+                components: []
+            });
+
+            await finalizeQuestionReveal(i, room, question, prizeAmount);
+            collector.stop();
+        }
+    });
+
+    collector.on('end', (collected, reason) => {
+        if (reason === 'time' && collected.size === 0) {
+            // Auto-activate after timeout
+            room.emergencyMode = true;
+            handleEmergencyReveal(room, question, prizeAmount);
+        }
+    });
 }
 
 /**
@@ -901,7 +969,22 @@ export async function handleHostValidate(interaction: ButtonInteraction, room: M
         components: []
     });
 
-    await handleFinalAnswerConfirmed(interaction, room);
+    room.awaitingFinalAnswer = false;
+
+    const channel = await interaction.client.channels.fetch(room.channelId);
+    if (!channel?.isTextBased() || !('send' in channel)) return;
+
+    // Send confirmation message to channel
+    const confirmEmbed = createInfoEmbed(
+        '✅ Respuesta Validada',
+        `**Anfitrión** ha validado la respuesta de **<@${room.playerId}>**: **${room.playerSelectedAnswer}**\n\n` +
+        `🎬 El anfitrión revelará el resultado...`
+    );
+
+    await channel.send({ embeds: [confirmEmbed] });
+
+    // Go directly to reveal panel without using interaction (already used)
+    await updateHostPanelForRevealNoInteraction(room);
 }
 
 /**
@@ -919,21 +1002,34 @@ export async function handleHostAllowChange(interaction: ButtonInteraction, room
     const channel = await interaction.client.channels.fetch(room.channelId);
     if (!channel?.isTextBased() || !('send' in channel)) return;
 
-    await channel.send({
-        content: `🎬 **Anfitrión:** <@${room.playerId}>, puedes cambiar tu respuesta.`
-    });
-
-    if (room.gameMessage && room.currentQuestion) {
-        // Import createQuestionEmbed dynamically to avoid circular dependency
+    if (room.currentQuestion) {
+        // Import functions dynamically to avoid circular dependency
         const { createQuestionEmbed } = await import('./embeds.js');
+        const { recreateCollectorForQuestion } = await import('./game.js');
+
         const prize = getPrizeForLevel(room.currentQuestionIndex);
         const embed = createQuestionEmbed(room, room.currentQuestion, prize?.amount || 0);
         const buttons = createQuestionButtons(room);
 
-        await room.gameMessage.edit({
+        // Send NEW messages instead of editing for better visibility
+        const changeEmbed = createInfoEmbed(
+            '🎬 Cambio Permitido',
+            `**Anfitrión** ha permitido a **<@${room.playerId}>** cambiar su respuesta.\n\n` +
+            `Aquí está la pregunta nuevamente:`
+        );
+
+        await channel.send({ embeds: [changeEmbed] });
+
+        const newMessage = await channel.send({
             embeds: [embed],
             components: buttons
         });
+
+        // Update game message reference
+        room.gameMessage = newMessage;
+
+        // Recreate collector for the new message
+        await recreateCollectorForQuestion(room);
     }
 }
 
@@ -1003,13 +1099,24 @@ export async function updateHostPanelForReveal(interaction: ButtonInteraction, r
                     content: '📢 Revelando resultado...',
                     components: []
                 });
-                await revealAnswer(i, room);
+                // Use revealAnswerNoInteraction since interaction was already used
+                await revealAnswerNoInteraction(room);
             } else if (i.customId === 'millionaire_host_suspense') {
                 await i.update({
                     content: '⏱️ Creando suspenso...',
                     components: []
                 });
-                await createSuspenseAndReveal(i, room);
+                // Inline the suspense logic to avoid passing used interaction
+                const channel = await i.client.channels.fetch(room.channelId);
+                if (channel?.isTextBased() && 'send' in channel) {
+                    const suspenseEmbed = new EmbedBuilder()
+                        .setColor(COLORS.WARNING)
+                        .setDescription('🎬 **Anfitrión:** Veamos si es correcta...\n\n⏱️ ...');
+
+                    await channel.send({ embeds: [suspenseEmbed] });
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await revealAnswerNoInteraction(room);
+                }
             }
 
             collector.stop();
@@ -1093,13 +1200,24 @@ export async function updateHostPanelForRevealNoInteraction(room: MillionaireGam
                     content: '📢 Revelando resultado...',
                     components: []
                 });
-                await revealAnswer(i, room);
+                // Use revealAnswerNoInteraction since interaction was already used
+                await revealAnswerNoInteraction(room);
             } else if (i.customId === 'millionaire_host_suspense') {
                 await i.update({
                     content: '⏱️ Creando suspenso...',
                     components: []
                 });
-                await createSuspenseAndReveal(i, room);
+                // Inline the suspense logic to avoid passing used interaction
+                const channel = await i.client.channels.fetch(room.channelId);
+                if (channel?.isTextBased() && 'send' in channel) {
+                    const suspenseEmbed = new EmbedBuilder()
+                        .setColor(COLORS.WARNING)
+                        .setDescription('🎬 **Anfitrión:** Veamos si es correcta...\n\n⏱️ ...');
+
+                    await channel.send({ embeds: [suspenseEmbed] });
+                    await new Promise(resolve => setTimeout(resolve, 5000));
+                    await revealAnswerNoInteraction(room);
+                }
             }
 
             collector.stop();

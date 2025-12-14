@@ -406,4 +406,68 @@ export async function finalizeQuestionReveal(
     });
 }
 
+/**
+ * Recrea el collector para permitir al jugador cambiar su respuesta
+ */
+export async function recreateCollectorForQuestion(
+    room: MillionaireGameRoom
+): Promise<void> {
+    if (!room.gameMessage || !room.currentQuestion) return;
+
+    // Stop existing collector if any
+    if (room.currentCollector) {
+        room.currentCollector.stop();
+    }
+
+    const timeRemaining = room.questionStartTime
+        ? Math.max(0, 180000 - (Date.now() - room.questionStartTime))
+        : 180000;
+
+    const collector = room.gameMessage.createMessageComponentCollector({
+        componentType: ComponentType.Button,
+        time: timeRemaining
+    });
+
+    room.currentCollector = collector as InteractionCollector<ButtonInteraction>;
+
+    collector.on('collect', async (i: ButtonInteraction) => {
+        if (i.user.id !== room.playerId) {
+            await i.reply({
+                content: '❌ Solo el concursante puede responder.',
+                ephemeral: true
+            });
+            return;
+        }
+
+        try {
+            if (i.customId.startsWith('millionaire_answer_')) {
+                await handleAnswer(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_cashout') {
+                await handleCashout(i, room);
+                collector.stop();
+            } else if (i.customId === 'millionaire_quit') {
+                await handleQuit(i, room);
+                collector.stop();
+            } else if (i.customId.startsWith('millionaire_lifeline_')) {
+                await handleLifeline(i, room);
+            }
+        } catch (error) {
+            logger.error('Millionaire', 'Error en recreated collector', error instanceof Error ? error : new Error(String(error)));
+            const embed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
+            await i.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
+            collector.stop();
+        }
+    });
+
+    collector.on('end', async (collected, reason) => {
+        if (reason === 'time') {
+            const channel = await room.gameMessage?.client.channels.fetch(room.channelId);
+            if (channel?.isTextBased()) {
+                await handleTimeout(room.gameMessage?.client.users.cache.get(room.playerId) as any, room);
+            }
+        }
+    });
+}
+
 // updateHostPanelWithTimeControls moved to host.ts
