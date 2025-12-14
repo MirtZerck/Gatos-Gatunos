@@ -537,7 +537,7 @@ export async function processFriendCall(
                 if (room.hasHost && room.hostId && room.hostPanelMessage) {
                     try {
                         const timeoutEmbed = new EmbedBuilder()
-                            .setColor(COLORS.ERROR)
+                            .setColor(COLORS.DANGER)
                             .setTitle('📞 COMODÍN: Llamar a un Amigo')
                             .setDescription(
                                 `**Amigo llamado:** ${friend.displayName}\n` +
