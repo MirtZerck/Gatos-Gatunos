@@ -69,6 +69,7 @@ export interface MillionaireGameRoom {
     timeControl?: TimeControl;
     emergencyMode?: boolean;
     hostPanelCollector?: InteractionCollector<ButtonInteraction>;
+    processingInteraction?: boolean;
 }
 
 export interface TriviaQuestion {

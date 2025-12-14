@@ -427,20 +427,26 @@ export async function showManualRevealPanel(
     question: TriviaQuestion,
     prizeAmount: number
 ): Promise<void> {
-    if (!room.hostPanelMessage || !question.allAnswers) return;
-
-    const letters = ['A', 'B', 'C', 'D'];
-    const revealed = room.optionsRevealed || 0;
-
-    // Create status text
-    let statusText = '**Opciones:**\n';
-    for (let i = 0; i < 4; i++) {
-        if (i < revealed) {
-            statusText += `✅ ${letters[i]}) ${question.allAnswers[i]}\n`;
-        } else {
-            statusText += `⏸️ ${letters[i]}) ???\n`;
+    try {
+        if (!room.hostPanelMessage || !question.allAnswers) {
+            logger.warn('Millionaire', 'Cannot show manual reveal panel: missing hostPanelMessage or allAnswers');
+            return;
         }
-    }
+
+        logger.debug('Millionaire', `Showing manual reveal panel: optionsRevealed=${room.optionsRevealed}`);
+
+        const letters = ['A', 'B', 'C', 'D'];
+        const revealed = room.optionsRevealed || 0;
+
+        // Create status text
+        let statusText = '**Opciones:**\n';
+        for (let i = 0; i < 4; i++) {
+            if (i < revealed) {
+                statusText += `✅ ${letters[i]}) ${question.allAnswers[i]}\n`;
+            } else {
+                statusText += `⏸️ ${letters[i]}) ???\n`;
+            }
+        }
 
     const embed = new EmbedBuilder()
         .setColor(COLORS.INFO)
@@ -512,13 +518,22 @@ export async function showManualRevealPanel(
         }
     });
 
-    collector.on('end', (collected, reason) => {
+    collector.on('end', async (collected, reason) => {
+        logger.debug('Millionaire', `Manual reveal collector ended: reason=${reason}, collected=${collected.size}, optionsRevealed=${room.optionsRevealed}`);
+
         if (reason === 'time' && room.optionsRevealed !== 4) {
             // Emergency mode: reveal all if host times out
+            logger.warn('Millionaire', 'Host panel timed out in manual reveal mode, activating emergency mode');
             room.emergencyMode = true;
-            handleEmergencyReveal(room, question, prizeAmount);
+            await handleEmergencyReveal(room, question, prizeAmount);
         }
     });
+    } catch (error) {
+        logger.error('Millionaire', 'Error in showManualRevealPanel', error instanceof Error ? error : new Error(String(error)));
+        // Fallback to emergency mode if there's an error
+        room.emergencyMode = true;
+        await handleEmergencyReveal(room, question, prizeAmount);
+    }
 }
 
 /**
@@ -531,24 +546,38 @@ export async function handleHostRevealSingleOption(
     prizeAmount: number,
     letter: string
 ): Promise<void> {
-    if (!question.allAnswers) return;
-
-    const currentRevealed = room.optionsRevealed || 0;
-    room.optionsRevealed = currentRevealed + 1;
-
-    // Update game message with new option
-    await updateGameMessageWithOptions(room, question, prizeAmount);
-
-    // If all options revealed, show activation panel
-    if (room.optionsRevealed === 4) {
-        if (room.hostPanelCollector) {
-            room.hostPanelCollector.stop();
+    try {
+        if (!question.allAnswers) {
+            logger.warn('Millionaire', 'Cannot reveal option: missing allAnswers');
+            return;
         }
 
-        await showHostActivateButtonsPanel(interaction, room, question, prizeAmount);
-    } else {
-        // Show panel again with next option available
-        await showManualRevealPanel(interaction, room, question, prizeAmount);
+        const currentRevealed = room.optionsRevealed || 0;
+        room.optionsRevealed = currentRevealed + 1;
+
+        logger.debug('Millionaire', `Revealing option ${letter}: now ${room.optionsRevealed}/4 revealed`);
+
+        // Update game message with new option
+        await updateGameMessageWithOptions(room, question, prizeAmount);
+
+        // If all options revealed, show activation panel
+        if (room.optionsRevealed === 4) {
+            logger.info('Millionaire', 'All options revealed, showing activation panel');
+            if (room.hostPanelCollector) {
+                room.hostPanelCollector.stop();
+            }
+
+            await showHostActivateButtonsPanel(interaction, room, question, prizeAmount);
+        } else {
+            // Show panel again with next option available
+            logger.debug('Millionaire', `Showing next manual reveal panel for option ${room.optionsRevealed + 1}`);
+            await showManualRevealPanel(interaction, room, question, prizeAmount);
+        }
+    } catch (error) {
+        logger.error('Millionaire', 'Error in handleHostRevealSingleOption', error instanceof Error ? error : new Error(String(error)));
+        // Continue in emergency mode
+        room.emergencyMode = true;
+        await handleEmergencyReveal(room, question, prizeAmount);
     }
 }
 
@@ -616,11 +645,14 @@ export async function showHostActivateButtonsPanel(
         }
     });
 
-    collector.on('end', (collected, reason) => {
+    collector.on('end', async (collected, reason) => {
+        logger.debug('Millionaire', `Activate buttons collector ended: reason=${reason}, collected=${collected.size}`);
+
         if (reason === 'time' && collected.size === 0) {
             // Auto-activate after timeout
+            logger.warn('Millionaire', 'Host did not activate buttons, auto-activating in emergency mode');
             room.emergencyMode = true;
-            handleEmergencyReveal(room, question, prizeAmount);
+            await handleEmergencyReveal(room, question, prizeAmount);
         }
     });
 }
@@ -729,6 +761,11 @@ export async function handleHostSkipIntro(
     });
 
     await displayQuestionAutomatic(interaction, room, question, prizeAmount);
+
+    // Update host panel with full question and options
+    if (room.hostId && room.hostPanelMessage) {
+        await updateHostPanelWithTimeControls(room);
+    }
 }
 
 /**
@@ -737,14 +774,28 @@ export async function handleHostSkipIntro(
 export async function updateHostPanelWithTimeControls(room: MillionaireGameRoom): Promise<void> {
     if (!room.hostPanelMessage || !room.hostId) return;
 
+    // Build options list for host reference
+    const letters = ['A', 'B', 'C', 'D'];
+    let optionsText = '**Opciones:**\n';
+    if (room.currentQuestion?.allAnswers) {
+        for (let i = 0; i < room.currentQuestion.allAnswers.length; i++) {
+            const isEliminated = room.eliminatedAnswers?.includes(room.currentQuestion.allAnswers[i]);
+            const isCorrect = room.currentQuestion.allAnswers[i] === room.currentQuestion.correctAnswer;
+            const prefix = isEliminated ? '~~' : '';
+            const suffix = isEliminated ? '~~' : '';
+            const correctMark = isCorrect ? ' ✅' : '';
+            optionsText += `${prefix}${letters[i]}) ${room.currentQuestion.allAnswers[i]}${correctMark}${suffix}\n`;
+        }
+    }
+
     const embed = new EmbedBuilder()
         .setColor(COLORS.INFO)
         .setTitle('🎬 PANEL DE ANFITRIÓN - ESPERANDO RESPUESTA')
         .setDescription(
             `**El jugador está pensando...**\n\n` +
-            `**Pregunta:** ${room.currentQuestion?.question}\n` +
-            `**Respuesta Correcta:** ${room.currentQuestion?.correctAnswer}\n\n` +
-            `Tiempo restante: <t:${Math.floor((room.questionStartTime! + 180000) / 1000)}:R>`
+            `**Pregunta:** ${room.currentQuestion?.question}\n\n` +
+            `${optionsText}\n` +
+            `⏱️ Tiempo restante: <t:${Math.floor((room.questionStartTime! + 180000) / 1000)}:R>`
         );
 
     await room.hostPanelMessage.edit({
@@ -1047,11 +1098,28 @@ export async function updateHostPanelForReveal(interaction: ButtonInteraction, r
         const selectedAnswer = room.currentQuestion?.allAnswers?.[index];
         const isCorrect = selectedAnswer === room.currentQuestion?.correctAnswer;
 
+        // Build options list for host reference
+        let optionsText = '**Opciones:**\n';
+        if (room.currentQuestion?.allAnswers) {
+            for (let i = 0; i < room.currentQuestion.allAnswers.length; i++) {
+                const isEliminated = room.eliminatedAnswers?.includes(room.currentQuestion.allAnswers[i]);
+                const isThisCorrect = room.currentQuestion.allAnswers[i] === room.currentQuestion.correctAnswer;
+                const isSelected = letters[i] === room.playerSelectedAnswer;
+                const prefix = isEliminated ? '~~' : '';
+                const suffix = isEliminated ? '~~' : '';
+                const correctMark = isThisCorrect ? ' ✅' : '';
+                const selectedMark = isSelected ? ' 👉' : '';
+                optionsText += `${prefix}${letters[i]}) ${room.currentQuestion.allAnswers[i]}${correctMark}${selectedMark}${suffix}\n`;
+            }
+        }
+
         const embed = new EmbedBuilder()
             .setColor(COLORS.INFO)
             .setTitle('🎭 Listo para Revelar')
             .setDescription(
-                `El jugador ha confirmado su respuesta: **${room.playerSelectedAnswer}**\n\n` +
+                `**Pregunta:** ${room.currentQuestion?.question}\n\n` +
+                `${optionsText}\n` +
+                `El jugador ha confirmado su respuesta: **${room.playerSelectedAnswer}**\n` +
                 `Resultado: **${isCorrect ? '✅ CORRECTA' : '❌ INCORRECTA'}**\n\n` +
                 `¿Cómo deseas revelar el resultado?`
             );
@@ -1135,6 +1203,61 @@ export async function updateHostPanelForReveal(interaction: ButtonInteraction, r
 }
 
 /**
+ * Notifica al anfitrión cuando se usa un comodín
+ */
+export async function notifyHostLifelineUsed(
+    room: MillionaireGameRoom,
+    lifelineName: string,
+    result: string
+): Promise<void> {
+    if (!room.hostId || !room.hostPanelMessage) return;
+
+    try {
+        const lifelineEmojis: Record<string, string> = {
+            '50:50': '⚖️',
+            'Preguntar al Público': '👥',
+            'Llamar a un Amigo': '📞',
+            'Cambiar Pregunta': '🔄'
+        };
+
+        const emoji = lifelineEmojis[lifelineName] || '🎯';
+
+        // Build options list for host reference
+        const letters = ['A', 'B', 'C', 'D'];
+        let optionsText = '**Opciones de la pregunta:**\n';
+        if (room.currentQuestion?.allAnswers) {
+            for (let i = 0; i < room.currentQuestion.allAnswers.length; i++) {
+                const isEliminated = room.eliminatedAnswers?.includes(room.currentQuestion.allAnswers[i]);
+                const isCorrect = room.currentQuestion.allAnswers[i] === room.currentQuestion.correctAnswer;
+                const prefix = isEliminated ? '~~' : '';
+                const suffix = isEliminated ? '~~' : '';
+                const correctMark = isCorrect ? ' ✅' : '';
+                optionsText += `${prefix}${letters[i]}) ${room.currentQuestion.allAnswers[i]}${correctMark}${suffix}\n`;
+            }
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(COLORS.WARNING)
+            .setTitle(`${emoji} COMODÍN USADO`)
+            .setDescription(
+                `**Comodín:** ${lifelineName}\n\n` +
+                `**Pregunta:** ${room.currentQuestion?.question}\n\n` +
+                `${optionsText}\n` +
+                `**Resultado del comodín:**\n${result}`
+            );
+
+        await room.hostPanelMessage.edit({
+            embeds: [embed],
+            components: []
+        });
+
+        logger.info('Millionaire', `Notificado al anfitrión: ${lifelineName} usado`);
+    } catch (error) {
+        logger.warn('Millionaire', 'No se pudo notificar al anfitrión del uso de comodín');
+    }
+}
+
+/**
  * Actualiza el panel del anfitrión para revelar sin interacción
  */
 export async function updateHostPanelForRevealNoInteraction(room: MillionaireGameRoom): Promise<void> {
@@ -1148,11 +1271,28 @@ export async function updateHostPanelForRevealNoInteraction(room: MillionaireGam
         const selectedAnswer = room.currentQuestion?.allAnswers?.[index];
         const isCorrect = selectedAnswer === room.currentQuestion?.correctAnswer;
 
+        // Build options list for host reference
+        let optionsText = '**Opciones:**\n';
+        if (room.currentQuestion?.allAnswers) {
+            for (let i = 0; i < room.currentQuestion.allAnswers.length; i++) {
+                const isEliminated = room.eliminatedAnswers?.includes(room.currentQuestion.allAnswers[i]);
+                const isThisCorrect = room.currentQuestion.allAnswers[i] === room.currentQuestion.correctAnswer;
+                const isSelected = letters[i] === room.playerSelectedAnswer;
+                const prefix = isEliminated ? '~~' : '';
+                const suffix = isEliminated ? '~~' : '';
+                const correctMark = isThisCorrect ? ' ✅' : '';
+                const selectedMark = isSelected ? ' 👉' : '';
+                optionsText += `${prefix}${letters[i]}) ${room.currentQuestion.allAnswers[i]}${correctMark}${selectedMark}${suffix}\n`;
+            }
+        }
+
         const embed = new EmbedBuilder()
             .setColor(COLORS.INFO)
             .setTitle('🎭 Listo para Revelar')
             .setDescription(
-                `El jugador ha confirmado su respuesta: **${room.playerSelectedAnswer}**\n\n` +
+                `**Pregunta:** ${room.currentQuestion?.question}\n\n` +
+                `${optionsText}\n` +
+                `El jugador ha confirmado su respuesta: **${room.playerSelectedAnswer}**\n` +
                 `Resultado: **${isCorrect ? '✅ CORRECTA' : '❌ INCORRECTA'}**\n\n` +
                 `¿Cómo deseas revelar el resultado?`
             );

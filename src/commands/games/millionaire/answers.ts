@@ -15,7 +15,7 @@ import { BotClient } from '../../../types/BotClient.js';
 import { activeRooms } from './state.js';
 import { createQuestionEmbed } from './embeds.js';
 import { createQuestionButtons } from './buttons.js';
-import { displayQuestion } from './game.js';
+import { displayQuestion, canProcessInteraction, finishProcessingInteraction } from './game.js';
 import { getRoomKey } from './utils.js';
 import {
     updateHostPanelWithSelection,
@@ -280,15 +280,28 @@ export async function handleCorrectAnswer(interaction: ButtonInteraction | null,
             return;
         }
 
-        if (i.customId === 'millionaire_continue') {
-            room.currentQuestionIndex++;
-            await i.update({ components: [] });
-            await displayQuestion(i, room);
-        } else if (i.customId === 'millionaire_cashout') {
-            await handleCashout(i, room);
+        // Protection against multiple rapid clicks
+        if (!canProcessInteraction(room)) {
+            await i.reply({
+                content: '⏱️ Por favor espera, procesando tu acción anterior...',
+                ephemeral: true
+            }).catch(() => {});
+            return;
         }
 
-        collector.stop();
+        try {
+            if (i.customId === 'millionaire_continue') {
+                room.currentQuestionIndex++;
+                await i.update({ components: [] });
+                await displayQuestion(i, room);
+            } else if (i.customId === 'millionaire_cashout') {
+                await handleCashout(i, room);
+            }
+
+            collector.stop();
+        } finally {
+            finishProcessingInteraction(room);
+        }
     });
 
     collector.on('end', async (collected, reason) => {

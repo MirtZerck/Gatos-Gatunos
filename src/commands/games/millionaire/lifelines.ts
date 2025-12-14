@@ -19,6 +19,7 @@ import { createQuestionEmbed } from './embeds.js';
 import { createQuestionButtons } from './buttons.js';
 import { handleAnswer, handleCashout, handleQuit, handleTimeout } from './answers.js';
 import { getPrizeForLevel, getDifficultyForLevel, formatPrize } from '../../../config/millionairePrizes.js';
+import { notifyHostLifelineUsed } from './host.js';
 
 async function sendHostPanel(
     interaction: ButtonInteraction,
@@ -111,6 +112,18 @@ export async function handleFiftyFifty(interaction: ButtonInteraction, room: Mil
         embeds: [embed],
         components: buttons
     });
+
+    // Notify host if present
+    if (room.hasHost && room.hostId) {
+        const letters = ['A', 'B', 'C', 'D'];
+        const eliminatedLetters = toEliminate.map(ans => {
+            const index = room.currentQuestion?.allAnswers?.indexOf(ans);
+            return index !== undefined && index !== -1 ? letters[index] : '?';
+        });
+
+        const result = `**Opciones eliminadas:**\n${eliminatedLetters.map((letter, i) => `${letter}) ${toEliminate[i]}`).join('\n')}`;
+        await notifyHostLifelineUsed(room, '50:50', result);
+    }
 
     logger.info('Millionaire', '50:50 usado');
 }
@@ -232,9 +245,11 @@ export async function handleAskAudience(interaction: ButtonInteraction, room: Mi
         const totalVotes = Array.from(votes.values()).reduce((a, b) => a + b, 0);
 
         let resultsText = '📊 **RESULTADOS DE LA VOTACIÓN** 📊\n\n';
+        let hostResultText = '';
 
         if (totalVotes === 0) {
             resultsText += 'No hubo votos de la audiencia.';
+            hostResultText = 'No hubo votos de la audiencia.';
         } else {
             resultsText += `Total de votos: **${totalVotes}**\n\n`;
 
@@ -246,6 +261,7 @@ export async function handleAskAudience(interaction: ButtonInteraction, room: Mi
                 const barLength = Math.round(percentage / 5);
                 const bar = '█'.repeat(barLength) + '░'.repeat(20 - barLength);
                 resultsText += `${letter}) ${answer}:\n${bar} ${percentage}% (${voteCount} votos)\n\n`;
+                hostResultText += `${letter}) ${answer}: ${percentage}% (${voteCount} votos)\n`;
             }
         }
 
@@ -257,6 +273,12 @@ export async function handleAskAudience(interaction: ButtonInteraction, room: Mi
             embeds: [resultsEmbed],
             components: []
         });
+
+        // Notify host if present
+        if (room.hasHost && room.hostId) {
+            const result = `**Total de votos:** ${totalVotes}\n\n${hostResultText}`;
+            await notifyHostLifelineUsed(room, 'Preguntar al Público', result);
+        }
     });
 
     logger.info('Millionaire', 'Pregunta al público usado');
@@ -376,11 +398,14 @@ export async function processFriendCall(
     room: MillionaireGameRoom,
     friendId: string
 ): Promise<void> {
+    // Defer immediately to prevent "Unknown interaction" error
+    await interaction.deferUpdate();
+
     try {
         const friend = await interaction.client.users.fetch(friendId);
 
         if (friend.bot) {
-            await interaction.update({
+            await interaction.editReply({
                 content: '❌ No puedes llamar a un bot. El comodín sigue disponible.',
                 components: []
             });
@@ -411,7 +436,7 @@ export async function processFriendCall(
 
         room.lifelines.callFriend = false;
 
-        await interaction.update({
+        await interaction.editReply({
             content: `📞 Llamando a **${friend.displayName}**... Esperando respuesta (45s)`,
             components: []
         });
@@ -422,6 +447,25 @@ export async function processFriendCall(
         await channel.send({
             content: `📞 **${interaction.user.displayName}** está llamando a **${friend.displayName}**...`
         });
+
+        // Notify host when lifeline is USED, not when it finishes
+        if (room.hasHost && room.hostId) {
+            try {
+                const host = await interaction.client.users.fetch(room.hostId);
+                const initialEmbed = new EmbedBuilder()
+                    .setColor(COLORS.WARNING)
+                    .setTitle('📞 COMODÍN: Llamar a un Amigo')
+                    .setDescription(
+                        `**Amigo llamado:** ${friend.displayName}\n` +
+                        `**Estado:** ⏳ Esperando respuesta (45 segundos)...`
+                    );
+
+                // Save the message reference to update it later
+                room.hostPanelMessage = await host.send({ embeds: [initialEmbed] });
+            } catch (error) {
+                logger.warn('Millionaire', 'No se pudo notificar al anfitrión');
+            }
+        }
 
         if (!('createMessageCollector' in friendMessage.channel)) {
             await channel.send({
@@ -444,10 +488,42 @@ export async function processFriendCall(
                 await channel.send({
                     content: `📞 **${friend.displayName}** dice: "Creo que es la **${response}**"`
                 });
+
+                // Update host panel with the result
+                if (room.hasHost && room.hostId && room.hostPanelMessage) {
+                    try {
+                        const resultEmbed = new EmbedBuilder()
+                            .setColor(COLORS.SUCCESS)
+                            .setTitle('📞 COMODÍN: Llamar a un Amigo')
+                            .setDescription(
+                                `**Amigo llamado:** ${friend.displayName}\n` +
+                                `**Resultado:** ✅ Respondió con **${response}**`
+                            );
+                        await room.hostPanelMessage.edit({ embeds: [resultEmbed] });
+                    } catch (error) {
+                        logger.warn('Millionaire', 'No se pudo actualizar resultado al anfitrión');
+                    }
+                }
             } else {
                 await channel.send({
                     content: `📞 **${friend.displayName}**: "${message.content}"`
                 });
+
+                // Update host panel with the result
+                if (room.hasHost && room.hostId && room.hostPanelMessage) {
+                    try {
+                        const resultEmbed = new EmbedBuilder()
+                            .setColor(COLORS.SUCCESS)
+                            .setTitle('📞 COMODÍN: Llamar a un Amigo')
+                            .setDescription(
+                                `**Amigo llamado:** ${friend.displayName}\n` +
+                                `**Resultado:** 💬 "${message.content}"`
+                            );
+                        await room.hostPanelMessage.edit({ embeds: [resultEmbed] });
+                    } catch (error) {
+                        logger.warn('Millionaire', 'No se pudo actualizar resultado al anfitrión');
+                    }
+                }
             }
         });
 
@@ -456,12 +532,28 @@ export async function processFriendCall(
                 await channel.send({
                     content: `📞 ${friend.displayName} no respondió a tiempo.`
                 });
+
+                // Update host panel with timeout result
+                if (room.hasHost && room.hostId && room.hostPanelMessage) {
+                    try {
+                        const timeoutEmbed = new EmbedBuilder()
+                            .setColor(COLORS.ERROR)
+                            .setTitle('📞 COMODÍN: Llamar a un Amigo')
+                            .setDescription(
+                                `**Amigo llamado:** ${friend.displayName}\n` +
+                                `**Resultado:** ⏱️ No respondió a tiempo (45 segundos agotados)`
+                            );
+                        await room.hostPanelMessage.edit({ embeds: [timeoutEmbed] });
+                    } catch (error) {
+                        logger.warn('Millionaire', 'No se pudo actualizar timeout al anfitrión');
+                    }
+                }
             }
         });
 
     } catch (error) {
         logger.error('Millionaire', 'Error procesando llamada', error instanceof Error ? error : new Error(String(error)));
-        await interaction.update({
+        await interaction.editReply({
             content: '❌ No se pudo contactar a ese usuario. Puede que tenga los DMs cerrados. El comodín sigue disponible.',
             components: []
         });
@@ -486,15 +578,10 @@ export async function handleChangeQuestion(interaction: ButtonInteraction, room:
         room.currentCollector.stop('lifeline_used');
     }
 
-    if (room.gameMessage) {
-        await room.gameMessage.edit({
-            components: []
-        });
-    }
-
+    // Responder a la interacción de forma efímera
     await interaction.reply({
         content: '🔄 Cambiando pregunta...',
-        ephemeral: false
+        ephemeral: true
     });
 
     const difficulty = getDifficultyForLevel(room.currentQuestionIndex);
@@ -508,10 +595,17 @@ export async function handleChangeQuestion(interaction: ButtonInteraction, room:
 
         newQuestion = await triviaService.enhanceQuestionWithImage(newQuestion);
 
+        // Save old question BEFORE overwriting it
+        const oldQuestion = room.currentQuestion;
+
+        // Reset all game states related to answers
         room.currentQuestion = newQuestion;
         room.usedQuestionIds.add(newQuestion.id);
         room.eliminatedAnswers = [];
         room.questionStartTime = Date.now();
+        room.playerSelectedAnswer = undefined;
+        room.awaitingFinalAnswer = false;
+        room.hostPanelState = 'WAITING_PLAYER';
 
         const prize = getPrizeForLevel(room.currentQuestionIndex);
         const embed = createQuestionEmbed(room, newQuestion, prize?.amount || 0);
@@ -522,19 +616,57 @@ export async function handleChangeQuestion(interaction: ButtonInteraction, room:
             throw new Error('Canal no válido');
         }
 
-        const newMessage = await channel.send({
-            content: '🔄 **Nueva Pregunta:**',
-            embeds: [embed],
-            components: buttons
-        });
-
-        room.gameMessage = newMessage;
-
-        if (room.hasHost && room.hostId) {
-            await sendHostPanel(interaction, room, newQuestion, prize?.amount || 0);
+        // Editar el mensaje existente en lugar de crear uno nuevo
+        if (room.gameMessage) {
+            await room.gameMessage.edit({
+                embeds: [embed],
+                components: buttons
+            });
+        } else {
+            // Fallback si no hay mensaje previo
+            const newMessage = await channel.send({
+                embeds: [embed],
+                components: buttons
+            });
+            room.gameMessage = newMessage;
         }
 
-        const collector = newMessage.createMessageComponentCollector({
+        if (room.hasHost && room.hostId) {
+            // Send a single combined message to host with lifeline info + new question panel
+            try {
+                const host = await interaction.client.users.fetch(room.hostId);
+
+                const letters = ['A', 'B', 'C', 'D'];
+                let optionsText = '';
+                if (newQuestion.allAnswers) {
+                    for (let i = 0; i < newQuestion.allAnswers.length; i++) {
+                        const isCorrect = newQuestion.allAnswers[i] === newQuestion.correctAnswer;
+                        const correctMark = isCorrect ? ' ✅' : '';
+                        optionsText += `${letters[i]}) ${newQuestion.allAnswers[i]}${correctMark}\n`;
+                    }
+                }
+
+                const embed = new EmbedBuilder()
+                    .setColor(COLORS.WARNING)
+                    .setTitle('🔄 COMODÍN: CAMBIAR PREGUNTA')
+                    .setDescription(
+                        `**Pregunta anterior (descartada):**\n${oldQuestion?.question || 'N/A'}\n` +
+                        `**Categoría anterior:** ${oldQuestion?.category || 'N/A'}\n\n` +
+                        `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+                        `**NUEVA PREGUNTA ${room.currentQuestionIndex} - ${formatPrize(prize?.amount || 0)}**\n\n` +
+                        `**Pregunta:** ${newQuestion.question}\n` +
+                        `**Categoría:** ${newQuestion.category}\n` +
+                        `**Dificultad:** ${newQuestion.difficulty}\n\n` +
+                        `**Opciones:**\n${optionsText}`
+                    );
+
+                await host.send({ embeds: [embed] });
+            } catch (error) {
+                logger.warn('Millionaire', 'No se pudo enviar panel al anfitrión');
+            }
+        }
+
+        const collector = room.gameMessage!.createMessageComponentCollector({
             componentType: ComponentType.Button,
             time: 180000
         });

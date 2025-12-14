@@ -22,6 +22,25 @@ import { handleAnswer, handleCashout, handleQuit, handleTimeout, endGame } from 
 import { handleLifeline } from './lifelines.js';
 
 /**
+ * Verifica si se puede procesar una interacción (protección contra múltiples clics)
+ * @returns true si se puede procesar, false si ya se está procesando otra
+ */
+export function canProcessInteraction(room: MillionaireGameRoom): boolean {
+    if (room.processingInteraction) {
+        return false;
+    }
+    room.processingInteraction = true;
+    return true;
+}
+
+/**
+ * Marca que se terminó de procesar una interacción
+ */
+export function finishProcessingInteraction(room: MillionaireGameRoom): void {
+    room.processingInteraction = false;
+}
+
+/**
  * Inicia el juego de Millionaire
  */
 export async function startGame(interaction: ButtonInteraction, room: MillionaireGameRoom): Promise<void> {
@@ -124,6 +143,15 @@ export async function displayQuestionAutomatic(
             return;
         }
 
+        // Protection against multiple rapid clicks
+        if (!canProcessInteraction(room)) {
+            await i.reply({
+                content: '⏱️ Por favor espera, procesando tu acción anterior...',
+                ephemeral: true
+            }).catch(() => {});
+            return;
+        }
+
         try {
             if (i.customId.startsWith('millionaire_answer_')) {
                 await handleAnswer(i, room);
@@ -142,6 +170,8 @@ export async function displayQuestionAutomatic(
             const embed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
             await i.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
             collector.stop();
+        } finally {
+            finishProcessingInteraction(room);
         }
     });
 
@@ -378,6 +408,15 @@ export async function finalizeQuestionReveal(
             return;
         }
 
+        // Protection against multiple rapid clicks
+        if (!canProcessInteraction(room)) {
+            await i.reply({
+                content: '⏱️ Por favor espera, procesando tu acción anterior...',
+                ephemeral: true
+            }).catch(() => {});
+            return;
+        }
+
         try {
             if (i.customId.startsWith('millionaire_answer_')) {
                 await handleAnswer(i, room);
@@ -396,6 +435,8 @@ export async function finalizeQuestionReveal(
             const embed = createErrorEmbed('❌ Error', 'Ocurrió un error procesando tu acción.');
             await i.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
             collector.stop();
+        } finally {
+            finishProcessingInteraction(room);
         }
     });
 
