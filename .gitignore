@@ -43,6 +43,10 @@ Thumbs.db
 coverage/
 .nyc_output/
 
+# Test Scripts (contienen URLs y datos personales)
+test-kofi-webhook.ps1
+test-dbl-webhook.ps1
+
 # Misc
 .cache/
 .temp/
