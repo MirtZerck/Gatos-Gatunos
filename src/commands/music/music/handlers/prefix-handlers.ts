@@ -10,7 +10,7 @@ import { CommandError, ErrorType } from '../../../../utils/errorHandler.js';
 import { logger } from '../../../../utils/logger.js';
 import { config } from '../../../../config.js';
 import { LoopMode } from '../../../../managers/MusicManager.js';
-import { getVoiceChannel, getMusicManager } from '../utils.js';
+import { getVoiceChannel, ensureSameVoiceChannel, getMusicManager } from '../utils.js';
 import { SPOTIFY_GREEN, ITEMS_PER_PAGE, MIN_VOLUME, MAX_VOLUME } from '../constants.js';
 import { createHelpEmbed } from '../embeds.js';
 
@@ -70,7 +70,7 @@ export async function handlePlayPrefix(message: Message, args: string[]): Promis
 
 export async function handlePausePrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -97,7 +97,7 @@ export async function handlePausePrefix(message: Message): Promise<void> {
 
 export async function handleResumePrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -124,7 +124,7 @@ export async function handleResumePrefix(message: Message): Promise<void> {
 
 export async function handleSkipPrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -147,7 +147,7 @@ export async function handleSkipPrefix(message: Message): Promise<void> {
 
 export async function handleStopPrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -168,6 +168,8 @@ export async function handleStopPrefix(message: Message): Promise<void> {
 }
 
 export async function handleQueuePrefix(message: Message, args: string[]): Promise<void> {
+    const member = message.member as GuildMember;
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
     const page = args[0] ? parseInt(args[0]) : 1;
@@ -204,6 +206,8 @@ export async function handleQueuePrefix(message: Message, args: string[]): Promi
 }
 
 export async function handleNowPlayingPrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -223,7 +227,7 @@ export async function handleVolumePrefix(message: Message, args: string[]): Prom
     }
 
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
     const level = parseInt(args[0]);
@@ -254,7 +258,7 @@ export async function handleVolumePrefix(message: Message, args: string[]): Prom
 
 export async function handleShufflePrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -277,7 +281,7 @@ export async function handleShufflePrefix(message: Message): Promise<void> {
 
 export async function handleLoopPrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = message.client as BotClient;
     const musicManager = getMusicManager(client);
 

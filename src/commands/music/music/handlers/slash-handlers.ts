@@ -9,7 +9,7 @@ import { COLORS, EMOJIS } from '../../../../utils/constants.js';
 import { CommandError, ErrorType } from '../../../../utils/errorHandler.js';
 import { logger } from '../../../../utils/logger.js';
 import { LoopMode } from '../../../../managers/MusicManager.js';
-import { getVoiceChannel, getMusicManager } from '../utils.js';
+import { getVoiceChannel, ensureSameVoiceChannel, getMusicManager } from '../utils.js';
 import { SPOTIFY_GREEN, ITEMS_PER_PAGE } from '../constants.js';
 
 export async function handlePlay(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -58,7 +58,7 @@ export async function handlePlay(interaction: ChatInputCommandInteraction): Prom
 
 export async function handlePause(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -85,7 +85,7 @@ export async function handlePause(interaction: ChatInputCommandInteraction): Pro
 
 export async function handleResume(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -112,7 +112,7 @@ export async function handleResume(interaction: ChatInputCommandInteraction): Pr
 
 export async function handleSkip(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -135,7 +135,7 @@ export async function handleSkip(interaction: ChatInputCommandInteraction): Prom
 
 export async function handleStop(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -156,6 +156,8 @@ export async function handleStop(interaction: ChatInputCommandInteraction): Prom
 }
 
 export async function handleQueue(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
     const page = interaction.options.getInteger('page') || 1;
@@ -192,6 +194,8 @@ export async function handleQueue(interaction: ChatInputCommandInteraction): Pro
 }
 
 export async function handleNowPlaying(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -206,7 +210,7 @@ export async function handleNowPlaying(interaction: ChatInputCommandInteraction)
 
 export async function handleVolume(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
     const level = interaction.options.getInteger('level', true);
@@ -232,7 +236,7 @@ export async function handleVolume(interaction: ChatInputCommandInteraction): Pr
 
 export async function handleShuffle(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 
@@ -255,7 +259,7 @@ export async function handleShuffle(interaction: ChatInputCommandInteraction): P
 
 export async function handleLoop(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
-    getVoiceChannel(member);
+    ensureSameVoiceChannel(member);
     const client = interaction.client as BotClient;
     const musicManager = getMusicManager(client);
 

@@ -14,6 +14,29 @@ export function getVoiceChannel(member: GuildMember): VoiceBasedChannel {
     return member.voice.channel;
 }
 
+export function ensureSameVoiceChannel(member: GuildMember): VoiceBasedChannel {
+    const userChannel = getVoiceChannel(member);
+    const botMember = member.guild.members.me;
+
+    if (!botMember?.voice.channel) {
+        throw new CommandError(
+            ErrorType.VALIDATION_ERROR,
+            'Bot no está en canal de voz',
+            'No hay música reproduciéndose actualmente.'
+        );
+    }
+
+    if (userChannel.id !== botMember.voice.channel.id) {
+        throw new CommandError(
+            ErrorType.VALIDATION_ERROR,
+            'No estás en el mismo canal',
+            `Debes estar en ${botMember.voice.channel} para usar este comando.`
+        );
+    }
+
+    return userChannel;
+}
+
 export function getMusicManager(client: BotClient): MusicManager {
     if (!client.musicManager) {
         throw new CommandError(
