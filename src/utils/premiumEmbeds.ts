@@ -38,13 +38,18 @@ export function createPremiumRequiredEmbed(requiredTier: PremiumTier, currentTie
 }
 
 export function createPremiumStatusEmbed(status: PremiumStatus): EmbedBuilder {
-    if (!status.hasPremium) {
+    if (!status.hasPremium && !status.tier) {
+        const description = status.systemDisabled
+            ? `No tienes premium activo\n\n` +
+              `${EMOJIS.WARNING} **Sistema Premium Deshabilitado**\n` +
+              `El sistema premium está temporalmente deshabilitado\n\n` +
+              `Usa \`/premium info\` para ver cómo obtenerlo`
+            : `No tienes premium activo\n\n` +
+              `Usa \`/premium info\` para ver cómo obtenerlo`;
+
         return new EmbedBuilder()
             .setTitle(`${EMOJIS.INFO} Estado Premium`)
-            .setDescription(
-                `No tienes premium activo\n\n` +
-                `Usa \`/premium info\` para ver cómo obtenerlo`
-            )
+            .setDescription(description)
             .setColor(0x808080)
             .setTimestamp();
     }
@@ -53,7 +58,20 @@ export function createPremiumStatusEmbed(status: PremiumStatus): EmbedBuilder {
     const tierName = getTierName(status.tier!);
     const tierColor = getTierColor(status.tier!);
 
-    let description = `${EMOJIS.SUCCESS} Tienes **Premium ${tierName}** activo\n\n`;
+    const title = status.systemDisabled
+        ? `${tierEmoji} Premium ${tierName} (Sistema Deshabilitado)`
+        : `${tierEmoji} Premium ${tierName}`;
+
+    let description = '';
+
+    if (status.systemDisabled) {
+        description += `${EMOJIS.WARNING} **Sistema Premium Temporalmente Deshabilitado**\n`;
+        description += `Tu premium está guardado y será restaurado cuando el sistema se reactive\n\n`;
+    }
+
+    description += status.systemDisabled
+        ? `Tienes **Premium ${tierName}** guardado\n\n`
+        : `${EMOJIS.SUCCESS} Tienes **Premium ${tierName}** activo\n\n`;
 
     const benefits = getTierBenefits(status.tier!);
     description += `**Beneficios:**\n`;
@@ -70,8 +88,12 @@ export function createPremiumStatusEmbed(status: PremiumStatus): EmbedBuilder {
         description += `• Días restantes: ${status.daysRemaining || 0}\n`;
     }
 
+    if (status.systemDisabled) {
+        description += `\n${EMOJIS.INFO} El tiempo de tu premium no está corriendo mientras el sistema está deshabilitado`;
+    }
+
     return new EmbedBuilder()
-        .setTitle(`${tierEmoji} Premium ${tierName}`)
+        .setTitle(title)
         .setDescription(description)
         .setColor(tierColor)
         .setTimestamp();

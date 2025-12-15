@@ -121,6 +121,7 @@ export interface PremiumStatus {
     expiresAt?: number | null;
     source?: PremiumSource;
     daysRemaining?: number;
+    systemDisabled?: boolean;
 }
 
 /**

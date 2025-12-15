@@ -39,6 +39,9 @@ export async function handleAnswer(interaction: ButtonInteraction, room: Million
     if (room.hasHost && room.hostId) {
         await handleAnswerWithHost(interaction, room, selectedLetter, selectedAnswer);
     } else {
+        // En modo sin anfitrión, actualizar la interacción primero
+        await interaction.deferUpdate();
+
         const isCorrect = selectedAnswer === room.currentQuestion.correctAnswer;
         if (isCorrect) {
             await handleCorrectAnswer(interaction, room);

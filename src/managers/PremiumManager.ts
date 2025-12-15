@@ -64,9 +64,7 @@ export class PremiumManager {
     }
 
     async getPremiumStatus(userId: string): Promise<PremiumStatus> {
-        if (!config.premium.enabled) {
-            return { hasPremium: false };
-        }
+        const systemDisabled = !config.premium.enabled;
 
         const globalTier = config.premium.globalTier;
         if (globalTier && globalTier !== 'none') {
@@ -74,13 +72,14 @@ export class PremiumManager {
             const expiresAt = config.premium.globalExpiresAt;
             if (!expiresAt || now < expiresAt) {
                 return {
-                    hasPremium: true,
+                    hasPremium: !systemDisabled,
                     tier: globalTier as PremiumTier,
                     type: expiresAt ? PremiumType.TEMPORARY : PremiumType.PERMANENT,
                     activatedAt: 0,
                     expiresAt: expiresAt || null,
                     source: PremiumSource.MANUAL,
-                    daysRemaining: expiresAt ? Math.ceil((expiresAt - now) / 86400000) : undefined
+                    daysRemaining: expiresAt ? Math.ceil((expiresAt - now) / 86400000) : undefined,
+                    systemDisabled
                 };
             }
         }
@@ -89,7 +88,7 @@ export class PremiumManager {
         const snapshot = await userRef.get();
 
         if (!snapshot.exists()) {
-            return { hasPremium: false };
+            return { hasPremium: false, systemDisabled };
         }
 
         const userData = snapshot.val() as PremiumUser;
@@ -99,7 +98,7 @@ export class PremiumManager {
             (userData.expiresAt !== null && now < userData.expiresAt);
 
         if (!isActive) {
-            return { hasPremium: false };
+            return { hasPremium: false, systemDisabled };
         }
 
         const daysRemaining = userData.expiresAt
@@ -107,13 +106,14 @@ export class PremiumManager {
             : undefined;
 
         return {
-            hasPremium: true,
+            hasPremium: !systemDisabled,
             tier: userData.tier,
             type: userData.type,
             activatedAt: userData.activatedAt,
             expiresAt: userData.expiresAt,
             source: userData.source,
-            daysRemaining
+            daysRemaining,
+            systemDisabled
         };
     }
 
@@ -252,6 +252,10 @@ export class PremiumManager {
 
     async checkExpiredUsers(): Promise<string[]> {
         try {
+            if (!config.premium.enabled) {
+                return [];
+            }
+
             const usersRef = this.firebaseManager.getRef('premium/users');
             const snapshot = await usersRef.get();
 
@@ -306,6 +310,10 @@ export class PremiumManager {
 
     async checkUpcomingExpirations(): Promise<void> {
         try {
+            if (!config.premium.enabled) {
+                return;
+            }
+
             const usersRef = this.firebaseManager.getRef('premium/users');
             const snapshot = await usersRef.get();
 
