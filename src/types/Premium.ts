@@ -50,6 +50,18 @@ export interface PremiumNotifications {
 }
 
 /**
+ * Premium en cola para activación futura
+ */
+export interface QueuedPremium {
+    tier: PremiumTier;
+    type: PremiumType;
+    duration: number | null;
+    source: PremiumSource;
+    sourceId: string;
+    queuedAt: number;
+}
+
+/**
  * Datos de un usuario premium en Firebase
  */
 export interface PremiumUser {
@@ -60,6 +72,7 @@ export interface PremiumUser {
     source: PremiumSource;
     sourceId: string;
     notificationsSent: PremiumNotifications;
+    queuedPremium?: QueuedPremium | null;
 }
 
 /**
@@ -125,6 +138,7 @@ export interface PremiumStatus {
     source?: PremiumSource;
     daysRemaining?: number;
     systemDisabled?: boolean;
+    queuedPremium?: QueuedPremium | null;
 }
 
 /**

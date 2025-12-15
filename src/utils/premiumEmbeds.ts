@@ -88,6 +88,14 @@ export function createPremiumStatusEmbed(status: PremiumStatus): EmbedBuilder {
         description += `• Días restantes: ${status.daysRemaining || 0}\n`;
     }
 
+    if (status.queuedPremium) {
+        const queuedTierName = getTierName(status.queuedPremium.tier);
+        const queuedTierEmoji = getTierEmoji(status.queuedPremium.tier);
+        description += `\n📦 **Premium Guardado:**\n`;
+        description += `• ${queuedTierEmoji} **${queuedTierName} Permanente**\n`;
+        description += `• Se activará automáticamente cuando expire tu premium actual\n`;
+    }
+
     if (status.systemDisabled) {
         description += `\n${EMOJIS.INFO} El tiempo de tu premium no está corriendo mientras el sistema está deshabilitado`;
     }
@@ -135,9 +143,10 @@ export function createCodeRedeemedEmbed(tier: PremiumTier, duration: number | nu
     const tierName = getTierName(tier);
 
     const hadPremium = currentStatus?.hasPremium && currentStatus.tier;
-    const isUpgrade = hadPremium && newStatus?.tier && getTierValue(newStatus.tier) > getTierValue(currentStatus.tier!);
-    const isSameTier = hadPremium && currentStatus.tier === tier;
-    const isConversion = hadPremium && newStatus?.tier && getTierValue(tier) < getTierValue(currentStatus.tier!);
+    const isQueued = hadPremium && newStatus?.queuedPremium && newStatus.queuedPremium.tier === tier;
+    const isUpgrade = hadPremium && newStatus?.tier && !isQueued && getTierValue(newStatus.tier) > getTierValue(currentStatus.tier!);
+    const isSameTier = hadPremium && currentStatus.tier === tier && !isQueued;
+    const isConversion = hadPremium && newStatus?.tier && !isQueued && getTierValue(tier) < getTierValue(currentStatus.tier!);
 
     const finalTierEmoji = newStatus?.tier ? getTierEmoji(newStatus.tier) : tierEmoji;
     const finalTierName = newStatus?.tier ? getTierName(newStatus.tier) : tierName;
@@ -145,7 +154,13 @@ export function createCodeRedeemedEmbed(tier: PremiumTier, duration: number | nu
 
     let description = `${EMOJIS.SUCCESS} Código canjeado exitosamente\n\n`;
 
-    if (isUpgrade) {
+    if (isQueued) {
+        description += `📦 **Premium guardado en cola**\n`;
+        description += `Tu código **${tierName} Permanente** ${tierEmoji} ha sido guardado\n\n`;
+        description += `Actualmente estás usando **${finalTierName}** ${finalTierEmoji}\n`;
+        description += `Cuando expire, se activará automáticamente tu **${tierName} Permanente** ${tierEmoji}\n\n`;
+        description += `_¡Así podrás disfrutar de ${finalTierName} sin perder tu premium permanente!_\n`;
+    } else if (isUpgrade) {
         description += `${EMOJIS.STAR} **Mejora aplicada**\n`;
         description += `Tu premium ha sido actualizado de **${getTierName(currentStatus.tier!)}** ${getTierEmoji(currentStatus.tier!)} a **${finalTierName}** ${finalTierEmoji}\n\n`;
     } else if (isSameTier) {
@@ -165,13 +180,15 @@ export function createCodeRedeemedEmbed(tier: PremiumTier, duration: number | nu
         description += `Has recibido **Premium ${finalTierName}** ${finalTierEmoji}\n\n`;
     }
 
-    if (newStatus?.expiresAt) {
-        const totalDays = Math.ceil((newStatus.expiresAt - Date.now()) / 86400000);
-        description += `• Tiempo total restante: **${totalDays} días**\n`;
-        description += `• Expira: ${formatTimeRemaining(newStatus.expiresAt)}\n`;
-    } else if (duration === null && !hadPremium) {
-        description += `• Tipo: **Permanente**\n`;
-        description += `• No expira nunca\n`;
+    if (!isQueued) {
+        if (newStatus?.expiresAt) {
+            const totalDays = Math.ceil((newStatus.expiresAt - Date.now()) / 86400000);
+            description += `• Tiempo total restante: **${totalDays} días**\n`;
+            description += `• Expira: ${formatTimeRemaining(newStatus.expiresAt)}\n`;
+        } else if (duration === null && !hadPremium) {
+            description += `• Tipo: **Permanente**\n`;
+            description += `• No expira nunca\n`;
+        }
     }
 
     description += `\nUsa \`/premium status\` para ver todos tus beneficios`;

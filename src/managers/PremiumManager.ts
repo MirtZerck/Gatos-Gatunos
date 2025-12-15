@@ -113,7 +113,8 @@ export class PremiumManager {
             expiresAt: userData.expiresAt,
             source: userData.source,
             daysRemaining,
-            systemDisabled
+            systemDisabled,
+            queuedPremium: userData.queuedPremium || null
         };
     }
 
@@ -175,24 +176,48 @@ export class PremiumManager {
                         return false;
                     }
 
-                    const currentValue = this.getTierValue(currentStatus.tier);
-                    const newValue = this.getTierValue(tier);
+                    if (type === PremiumType.PERMANENT) {
+                        const currentValue = this.getTierValue(currentStatus.tier);
+                        const newValue = this.getTierValue(tier);
 
-                    if (newValue < currentValue) {
-                        const conversionRatio = newValue / currentValue;
-                        const newDuration = duration || PREMIUM.DURATION_DAYS * 86400000;
-                        const convertedDuration = Math.floor(newDuration * conversionRatio);
+                        if (newValue < currentValue) {
+                            const userRef = this.getUserRef(userId);
+                            await userRef.update({
+                                queuedPremium: {
+                                    tier,
+                                    type,
+                                    duration: null,
+                                    source,
+                                    sourceId,
+                                    queuedAt: now
+                                }
+                            });
 
-                        await this.extendPremium(userId, convertedDuration / 3600000);
+                            logger.info('PremiumManager', `Premium permanente ${tier} guardado en cola para ${userId} (activo: ${currentStatus.tier} temporal)`);
+                            return true;
+                        } else {
+                            logger.info('PremiumManager', `Usuario ${userId} con temporal, upgrade a permanente ${tier}`);
+                        }
+                    } else {
+                        const currentValue = this.getTierValue(currentStatus.tier);
+                        const newValue = this.getTierValue(tier);
 
-                        logger.info('PremiumManager', `Premium convertido para ${userId}: ${tier} (${newDuration}ms) → ${currentStatus.tier} (${convertedDuration}ms)`);
-                        return true;
-                    } else if (newValue === currentValue) {
-                        const extensionHours = (duration || PREMIUM.DURATION_DAYS * 86400000) / 3600000;
-                        await this.extendPremium(userId, extensionHours);
+                        if (newValue < currentValue) {
+                            const conversionRatio = newValue / currentValue;
+                            const newDuration = duration || PREMIUM.DURATION_DAYS * 86400000;
+                            const convertedDuration = Math.floor(newDuration * conversionRatio);
 
-                        logger.info('PremiumManager', `Premium extendido para ${userId}: ${tier} (+${extensionHours}h)`);
-                        return true;
+                            await this.extendPremium(userId, convertedDuration / 3600000);
+
+                            logger.info('PremiumManager', `Premium convertido para ${userId}: ${tier} (${newDuration}ms) → ${currentStatus.tier} (${convertedDuration}ms)`);
+                            return true;
+                        } else if (newValue === currentValue) {
+                            const extensionHours = (duration || PREMIUM.DURATION_DAYS * 86400000) / 3600000;
+                            await this.extendPremium(userId, extensionHours);
+
+                            logger.info('PremiumManager', `Premium extendido para ${userId}: ${tier} (+${extensionHours}h)`);
+                            return true;
+                        }
                     }
                 }
             }
@@ -326,23 +351,66 @@ export class PremiumManager {
     private async handleExpiration(userId: string, userData: PremiumUser): Promise<void> {
         try {
             const userRef = this.getUserRef(userId);
-            await userRef.remove();
 
-            await this.logTransaction(userId, TransactionType.EXPIRATION, userData.tier, userData.source, {
-                activatedAt: userData.activatedAt,
-                expiredAt: Date.now()
-            });
+            if (userData.queuedPremium) {
+                const queuedPremium = userData.queuedPremium;
+                const now = Date.now();
 
-            if (!userData.notificationsSent.expired) {
-                await this.sendExpirationNotification(userId, userData.tier);
+                const newPremiumData: PremiumUser = {
+                    tier: queuedPremium.tier,
+                    type: queuedPremium.type,
+                    activatedAt: now,
+                    expiresAt: queuedPremium.type === PremiumType.PERMANENT ? null : now + (queuedPremium.duration || 0),
+                    source: queuedPremium.source,
+                    sourceId: queuedPremium.sourceId,
+                    notificationsSent: {
+                        threeDayWarning: false,
+                        oneDayWarning: false,
+                        expired: false
+                    },
+                    queuedPremium: null
+                };
+
+                await userRef.set(newPremiumData);
+
+                await this.logTransaction(userId, TransactionType.EXPIRATION, userData.tier, userData.source, {
+                    activatedAt: userData.activatedAt,
+                    expiredAt: now,
+                    queuedActivated: true
+                });
+
+                await this.logTransaction(userId, TransactionType.ACTIVATION, queuedPremium.tier, queuedPremium.source, {
+                    type: queuedPremium.type,
+                    activatedFromQueue: true
+                });
+
+                await this.sendQueuedPremiumActivationNotification(userId, userData.tier, queuedPremium.tier);
+
+                const botClient = this.client as import('../types/BotClient.js').BotClient;
+                if (botClient.premiumLogger) {
+                    await botClient.premiumLogger.logPremiumExpiration(userId, userData.tier);
+                }
+
+                logger.info('PremiumManager', `Premium ${userData.tier} expirado para ${userId}, activado premium en cola: ${queuedPremium.tier}`);
+            } else {
+                await userRef.remove();
+
+                await this.logTransaction(userId, TransactionType.EXPIRATION, userData.tier, userData.source, {
+                    activatedAt: userData.activatedAt,
+                    expiredAt: Date.now()
+                });
+
+                if (!userData.notificationsSent.expired) {
+                    await this.sendExpirationNotification(userId, userData.tier);
+                }
+
+                const botClient = this.client as import('../types/BotClient.js').BotClient;
+                if (botClient.premiumLogger) {
+                    await botClient.premiumLogger.logPremiumExpiration(userId, userData.tier);
+                }
+
+                logger.info('PremiumManager', `Premium expirado para ${userId}`);
             }
-
-            const botClient = this.client as import('../types/BotClient.js').BotClient;
-            if (botClient.premiumLogger) {
-                await botClient.premiumLogger.logPremiumExpiration(userId, userData.tier);
-            }
-
-            logger.info('PremiumManager', `Premium expirado para ${userId}`);
         } catch (error) {
             logger.error('PremiumManager', 'Error manejando expiración', error);
         }
@@ -408,6 +476,21 @@ export class PremiumManager {
             });
         } catch (error) {
             logger.error('PremiumManager', 'Error enviando notificación de expiración', error);
+        }
+    }
+
+    private async sendQueuedPremiumActivationNotification(userId: string, expiredTier: PremiumTier, newTier: PremiumTier): Promise<void> {
+        try {
+            const user = await this.client.users.fetch(userId);
+            if (!user) return;
+
+            const message = `Tu premium ${expiredTier} ha expirado.\n\n✅ Se ha activado automáticamente tu premium ${newTier} permanente que tenías guardado.`;
+
+            await user.send(message).catch(() => {
+                logger.warn('PremiumManager', `No se pudo enviar notificación a ${userId}`);
+            });
+        } catch (error) {
+            logger.error('PremiumManager', 'Error enviando notificación de activación de premium en cola', error);
         }
     }
 
