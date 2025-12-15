@@ -1,9 +1,11 @@
-import { EmbedBuilder, TextBasedChannel, Client } from 'discord.js';
+import { EmbedBuilder, TextChannel, NewsChannel, Client, ChannelType } from 'discord.js';
 import { COLORS, EMOJIS } from './constants.js';
 import { PremiumTier, PremiumSource } from '../types/Premium.js';
 import { getTierEmoji, getTierName } from './premiumHelpers.js';
 import { logger } from './logger.js';
 import { config } from '../config.js';
+
+type SendableChannel = TextChannel | NewsChannel;
 
 export class PremiumLogger {
     private client: Client;
@@ -14,7 +16,7 @@ export class PremiumLogger {
         this.logChannelId = config.premium.logChannelId;
     }
 
-    private async getLogChannel(): Promise<TextBasedChannel | null> {
+    private async getLogChannel(): Promise<SendableChannel | null> {
         if (!this.logChannelId) {
             logger.warn('PremiumLogger', 'Canal de logs no configurado');
             return null;
@@ -22,11 +24,17 @@ export class PremiumLogger {
 
         try {
             const channel = await this.client.channels.fetch(this.logChannelId);
-            if (!channel || !channel.isTextBased() || !('send' in channel)) {
-                logger.warn('PremiumLogger', 'Canal de logs inválido');
+            if (!channel) {
+                logger.warn('PremiumLogger', 'Canal de logs no encontrado');
                 return null;
             }
-            return channel as TextBasedChannel;
+
+            if (channel.type === ChannelType.GuildText || channel.type === ChannelType.GuildAnnouncement) {
+                return channel as SendableChannel;
+            }
+
+            logger.warn('PremiumLogger', 'Canal de logs inválido - debe ser un canal de texto');
+            return null;
         } catch (error) {
             logger.error('PremiumLogger', 'Error obteniendo canal de logs', error);
             return null;
