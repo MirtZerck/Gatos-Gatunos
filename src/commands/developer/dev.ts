@@ -85,10 +85,9 @@ async function showDevHelp(message: Message): Promise<void> {
 
         output += AnsiFormatter.format(`${config.prefix}dev premium <acción>`, ANSI.BRIGHT_GREEN) + '\n';
         output += AnsiFormatter.dim('  └─ Gestionar sistema premium') + '\n';
-        output += AnsiFormatter.dim('  └─ grant @usuario <tier> [días]') + '\n';
-        output += AnsiFormatter.dim('  └─ revoke @usuario [razón]') + '\n';
-        output += AnsiFormatter.dim('  └─ check @usuario') + '\n';
-        output += AnsiFormatter.dim('  └─ stats') + '\n';
+        output += AnsiFormatter.dim('  └─ grant, revoke, check, stats') + '\n';
+        output += AnsiFormatter.dim('  └─ generate, generate-custom, codes') + '\n';
+        output += AnsiFormatter.dim('  └─ Usa "premium help" para más info') + '\n';
         output += AnsiFormatter.dim('  └─ Alias: prem') + '\n\n';
 
         output += AnsiFormatter.dim('═'.repeat(45)) + '\n';
@@ -118,7 +117,7 @@ async function showDevHelp(message: Message): Promise<void> {
                 },
                 {
                     name: `${config.prefix}dev premium <acción>`,
-                    value: 'Gestionar sistema premium\n`grant @usuario <tier> [días]`\n`revoke @usuario [razón]`\n`check @usuario`\n`stats`\nAlias: `prem`',
+                    value: 'Gestionar sistema premium\nAcciones: `grant`, `revoke`, `check`, `stats`, `generate`, `generate-custom`, `codes`, `delete-code`\nUsa `premium help` para más información\nAlias: `prem`',
                     inline: false
                 }
             )
@@ -458,8 +457,8 @@ async function handlePremium(message: Message, args: string[]): Promise<void> {
 
     const action = args[0]?.toLowerCase();
 
-    if (!action) {
-        await message.reply(`❌ Especifica una acción: grant, revoke, check, stats, generate, codes, delete-code`);
+    if (!action || action === 'help') {
+        await showPremiumHelp(message);
         return;
     }
 
@@ -480,6 +479,10 @@ async function handlePremium(message: Message, args: string[]): Promise<void> {
         case 'gen':
             await handlePremiumGenerateCode(message, args.slice(1), client);
             break;
+        case 'generate-custom':
+        case 'gencustom':
+            await handlePremiumGenerateCustomCode(message, args.slice(1), client);
+            break;
         case 'codes':
         case 'list':
             await handlePremiumListCodes(message, args.slice(1), client);
@@ -489,7 +492,98 @@ async function handlePremium(message: Message, args: string[]): Promise<void> {
             await handlePremiumDeleteCode(message, args.slice(1), client);
             break;
         default:
-            await message.reply(`❌ Acción no válida: **${action}**`);
+            await message.reply(`❌ Acción no válida: **${action}**\nUsa \`${config.prefix}dev premium help\``);
+    }
+}
+
+async function showPremiumHelp(message: Message): Promise<void> {
+    if (isDevFormatMessage(message)) {
+        let output = '';
+        output += AnsiFormatter.header('╔═══════════════════════════════════════════╗') + '\n';
+        output += AnsiFormatter.header('║    COMANDOS PREMIUM                       ║') + '\n';
+        output += AnsiFormatter.header('╚═══════════════════════════════════════════╝') + '\n\n';
+
+        output += AnsiFormatter.format('👤 GESTIÓN DE USUARIOS', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.format('  grant', ANSI.BRIGHT_GREEN) + ' @usuario <tier> [días|perm]\n';
+        output += AnsiFormatter.dim('    └─ Otorgar premium a un usuario') + '\n';
+        output += AnsiFormatter.dim('    └─ Tiers: basic, pro, ultra') + '\n\n';
+
+        output += AnsiFormatter.format('  revoke', ANSI.BRIGHT_GREEN) + ' @usuario [razón]\n';
+        output += AnsiFormatter.dim('    └─ Revocar premium de un usuario') + '\n\n';
+
+        output += AnsiFormatter.format('  check', ANSI.BRIGHT_GREEN) + ' @usuario\n';
+        output += AnsiFormatter.dim('    └─ Verificar estado premium') + '\n\n';
+
+        output += AnsiFormatter.format('📊 ESTADÍSTICAS', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.format('  stats', ANSI.BRIGHT_GREEN) + '\n';
+        output += AnsiFormatter.dim('    └─ Ver estadísticas del sistema') + '\n\n';
+
+        output += AnsiFormatter.format('🎫 CÓDIGOS', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.format('  generate', ANSI.BRIGHT_GREEN) + ' <tier> <tipo> [días]\n';
+        output += AnsiFormatter.dim('    └─ Generar código aleatorio') + '\n';
+        output += AnsiFormatter.dim('    └─ Alias: gen') + '\n\n';
+
+        output += AnsiFormatter.format('  generate-custom', ANSI.BRIGHT_GREEN) + ' <código> <tier> <tipo> [días] [max-usos] [expira-días]\n';
+        output += AnsiFormatter.dim('    └─ Generar código personalizado') + '\n';
+        output += AnsiFormatter.dim('    └─ Ejemplo: HALLOWEEN, MIRTZERCK') + '\n';
+        output += AnsiFormatter.dim('    └─ Alias: gencustom') + '\n\n';
+
+        output += AnsiFormatter.format('  codes', ANSI.BRIGHT_GREEN) + ' [active|used|all]\n';
+        output += AnsiFormatter.dim('    └─ Listar códigos generados') + '\n';
+        output += AnsiFormatter.dim('    └─ Alias: list') + '\n\n';
+
+        output += AnsiFormatter.format('  delete-code', ANSI.BRIGHT_GREEN) + ' <código>\n';
+        output += AnsiFormatter.dim('    └─ Eliminar un código no usado') + '\n';
+        output += AnsiFormatter.dim('    └─ Alias: delcode') + '\n\n';
+
+        output += AnsiFormatter.dim('═'.repeat(45)) + '\n';
+        output += AnsiFormatter.format(`Uso: ${config.prefix}dev premium <acción>`, ANSI.BRIGHT_YELLOW);
+
+        await message.reply(AnsiFormatter.codeBlock(output));
+    } else {
+        const embed = new EmbedBuilder()
+            .setTitle('💎 Comandos Premium')
+            .setDescription('Gestión completa del sistema premium')
+            .setColor(COLORS.INFO)
+            .addFields(
+                {
+                    name: '👤 Gestión de Usuarios',
+                    value:
+                        `\`grant @usuario <tier> [días|perm]\` - Otorgar premium\n` +
+                        `\`revoke @usuario [razón]\` - Revocar premium\n` +
+                        `\`check @usuario\` - Ver estado premium`,
+                    inline: false
+                },
+                {
+                    name: '📊 Estadísticas',
+                    value: '`stats` - Ver estadísticas del sistema',
+                    inline: false
+                },
+                {
+                    name: '🎫 Códigos',
+                    value:
+                        `\`generate <tier> <tipo> [días]\` - Código aleatorio\n` +
+                        `\`generate-custom <código> <tier> <tipo> [días] [max-usos] [expira-días]\` - Código personalizado\n` +
+                        `\`codes [active|used|all]\` - Listar códigos\n` +
+                        `\`delete-code <código>\` - Eliminar código`,
+                    inline: false
+                },
+                {
+                    name: 'ℹ️ Información',
+                    value:
+                        `**Tiers:** basic, pro, ultra\n` +
+                        `**Tipos:** temp (temporal), perm (permanente)\n` +
+                        `**Ejemplo:** \`${config.prefix}dev premium grant @user ultra 30\``,
+                    inline: false
+                }
+            )
+            .setFooter({ text: `Usa: ${config.prefix}dev premium <acción>` })
+            .setTimestamp();
+
+        await message.reply({ embeds: [embed] });
     }
 }
 
@@ -904,6 +998,192 @@ async function handlePremiumGenerateCode(message: Message, args: string[], clien
             embed.addFields({
                 name: 'Duración',
                 value: `${days} días`,
+                inline: true
+            });
+        }
+
+        await message.reply({ embeds: [embed] });
+    }
+}
+
+async function handlePremiumGenerateCustomCode(message: Message, args: string[], client: BotClient): Promise<void> {
+    if (!client.redeemCodeManager) {
+        await message.reply('❌ El sistema de códigos no está disponible.');
+        return;
+    }
+
+    const customCode = args[0]?.toUpperCase();
+    const tierArg = args[1]?.toLowerCase();
+    const typeArg = args[2]?.toLowerCase();
+
+    if (!customCode || !tierArg || !typeArg) {
+        const errorMsg = isDevFormatMessage(message)
+            ? AnsiFormatter.codeBlock(
+                AnsiFormatter.error('✘ Uso incorrecto') + '\n\n' +
+                AnsiFormatter.format('Uso:', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev premium generate-custom <código> <tier> <tipo> [días] [max-usos] [expira-días]`) + '\n\n' +
+                AnsiFormatter.format('Ejemplos:', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev premium gencustom HALLOWEEN ultra temp 30 100 7`) + '\n' +
+                AnsiFormatter.dim(`  ${config.prefix}dev premium gencustom MIRTZERCK ultra perm`) + '\n\n' +
+                AnsiFormatter.dim('max-usos: número de usos permitidos (omitir para uso único)') + '\n' +
+                AnsiFormatter.dim('expira-días: días hasta que expire el código')
+            )
+            : '❌ **Uso:** `*dev premium generate-custom <código> <tier> <tipo> [días] [max-usos] [expira-días]`\n\n**Ejemplos:**\n`*dev premium gencustom HALLOWEEN ultra temp 30 100 7` - Código de evento\n`*dev premium gencustom MIRTZERCK ultra perm` - Código VIP único';
+        await message.reply(errorMsg);
+        return;
+    }
+
+    let tier: PremiumTier;
+    switch (tierArg) {
+        case 'basic':
+        case 'basico':
+            tier = PremiumTier.BASIC;
+            break;
+        case 'pro':
+            tier = PremiumTier.PRO;
+            break;
+        case 'ultra':
+            tier = PremiumTier.ULTRA;
+            break;
+        default:
+            await message.reply(`❌ Tier inválido: **${tierArg}**`);
+            return;
+    }
+
+    let type: PremiumType;
+    let duration: number | undefined;
+
+    switch (typeArg) {
+        case 'temp':
+        case 'temporal':
+            type = PremiumType.TEMPORARY;
+            const days = parseInt(args[3]);
+            if (!days || days <= 0) {
+                await message.reply('❌ Debes especificar la duración en días para códigos temporales.');
+                return;
+            }
+            duration = days * 86400000;
+            break;
+        case 'perm':
+        case 'permanent':
+        case 'permanente':
+            type = PremiumType.PERMANENT;
+            duration = undefined;
+            break;
+        default:
+            await message.reply(`❌ Tipo inválido: **${typeArg}**`);
+            return;
+    }
+
+    const maxUsesArg = args[4];
+    const maxUses = maxUsesArg ? parseInt(maxUsesArg) : null;
+
+    if (maxUsesArg && (isNaN(maxUses!) || maxUses! <= 0)) {
+        await message.reply('❌ El número máximo de usos debe ser un número positivo.');
+        return;
+    }
+
+    const expireDaysArg = args[5];
+    let codeExpiresAt: number | undefined;
+
+    if (expireDaysArg) {
+        const expireDays = parseInt(expireDaysArg);
+        if (isNaN(expireDays) || expireDays <= 0) {
+            await message.reply('❌ Los días de expiración deben ser un número positivo.');
+            return;
+        }
+        codeExpiresAt = Date.now() + (expireDays * 86400000);
+    }
+
+    const code = await client.redeemCodeManager.generateCode({
+        tier,
+        type,
+        duration,
+        createdBy: message.author.id,
+        customCode,
+        maxUses,
+        expiresAt: codeExpiresAt
+    });
+
+    if (isDevFormatMessage(message)) {
+        let output = '';
+        output += AnsiFormatter.header('╔════════════════════════════════════════════╗') + '\n';
+        output += AnsiFormatter.header('║    CÓDIGO PERSONALIZADO GENERADO          ║') + '\n';
+        output += AnsiFormatter.header('╚════════════════════════════════════════════╝') + '\n\n';
+
+        output += AnsiFormatter.format('📋 CÓDIGO', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.format(`  ${code.code}`, ANSI.BRIGHT_GREEN, ANSI.BOLD) + '\n\n';
+
+        output += AnsiFormatter.format('ℹ️  DETALLES', ANSI.BRIGHT_CYAN, ANSI.BOLD) + '\n';
+        output += AnsiFormatter.dim('─'.repeat(45)) + '\n';
+        output += AnsiFormatter.key('  Tier     ') + ': ' + AnsiFormatter.value(tier) + '\n';
+        output += AnsiFormatter.key('  Tipo     ') + ': ' + AnsiFormatter.value(type) + '\n';
+        if (duration) {
+            const days = Math.ceil(duration / 86400000);
+            output += AnsiFormatter.key('  Duración ') + ': ' + AnsiFormatter.value(`${days} días`) + '\n';
+        }
+        if (maxUses !== null) {
+            output += AnsiFormatter.key('  Max usos ') + ': ' + AnsiFormatter.format(maxUses.toString(), ANSI.BRIGHT_YELLOW) + '\n';
+        } else {
+            output += AnsiFormatter.key('  Max usos ') + ': ' + AnsiFormatter.dim('1 (uso único)') + '\n';
+        }
+        if (codeExpiresAt) {
+            output += AnsiFormatter.key('  Expira   ') + ': ' + AnsiFormatter.dim(`<t:${Math.floor(codeExpiresAt / 1000)}:R>`) + '\n';
+        }
+
+        await message.reply(AnsiFormatter.codeBlock(output));
+    } else {
+        const tierName = tier === PremiumTier.BASIC ? 'Básico' : tier === PremiumTier.PRO ? 'Pro' : 'Ultra';
+        const embed = new EmbedBuilder()
+            .setTitle('✅ Código Personalizado Generado')
+            .setColor(COLORS.SUCCESS)
+            .addFields(
+                {
+                    name: '📋 Código',
+                    value: `\`${code.code}\``,
+                    inline: false
+                },
+                {
+                    name: 'Tier',
+                    value: tierName,
+                    inline: true
+                },
+                {
+                    name: 'Tipo',
+                    value: type === PremiumType.PERMANENT ? 'Permanente' : 'Temporal',
+                    inline: true
+                }
+            )
+            .setTimestamp();
+
+        if (duration) {
+            const days = Math.ceil(duration / 86400000);
+            embed.addFields({
+                name: 'Duración',
+                value: `${days} días`,
+                inline: true
+            });
+        }
+
+        if (maxUses !== null) {
+            embed.addFields({
+                name: 'Máximo de Usos',
+                value: `${maxUses} usos`,
+                inline: true
+            });
+        } else {
+            embed.addFields({
+                name: 'Máximo de Usos',
+                value: '1 (uso único)',
+                inline: true
+            });
+        }
+
+        if (codeExpiresAt) {
+            embed.addFields({
+                name: 'Expira',
+                value: `<t:${Math.floor(codeExpiresAt / 1000)}:R>`,
                 inline: true
             });
         }

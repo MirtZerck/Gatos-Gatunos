@@ -76,6 +76,9 @@ export interface PremiumCode {
     usedBy: string | null;
     usedAt: number | null;
     expiresAt: number | null;
+    maxUses?: number | null;
+    currentUses?: number;
+    usedByUsers?: string[];
 }
 
 /**
@@ -134,6 +137,7 @@ export interface CreateCodeOptions {
     createdBy: string;
     customCode?: string;
     expiresAt?: number;
+    maxUses?: number | null;
 }
 
 /**

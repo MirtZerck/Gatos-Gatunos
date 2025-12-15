@@ -32,6 +32,8 @@ export class RedeemCodeManager {
         const codeString = options.customCode || await this.generateRandomCode();
         const codeId = this.generateCodeId();
 
+        const isMultiUse = options.maxUses !== undefined && options.maxUses !== null;
+
         const codeData: PremiumCode = {
             code: codeString,
             tier: options.tier,
@@ -45,10 +47,17 @@ export class RedeemCodeManager {
             expiresAt: options.expiresAt || null
         };
 
+        if (isMultiUse) {
+            codeData.maxUses = options.maxUses;
+            codeData.currentUses = 0;
+            codeData.usedByUsers = [];
+        }
+
         const codesRef = this.firebaseAdminManager.getRef('premium/codes');
         await codesRef.child(codeId).set(codeData);
 
-        logger.info('RedeemCodeManager', `Código ${codeString} generado por ${options.createdBy}`);
+        const codeType = isMultiUse ? `multi-uso (${options.maxUses})` : 'único';
+        logger.info('RedeemCodeManager', `Código ${codeString} (${codeType}) generado por ${options.createdBy}`);
 
         return codeData;
     }
@@ -64,7 +73,7 @@ export class RedeemCodeManager {
         return `${part1}-${part2}-${part3}`;
     }
 
-    async validateCode(code: string): Promise<{ valid: boolean; reason?: string; codeData?: PremiumCode }> {
+    async validateCode(code: string, userId?: string): Promise<{ valid: boolean; reason?: string; codeData?: PremiumCode }> {
         const normalizedCode = code.toUpperCase().trim();
 
         const codesRef = this.firebaseAdminManager.getRef('premium/codes');
@@ -77,8 +86,20 @@ export class RedeemCodeManager {
         const codeId = Object.keys(snapshot.val())[0];
         const codeData = snapshot.val()[codeId] as PremiumCode;
 
-        if (codeData.used) {
-            return { valid: false, reason: 'Código ya utilizado' };
+        const isMultiUse = codeData.maxUses !== undefined && codeData.maxUses !== null;
+
+        if (isMultiUse) {
+            if (codeData.currentUses !== undefined && codeData.maxUses !== null && codeData.maxUses !== undefined && codeData.currentUses >= codeData.maxUses) {
+                return { valid: false, reason: 'Código sin usos disponibles' };
+            }
+
+            if (userId && codeData.usedByUsers?.includes(userId)) {
+                return { valid: false, reason: 'Ya has usado este código' };
+            }
+        } else {
+            if (codeData.used) {
+                return { valid: false, reason: 'Código ya utilizado' };
+            }
         }
 
         if (codeData.expiresAt && Date.now() > codeData.expiresAt) {
@@ -97,7 +118,7 @@ export class RedeemCodeManager {
             };
         }
 
-        const validation = await this.validateCode(code);
+        const validation = await this.validateCode(code, userId);
 
         if (!validation.valid || !validation.codeData) {
             this.incrementAttempts(userId);
@@ -126,14 +147,45 @@ export class RedeemCodeManager {
             }
 
             const codeId = Object.keys(snapshot.val())[0];
+            const codeData = snapshot.val()[codeId] as PremiumCode;
 
-            await codesRef.child(codeId).update({
-                used: true,
-                usedBy: userId,
-                usedAt: Date.now()
-            });
+            const isMultiUse = codeData.maxUses !== undefined && codeData.maxUses !== null;
 
-            logger.info('RedeemCodeManager', `Usuario ${userId} canjeó código ${normalizedCode}`);
+            if (isMultiUse) {
+                const currentUses = (codeData.currentUses || 0) + 1;
+                const usedByUsers = codeData.usedByUsers || [];
+
+                if (!usedByUsers.includes(userId)) {
+                    usedByUsers.push(userId);
+                }
+
+                const updates: Partial<PremiumCode> = {
+                    currentUses,
+                    usedByUsers
+                };
+
+                if (currentUses === 1) {
+                    updates.usedBy = userId;
+                    updates.usedAt = Date.now();
+                }
+
+                if (codeData.maxUses !== null && codeData.maxUses !== undefined && currentUses >= codeData.maxUses) {
+                    updates.used = true;
+                }
+
+                await codesRef.child(codeId).update(updates);
+
+                logger.info('RedeemCodeManager', `Usuario ${userId} canjeó código ${normalizedCode} (${currentUses}/${codeData.maxUses})`);
+            } else {
+                await codesRef.child(codeId).update({
+                    used: true,
+                    usedBy: userId,
+                    usedAt: Date.now()
+                });
+
+                logger.info('RedeemCodeManager', `Usuario ${userId} canjeó código ${normalizedCode}`);
+            }
+
             return true;
         } catch (error) {
             logger.error('RedeemCodeManager', 'Error marcando código como usado', error);
