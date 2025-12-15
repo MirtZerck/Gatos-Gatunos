@@ -85,6 +85,9 @@ export class BotClient extends Client {
     /** Servidor de webhooks para premium */
     public webhookServer?: import('../server/webhookServer.js').WebhookServer;
 
+    /** Sistema de logs de premium */
+    public premiumLogger?: import('../utils/premiumLogger.js').PremiumLogger;
+
     constructor(options: ClientOptions) {
         super(options);
         this.commands = new Collection();

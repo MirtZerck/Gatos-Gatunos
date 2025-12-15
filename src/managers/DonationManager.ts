@@ -25,15 +25,26 @@ export class DonationManager {
 
             logger.info('DonationManager', `Donación recibida: $${amount} de ${fromName} (${email})`);
 
-            const userId = await this.findUserByEmail(email);
+            // Priorizar discord_userid si está disponible
+            let userId = payload.discord_userid || null;
 
+            // Si no hay discord_userid, buscar por email como fallback
             if (!userId) {
-                logger.warn('DonationManager', `No se encontró usuario con email ${email}`);
-                await this.notifyDonationNoUser(amount, fromName, email, messageFromSupporter);
-                return false;
+                userId = await this.findUserByEmail(email);
+            } else {
+                logger.info('DonationManager', `Usuario identificado por Discord ID: ${userId}`);
             }
 
             const { tier, duration } = this.mapAmountToTier(amount);
+
+            if (!userId) {
+                logger.warn('DonationManager', `No se encontró usuario con email ${email} ni discord_userid`);
+                await this.notifyDonationNoUser(amount, fromName, email, messageFromSupporter);
+                if (this.client.premiumLogger) {
+                    await this.client.premiumLogger.logDonation(null, amount, tier, duration, fromName, email, messageFromSupporter);
+                }
+                return false;
+            }
 
             if (!this.client.premiumManager) {
                 logger.error('DonationManager', 'PremiumManager no disponible');
@@ -50,6 +61,10 @@ export class DonationManager {
             });
 
             await this.notifyDonation(userId, tier, duration, amount);
+
+            if (this.client.premiumLogger) {
+                await this.client.premiumLogger.logDonation(userId, amount, tier, duration, fromName, email, messageFromSupporter);
+            }
 
             logger.info('DonationManager', `Premium ${tier} otorgado a ${userId} por donación de $${amount}`);
 

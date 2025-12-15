@@ -178,6 +178,9 @@ export interface KofiWebhookPayload {
     kofi_transaction_id: string;
     shop_items: unknown[] | null;
     tier_name: string | null;
+    shipping: unknown | null;
+    discord_username?: string;
+    discord_userid?: string;
 }
 
 /**

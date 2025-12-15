@@ -90,6 +90,18 @@ export class WebhookServer {
             }
         });
 
+        this.app.options('/webhooks/kofi', (req: Request, res: Response) => {
+            res.status(200).end();
+        });
+
+        this.app.options('/webhooks/topgg', (req: Request, res: Response) => {
+            res.status(200).end();
+        });
+
+        this.app.options('/webhooks/dbl', (req: Request, res: Response) => {
+            res.status(200).end();
+        });
+
         this.app.use((req: Request, res: Response) => {
             res.status(404).json({ error: 'Not found' });
         });
@@ -102,18 +114,28 @@ export class WebhookServer {
             return;
         }
 
+        let payload;
+        try {
+            // Ko-fi envía el payload como string JSON dentro del campo 'data'
+            payload = typeof req.body.data === 'string' ? JSON.parse(req.body.data) : req.body;
+        } catch (error) {
+            logger.error('WebhookServer', 'Error parseando payload de Ko-fi', error);
+            res.status(400).json({ error: 'Invalid payload' });
+            return;
+        }
+
         const verificationToken = config.premium.kofiVerificationToken;
-        const providedToken = req.body.verification_token;
+        const providedToken = payload.verification_token;
 
         if (!verificationToken || providedToken !== verificationToken) {
-            logger.warn('WebhookServer', 'Token de verificación Ko-fi inválido');
+            logger.warn('WebhookServer', `Token de verificación Ko-fi inválido. Esperado: "${verificationToken}", Recibido: "${providedToken}"`);
             res.status(401).json({ error: 'Unauthorized' });
             return;
         }
 
         logger.info('WebhookServer', 'Webhook Ko-fi recibido');
 
-        const success = await this.client.donationManager.processKofiWebhook(req.body);
+        const success = await this.client.donationManager.processKofiWebhook(payload);
 
         if (success) {
             res.status(200).json({ success: true });

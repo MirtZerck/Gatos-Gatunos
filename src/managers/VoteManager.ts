@@ -23,10 +23,16 @@ export class VoteManager {
             logger.info('VoteManager', `Voto recibido de Top.gg: ${userId}${isWeekend ? ' (fin de semana)' : ''}`);
 
             const hours = isWeekend ? 24 : 12;
+            const existingStatus = await this.client.premiumManager!.getPremiumStatus(userId);
+            const isExtension = existingStatus.hasPremium && existingStatus.type === PremiumType.TEMPORARY;
+
             const success = await this.grantVotePremium(userId, 'Top.gg', hours);
 
             if (success) {
                 await this.notifyVote(userId, 'Top.gg', hours);
+                if (this.client.premiumLogger) {
+                    await this.client.premiumLogger.logVote(userId, 'Top.gg', hours, isExtension);
+                }
             }
 
             return success;
@@ -42,10 +48,16 @@ export class VoteManager {
 
             logger.info('VoteManager', `Voto recibido de DBL: ${userId}`);
 
+            const existingStatus = await this.client.premiumManager!.getPremiumStatus(userId);
+            const isExtension = existingStatus.hasPremium && existingStatus.type === PremiumType.TEMPORARY;
+
             const success = await this.grantVotePremium(userId, 'Discord Bot List', 12);
 
             if (success) {
                 await this.notifyVote(userId, 'Discord Bot List', 12);
+                if (this.client.premiumLogger) {
+                    await this.client.premiumLogger.logVote(userId, 'Discord Bot List', 12, isExtension);
+                }
             }
 
             return success;

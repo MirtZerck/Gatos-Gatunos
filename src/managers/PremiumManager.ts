@@ -178,12 +178,17 @@ export class PremiumManager {
             const userRef = this.getUserRef(userId);
             await userRef.set(premiumData);
 
-            await this.logTransaction(userId, TransactionType.ACTIVATION, tier, source, {
+            const transactionMetadata: Record<string, unknown> = {
                 type,
                 duration,
-                expiresAt,
-                grantedBy: options.grantedBy
-            });
+                expiresAt
+            };
+
+            if (options.grantedBy !== undefined) {
+                transactionMetadata.grantedBy = options.grantedBy;
+            }
+
+            await this.logTransaction(userId, TransactionType.ACTIVATION, tier, source, transactionMetadata);
 
             await this.updateStats();
 
@@ -286,6 +291,11 @@ export class PremiumManager {
 
             if (!userData.notificationsSent.expired) {
                 await this.sendExpirationNotification(userId, userData.tier);
+            }
+
+            const botClient = this.client as import('../types/BotClient.js').BotClient;
+            if (botClient.premiumLogger) {
+                await botClient.premiumLogger.logPremiumExpiration(userId, userData.tier);
             }
 
             logger.info('PremiumManager', `Premium expirado para ${userId}`);

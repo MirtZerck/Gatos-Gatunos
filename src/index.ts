@@ -56,6 +56,11 @@ async function main() {
             client.discordAutomodManager = discordAutomodManager;
             logger.info('Bot', 'Sistema de AutoMod listo');
 
+            const { PremiumLogger } = await import('./utils/premiumLogger.js');
+            const premiumLogger = new PremiumLogger(client);
+            client.premiumLogger = premiumLogger;
+            logger.info('Bot', 'Sistema de logs premium listo');
+
             const { PremiumManager } = await import('./managers/PremiumManager.js');
             const premiumManager = new PremiumManager(firebaseAdminManager, client);
             client.premiumManager = premiumManager;
