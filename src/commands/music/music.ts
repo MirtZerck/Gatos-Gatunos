@@ -22,6 +22,7 @@ import {
     handleVolume,
     handleShuffle,
     handleLoop,
+    handleAutoplay,
     handleJoin,
     handleLeave
 } from './music/handlers/slash-handlers.js';
@@ -37,6 +38,7 @@ import {
     handleVolumePrefix,
     handleShufflePrefix,
     handleLoopPrefix,
+    handleAutoplayPrefix,
     handleJoinPrefix,
     handleLeavePrefix
 } from './music/handlers/prefix-handlers.js';
@@ -57,6 +59,7 @@ export const music: HybridCommand = {
         { name: 'volume', aliases: ['vol', 'volumen'], description: 'Ajusta el volumen' },
         { name: 'shuffle', aliases: ['mezclar', 'aleatorio'], description: 'Mezcla la cola' },
         { name: 'loop', aliases: ['repetir', 'repeat'], description: 'Cambia el modo de repeticion' },
+        { name: 'autoplay', aliases: ['auto', 'ap'], description: 'Activa/desactiva reproduccion automatica' },
         { name: 'join', aliases: ['conectar', 'entrar'], description: 'Conecta el bot al canal de voz' },
         { name: 'leave', aliases: ['disconnect', 'salir', 'dc'], description: 'Desconecta el bot del canal' },
     ],
@@ -128,6 +131,15 @@ export const music: HybridCommand = {
         .addSubcommand(sub =>
             sub.setName('loop').setDescription('Cambia el modo de repeticion (Off -> Cancion -> Cola)')
         )
+        .addSubcommand(sub =>
+            sub.setName('autoplay').setDescription('Activa/desactiva la reproduccion automatica')
+        )
+        .addSubcommand(sub =>
+            sub.setName('join').setDescription('Conecta el bot a tu canal de voz')
+        )
+        .addSubcommand(sub =>
+            sub.setName('leave').setDescription('Desconecta el bot del canal de voz')
+        )
         .setContexts(CONTEXTS.GUILD_ONLY)
         .setIntegrationTypes(INTEGRATION_TYPES.GUILD_ONLY),
 
@@ -166,6 +178,9 @@ export const music: HybridCommand = {
                 case 'loop':
                     await handleLoop(interaction);
                     break;
+                case 'autoplay':
+                    await handleAutoplay(interaction);
+                    break;
                 case 'join':
                     await handleJoin(interaction);
                     break;
@@ -198,6 +213,7 @@ export const music: HybridCommand = {
                 'vol': 'volume', 'volumen': 'volume',
                 'mezclar': 'shuffle', 'aleatorio': 'shuffle',
                 'repetir': 'loop', 'repeat': 'loop',
+                'auto': 'autoplay', 'ap': 'autoplay',
                 'conectar': 'join', 'entrar': 'join',
                 'disconnect': 'leave', 'salir': 'leave', 'dc': 'leave'
             };
@@ -234,6 +250,9 @@ export const music: HybridCommand = {
                     break;
                 case 'loop':
                     await handleLoopPrefix(message);
+                    break;
+                case 'autoplay':
+                    await handleAutoplayPrefix(message);
                     break;
                 case 'join':
                     await handleJoinPrefix(message);

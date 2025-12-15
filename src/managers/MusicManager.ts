@@ -115,6 +115,39 @@ export class MusicManager {
             }
 
             if (player.queue.size === 0 && !player.queue.current) {
+                const autoplayEnabled = player.data.get('autoplay') as boolean;
+
+                if (autoplayEnabled) {
+                    const history = this.trackHistory.get(player.guildId) || [];
+                    const lastTrack = history[history.length - 1];
+
+                    if (lastTrack) {
+                        try {
+                            const relatedResult = await this.kazagumo.search(
+                                `https://www.youtube.com/watch?v=${lastTrack.identifier}&list=RD${lastTrack.identifier}`,
+                                { requester: lastTrack.requester }
+                            );
+
+                            if (relatedResult && relatedResult.tracks.length > 0) {
+                                const relatedTrack = relatedResult.tracks[Math.floor(Math.random() * Math.min(5, relatedResult.tracks.length))];
+                                player.queue.add(relatedTrack);
+                                player.play();
+
+                                const channel = this.textChannels.get(player.guildId);
+                                if (channel) {
+                                    const embed = new EmbedBuilder()
+                                        .setColor(COLORS.INFO)
+                                        .setDescription(`${EMOJIS.PLAY} Autoplay: Reproduciendo [${relatedTrack.title}](${relatedTrack.uri})`);
+                                    await channel.send({ embeds: [embed] });
+                                }
+                                return;
+                            }
+                        } catch (error) {
+                            logger.error('MusicManager', 'Error en autoplay', error);
+                        }
+                    }
+                }
+
                 const channel = this.textChannels.get(player.guildId);
                 if (channel) {
                     const embed = new EmbedBuilder()
@@ -485,6 +518,24 @@ export class MusicManager {
         await this.deletePlayerMessage(guildId);
 
         return true;
+    }
+
+    toggleAutoplay(guildId: string): boolean {
+        const player = this.kazagumo.players.get(guildId);
+        if (!player) return false;
+
+        const currentState = player.data.get('autoplay') as boolean || false;
+        const newState = !currentState;
+        player.data.set('autoplay', newState);
+
+        return newState;
+    }
+
+    getAutoplayState(guildId: string): boolean {
+        const player = this.kazagumo.players.get(guildId);
+        if (!player) return false;
+
+        return player.data.get('autoplay') as boolean || false;
     }
 
     /**

@@ -314,6 +314,32 @@ export async function handleLoopPrefix(message: Message): Promise<void> {
     });
 }
 
+export async function handleAutoplayPrefix(message: Message): Promise<void> {
+    const member = message.member as GuildMember;
+    ensureSameVoiceChannel(member);
+    const client = message.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(message.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    const newState = musicManager.toggleAutoplay(message.guildId!);
+    await musicManager.refreshPlayerEmbed(player);
+
+    const statusText = newState ? 'Activado' : 'Desactivado';
+    const emoji = newState ? EMOJIS.SUCCESS : EMOJIS.ERROR;
+
+    await message.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(newState ? COLORS.SUCCESS : COLORS.INFO)
+                .setDescription(`${emoji} Reproduccion automatica: **${statusText}**`)
+        ]
+    });
+}
+
 export async function handleJoinPrefix(message: Message): Promise<void> {
     const member = message.member as GuildMember;
     const voiceChannel = getVoiceChannel(member);

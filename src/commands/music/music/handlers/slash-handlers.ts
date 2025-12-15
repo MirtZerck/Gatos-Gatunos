@@ -292,6 +292,32 @@ export async function handleLoop(interaction: ChatInputCommandInteraction): Prom
     });
 }
 
+export async function handleAutoplay(interaction: ChatInputCommandInteraction): Promise<void> {
+    const member = interaction.member as GuildMember;
+    ensureSameVoiceChannel(member);
+    const client = interaction.client as BotClient;
+    const musicManager = getMusicManager(client);
+
+    const player = musicManager.getPlayer(interaction.guildId!);
+    if (!player) {
+        throw new CommandError(ErrorType.NOT_FOUND, 'Sin player', 'No hay musica reproduciendose.');
+    }
+
+    const newState = musicManager.toggleAutoplay(interaction.guildId!);
+    await musicManager.refreshPlayerEmbed(player);
+
+    const statusText = newState ? 'Activado' : 'Desactivado';
+    const emoji = newState ? EMOJIS.SUCCESS : EMOJIS.ERROR;
+
+    await interaction.reply({
+        embeds: [
+            new EmbedBuilder()
+                .setColor(newState ? COLORS.SUCCESS : COLORS.INFO)
+                .setDescription(`${emoji} Reproduccion automatica: **${statusText}**`)
+        ]
+    });
+}
+
 export async function handleJoin(interaction: ChatInputCommandInteraction): Promise<void> {
     const member = interaction.member as GuildMember;
     const voiceChannel = getVoiceChannel(member);
