@@ -234,16 +234,32 @@ async function handleRedeemSubcommand(
         );
     }
 
-    await client.premiumManager.grantPremium({
+    const currentStatus = await client.premiumManager.getPremiumStatus(interaction.user.id);
+
+    const grantSuccess = await client.premiumManager.grantPremium({
         userId: interaction.user.id,
         tier: result.tier,
         type: result.duration === null || result.duration === undefined ? PremiumType.PERMANENT : PremiumType.TEMPORARY,
         duration: result.duration === null ? undefined : result.duration,
         source: PremiumSource.CODE,
-        sourceId: code
+        sourceId: code,
+        smartGrant: true
     });
 
-    const embed = createCodeRedeemedEmbed(result.tier, result.duration || null);
+    if (!grantSuccess) {
+        const embed = createErrorEmbed(
+            `${EMOJIS.ERROR} No se pudo canjear`,
+            'Ya tienes un premium permanente. No puedes canjear códigos adicionales.'
+        );
+
+        await sendMessage(interaction, { embed });
+        return;
+    }
+
+    await client.redeemCodeManager.markCodeAsUsed(code, interaction.user.id);
+
+    const newStatus = await client.premiumManager.getPremiumStatus(interaction.user.id);
+    const embed = createCodeRedeemedEmbed(result.tier, result.duration || null, currentStatus, newStatus);
 
     await sendMessage(interaction, { embed });
 }
@@ -319,16 +335,32 @@ async function handleRedeemPrefixSubcommand(
         );
     }
 
-    await client.premiumManager.grantPremium({
+    const currentStatus = await client.premiumManager.getPremiumStatus(message.author.id);
+
+    const grantSuccess = await client.premiumManager.grantPremium({
         userId: message.author.id,
         tier: result.tier,
         type: result.duration === null || result.duration === undefined ? PremiumType.PERMANENT : PremiumType.TEMPORARY,
         duration: result.duration === null ? undefined : result.duration,
         source: PremiumSource.CODE,
-        sourceId: code
+        sourceId: code,
+        smartGrant: true
     });
 
-    const embed = createCodeRedeemedEmbed(result.tier, result.duration || null);
+    if (!grantSuccess) {
+        const embed = createErrorEmbed(
+            `${EMOJIS.ERROR} No se pudo canjear`,
+            'Ya tienes un premium permanente. No puedes canjear códigos adicionales.'
+        );
+
+        await sendMessage(message, { embed });
+        return;
+    }
+
+    await client.redeemCodeManager.markCodeAsUsed(code, message.author.id);
+
+    const newStatus = await client.premiumManager.getPremiumStatus(message.author.id);
+    const embed = createCodeRedeemedEmbed(result.tier, result.duration || null, currentStatus, newStatus);
 
     await sendMessage(message, { embed });
 }

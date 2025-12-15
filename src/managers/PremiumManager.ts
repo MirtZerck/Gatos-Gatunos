@@ -152,10 +152,50 @@ export class PremiumManager {
         };
     }
 
-    async grantPremium(options: GrantPremiumOptions): Promise<boolean> {
+    private getTierValue(tier: PremiumTier): number {
+        const tierValues = {
+            [PremiumTier.BASIC]: 1,
+            [PremiumTier.PRO]: 2,
+            [PremiumTier.ULTRA]: 3
+        };
+        return tierValues[tier];
+    }
+
+    async grantPremium(options: GrantPremiumOptions & { smartGrant?: boolean }): Promise<boolean> {
         try {
-            const { userId, tier, type, duration, source, sourceId } = options;
+            const { userId, tier, type, duration, source, sourceId, smartGrant = false } = options;
             const now = Date.now();
+
+            if (smartGrant) {
+                const currentStatus = await this.getPremiumStatus(userId);
+
+                if (currentStatus.hasPremium && currentStatus.tier && currentStatus.type) {
+                    if (currentStatus.type === PremiumType.PERMANENT) {
+                        logger.info('PremiumManager', `Usuario ${userId} tiene premium permanente, otorgamiento rechazado`);
+                        return false;
+                    }
+
+                    const currentValue = this.getTierValue(currentStatus.tier);
+                    const newValue = this.getTierValue(tier);
+
+                    if (newValue < currentValue) {
+                        const conversionRatio = newValue / currentValue;
+                        const newDuration = duration || PREMIUM.DURATION_DAYS * 86400000;
+                        const convertedDuration = Math.floor(newDuration * conversionRatio);
+
+                        await this.extendPremium(userId, convertedDuration / 3600000);
+
+                        logger.info('PremiumManager', `Premium convertido para ${userId}: ${tier} (${newDuration}ms) → ${currentStatus.tier} (${convertedDuration}ms)`);
+                        return true;
+                    } else if (newValue === currentValue) {
+                        const extensionHours = (duration || PREMIUM.DURATION_DAYS * 86400000) / 3600000;
+                        await this.extendPremium(userId, extensionHours);
+
+                        logger.info('PremiumManager', `Premium extendido para ${userId}: ${tier} (+${extensionHours}h)`);
+                        return true;
+                    }
+                }
+            }
 
             const expiresAt = type === PremiumType.PERMANENT
                 ? null

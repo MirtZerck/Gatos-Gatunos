@@ -130,30 +130,66 @@ export function createPremiumInfoEmbed(): EmbedBuilder {
         .setTimestamp();
 }
 
-export function createCodeRedeemedEmbed(tier: PremiumTier, duration: number | null): EmbedBuilder {
+export function createCodeRedeemedEmbed(tier: PremiumTier, duration: number | null, currentStatus?: PremiumStatus, newStatus?: PremiumStatus): EmbedBuilder {
     const tierEmoji = getTierEmoji(tier);
     const tierName = getTierName(tier);
-    const tierColor = getTierColor(tier);
+
+    const hadPremium = currentStatus?.hasPremium && currentStatus.tier;
+    const isUpgrade = hadPremium && newStatus?.tier && getTierValue(newStatus.tier) > getTierValue(currentStatus.tier!);
+    const isSameTier = hadPremium && currentStatus.tier === tier;
+    const isConversion = hadPremium && newStatus?.tier && getTierValue(tier) < getTierValue(currentStatus.tier!);
+
+    const finalTierEmoji = newStatus?.tier ? getTierEmoji(newStatus.tier) : tierEmoji;
+    const finalTierName = newStatus?.tier ? getTierName(newStatus.tier) : tierName;
+    const finalTierColor = newStatus?.tier ? getTierColor(newStatus.tier) : getTierColor(tier);
 
     let description = `${EMOJIS.SUCCESS} Código canjeado exitosamente\n\n`;
-    description += `Has recibido **Premium ${tierName}** ${tierEmoji}\n\n`;
 
-    if (duration === null) {
-        description += `• Tipo: **Permanente**\n`;
-        description += `• No expira nunca\n`;
+    if (isUpgrade) {
+        description += `${EMOJIS.STAR} **Mejora aplicada**\n`;
+        description += `Tu premium ha sido actualizado de **${getTierName(currentStatus.tier!)}** ${getTierEmoji(currentStatus.tier!)} a **${finalTierName}** ${finalTierEmoji}\n\n`;
+    } else if (isSameTier) {
+        const addedDays = newStatus && currentStatus.expiresAt && newStatus.expiresAt
+            ? Math.ceil((newStatus.expiresAt - currentStatus.expiresAt) / 86400000)
+            : Math.ceil((duration || 0) / 86400000);
+        description += `**Tiempo extendido**\n`;
+        description += `Se añadieron **${addedDays} días** a tu **Premium ${finalTierName}** ${finalTierEmoji}\n\n`;
+    } else if (isConversion) {
+        const addedDays = newStatus && currentStatus.expiresAt && newStatus.expiresAt
+            ? Math.ceil((newStatus.expiresAt - currentStatus.expiresAt) / 86400000)
+            : 0;
+        description += `**Tiempo convertido**\n`;
+        description += `El código **${tierName}** fue convertido a **${addedDays} días** de tu **Premium ${finalTierName}** ${finalTierEmoji}\n`;
+        description += `_Los códigos de menor nivel otorgan menos tiempo a planes superiores_\n\n`;
     } else {
-        const days = Math.ceil(duration / 86400000);
-        description += `• Duración: **${days} días**\n`;
-        description += `• Disfruta de todos los beneficios premium\n`;
+        description += `Has recibido **Premium ${finalTierName}** ${finalTierEmoji}\n\n`;
     }
 
-    description += `\nUsa \`/premium status\` para ver tus beneficios`;
+    if (newStatus?.expiresAt) {
+        const totalDays = Math.ceil((newStatus.expiresAt - Date.now()) / 86400000);
+        description += `• Tiempo total restante: **${totalDays} días**\n`;
+        description += `• Expira: ${formatTimeRemaining(newStatus.expiresAt)}\n`;
+    } else if (duration === null && !hadPremium) {
+        description += `• Tipo: **Permanente**\n`;
+        description += `• No expira nunca\n`;
+    }
+
+    description += `\nUsa \`/premium status\` para ver todos tus beneficios`;
 
     return new EmbedBuilder()
         .setTitle(`${EMOJIS.GIFT} Premium Activado`)
         .setDescription(description)
-        .setColor(tierColor)
+        .setColor(finalTierColor)
         .setTimestamp();
+}
+
+function getTierValue(tier: PremiumTier): number {
+    const tierValues = {
+        [PremiumTier.BASIC]: 1,
+        [PremiumTier.PRO]: 2,
+        [PremiumTier.ULTRA]: 3
+    };
+    return tierValues[tier];
 }
 
 export function createPremiumActivatedEmbed(tier: PremiumTier, source: string): EmbedBuilder {

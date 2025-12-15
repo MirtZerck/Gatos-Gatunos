@@ -51,16 +51,27 @@ export class DonationManager {
                 return false;
             }
 
-            await this.client.premiumManager.grantPremium({
+            const currentStatus = await this.client.premiumManager.getPremiumStatus(userId);
+
+            const grantSuccess = await this.client.premiumManager.grantPremium({
                 userId,
                 tier,
-                type: duration === null ? PremiumType.PERMANENT : PremiumType.TEMPORARY,
-                duration: duration === null ? undefined : duration,
+                type: PremiumType.TEMPORARY,
+                duration,
                 source: PremiumSource.KOFI,
-                sourceId: payload.kofi_transaction_id || 'unknown'
+                sourceId: payload.kofi_transaction_id || 'unknown',
+                smartGrant: true
             });
 
-            await this.notifyDonation(userId, tier, duration, amount);
+            if (!grantSuccess) {
+                logger.warn('DonationManager', `No se pudo otorgar premium a ${userId} (tiene premium permanente)`);
+                await this.notifyDonationRejected(userId, tier, amount);
+                return false;
+            }
+
+            const newStatus = await this.client.premiumManager.getPremiumStatus(userId);
+
+            await this.notifyDonation(userId, tier, duration, amount, currentStatus, newStatus);
 
             if (this.client.premiumLogger) {
                 await this.client.premiumLogger.logDonation(userId, amount, tier, duration, fromName, email, messageFromSupporter);
@@ -75,16 +86,21 @@ export class DonationManager {
         }
     }
 
-    mapAmountToTier(amount: number): { tier: PremiumTier; duration: number | null } {
-        if (amount >= 25) {
+    mapAmountToTier(amount: number): { tier: PremiumTier; duration: number } {
+        if (amount >= 30) {
             return {
                 tier: PremiumTier.ULTRA,
-                duration: null
+                duration: 180 * 86400000
+            };
+        } else if (amount >= 20) {
+            return {
+                tier: PremiumTier.ULTRA,
+                duration: 120 * 86400000
             };
         } else if (amount >= 10) {
             return {
                 tier: PremiumTier.ULTRA,
-                duration: 30 * 86400000
+                duration: 60 * 86400000
             };
         } else if (amount >= 5) {
             return {
@@ -116,22 +132,43 @@ export class DonationManager {
         return userId;
     }
 
-    async notifyDonation(userId: string, tier: PremiumTier, duration: number | null, amount: number): Promise<void> {
+    async notifyDonation(userId: string, tier: PremiumTier, duration: number, amount: number, currentStatus?: any, newStatus?: any): Promise<void> {
         try {
             const user = await this.client.users.fetch(userId);
 
             const tierEmoji = getTierEmoji(tier);
             const tierName = getTierName(tier);
 
-            let description = `${EMOJIS.GIFT} Gracias por tu donación de **$${amount}**\n\n`;
-            description += `Has recibido **Premium ${tierName}** ${tierEmoji}\n\n`;
+            const hadPremium = currentStatus?.hasPremium && currentStatus.tier;
+            const isUpgrade = hadPremium && newStatus?.tier && this.getTierValue(newStatus.tier) > this.getTierValue(currentStatus.tier);
+            const isSameTier = hadPremium && currentStatus.tier === tier;
+            const isConversion = hadPremium && newStatus?.tier && this.getTierValue(tier) < this.getTierValue(currentStatus.tier);
 
-            if (duration === null) {
-                description += `• Tipo: **Permanente**\n`;
-                description += `• No expira nunca\n`;
+            const finalTierEmoji = newStatus?.tier ? getTierEmoji(newStatus.tier) : tierEmoji;
+            const finalTierName = newStatus?.tier ? getTierName(newStatus.tier) : tierName;
+
+            let description = `${EMOJIS.GIFT} Gracias por tu donación de **$${amount}**\n\n`;
+
+            if (isUpgrade) {
+                description += `${EMOJIS.STAR} Tu premium ha sido actualizado a **${finalTierName}** ${finalTierEmoji}\n\n`;
+            } else if (isSameTier) {
+                const addedDays = newStatus && currentStatus.expiresAt && newStatus.expiresAt
+                    ? Math.ceil((newStatus.expiresAt - currentStatus.expiresAt) / 86400000)
+                    : Math.ceil(duration / 86400000);
+                description += `Se añadieron **${addedDays} días** a tu **Premium ${finalTierName}** ${finalTierEmoji}\n\n`;
+            } else if (isConversion) {
+                const addedDays = newStatus && currentStatus.expiresAt && newStatus.expiresAt
+                    ? Math.ceil((newStatus.expiresAt - currentStatus.expiresAt) / 86400000)
+                    : 0;
+                description += `Tu donación fue convertida a **${addedDays} días** de **Premium ${finalTierName}** ${finalTierEmoji}\n\n`;
             } else {
                 const days = Math.ceil(duration / 86400000);
-                description += `• Duración: **${days} días**\n`;
+                description += `Has recibido **${days} días** de **Premium ${finalTierName}** ${finalTierEmoji}\n\n`;
+            }
+
+            if (newStatus?.expiresAt) {
+                const totalDays = Math.ceil((newStatus.expiresAt - Date.now()) / 86400000);
+                description += `• Tiempo total: **${totalDays} días**\n`;
             }
 
             description += `\nUsa \`/premium status\` para ver todos tus beneficios`;
@@ -148,6 +185,38 @@ export class DonationManager {
         } catch (error) {
             logger.error('DonationManager', `Error enviando notificación a ${userId}`, error);
         }
+    }
+
+    async notifyDonationRejected(userId: string, tier: PremiumTier, amount: number): Promise<void> {
+        try {
+            const user = await this.client.users.fetch(userId);
+
+            const description =
+                `${EMOJIS.GIFT} Gracias por tu donación de **$${amount}**\n\n` +
+                `${EMOJIS.INFO} Ya tienes un premium permanente activo, por lo que tu donación no pudo ser procesada como premium.\n\n` +
+                `Tu apoyo es muy apreciado. Por favor contacta con el desarrollador para resolver esto.`;
+
+            const embed = new EmbedBuilder()
+                .setTitle(`${EMOJIS.WARNING} Donación Recibida`)
+                .setDescription(description)
+                .setColor(COLORS.WARNING)
+                .setTimestamp();
+
+            await user.send({ embeds: [embed] });
+
+            logger.info('DonationManager', `Notificación de rechazo enviada a ${userId}`);
+        } catch (error) {
+            logger.error('DonationManager', `Error enviando notificación de rechazo a ${userId}`, error);
+        }
+    }
+
+    private getTierValue(tier: PremiumTier): number {
+        const tierValues = {
+            [PremiumTier.BASIC]: 1,
+            [PremiumTier.PRO]: 2,
+            [PremiumTier.ULTRA]: 3
+        };
+        return tierValues[tier];
     }
 
     async notifyDonationNoUser(amount: number, fromName: string, email: string, message?: string): Promise<void> {

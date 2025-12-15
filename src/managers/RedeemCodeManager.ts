@@ -105,27 +105,40 @@ export class RedeemCodeManager {
         }
 
         const codeData = validation.codeData;
-        const normalizedCode = code.toUpperCase().trim();
-
-        const codesRef = this.firebaseAdminManager.getRef('premium/codes');
-        const snapshot = await codesRef.orderByChild('code').equalTo(normalizedCode).once('value');
-        const codeId = Object.keys(snapshot.val())[0];
-
-        await codesRef.child(codeId).update({
-            used: true,
-            usedBy: userId,
-            usedAt: Date.now()
-        });
 
         this.redemptionAttempts.delete(userId);
-
-        logger.info('RedeemCodeManager', `Usuario ${userId} canjeó código ${normalizedCode} (${codeData.tier})`);
 
         return {
             success: true,
             tier: codeData.tier,
             duration: codeData.duration
         };
+    }
+
+    async markCodeAsUsed(code: string, userId: string): Promise<boolean> {
+        try {
+            const normalizedCode = code.toUpperCase().trim();
+            const codesRef = this.firebaseAdminManager.getRef('premium/codes');
+            const snapshot = await codesRef.orderByChild('code').equalTo(normalizedCode).once('value');
+
+            if (!snapshot.exists()) {
+                return false;
+            }
+
+            const codeId = Object.keys(snapshot.val())[0];
+
+            await codesRef.child(codeId).update({
+                used: true,
+                usedBy: userId,
+                usedAt: Date.now()
+            });
+
+            logger.info('RedeemCodeManager', `Usuario ${userId} canjeó código ${normalizedCode}`);
+            return true;
+        } catch (error) {
+            logger.error('RedeemCodeManager', 'Error marcando código como usado', error);
+            return false;
+        }
     }
 
     async getActiveCodes(): Promise<PremiumCode[]> {
