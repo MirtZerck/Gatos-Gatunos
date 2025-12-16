@@ -134,12 +134,6 @@ export const music: HybridCommand = {
         .addSubcommand(sub =>
             sub.setName('autoplay').setDescription('Activa/desactiva la reproduccion automatica')
         )
-        .addSubcommand(sub =>
-            sub.setName('join').setDescription('Conecta el bot a tu canal de voz')
-        )
-        .addSubcommand(sub =>
-            sub.setName('leave').setDescription('Desconecta el bot del canal de voz')
-        )
         .setContexts(CONTEXTS.GUILD_ONLY)
         .setIntegrationTypes(INTEGRATION_TYPES.GUILD_ONLY),
 
