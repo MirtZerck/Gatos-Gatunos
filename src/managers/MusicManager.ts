@@ -113,54 +113,18 @@ export class MusicManager {
             } else {
                 this.skipHistorySave.delete(player.guildId);
             }
-
-            if (player.queue.size === 0 && !player.queue.current) {
-                const autoplayEnabled = player.data.get('autoplay') as boolean;
-
-                if (autoplayEnabled) {
-                    const history = this.trackHistory.get(player.guildId) || [];
-                    const lastTrack = history[history.length - 1];
-
-                    if (lastTrack) {
-                        try {
-                            const relatedResult = await this.kazagumo.search(
-                                `https://www.youtube.com/watch?v=${lastTrack.identifier}&list=RD${lastTrack.identifier}`,
-                                { requester: lastTrack.requester }
-                            );
-
-                            if (relatedResult && relatedResult.tracks.length > 0) {
-                                const relatedTrack = relatedResult.tracks[Math.floor(Math.random() * Math.min(5, relatedResult.tracks.length))];
-                                player.queue.add(relatedTrack);
-                                player.play();
-
-                                const channel = this.textChannels.get(player.guildId);
-                                if (channel) {
-                                    const embed = new EmbedBuilder()
-                                        .setColor(COLORS.INFO)
-                                        .setDescription(`${EMOJIS.PLAY} Autoplay: Reproduciendo [${relatedTrack.title}](${relatedTrack.uri})`);
-                                    await channel.send({ embeds: [embed] });
-                                }
-                                return;
-                            }
-                        } catch (error) {
-                            logger.error('MusicManager', 'Error en autoplay', error);
-                        }
-                    }
-                }
-
-                const channel = this.textChannels.get(player.guildId);
-                if (channel) {
-                    const embed = new EmbedBuilder()
-                        .setColor(COLORS.INFO)
-                        .setDescription(`${EMOJIS.MUSIC} La cola ha terminado. Agrega mas canciones o me desconectare en 5 minutos.`);
-                    await channel.send({ embeds: [embed] });
-                }
-                await this.deletePlayerMessage(player.guildId);
-                this.startInactivityTimer(player.guildId);
-            }
         });
 
         this.kazagumo.on('playerEmpty', async (player) => {
+            const autoplayEnabled = player.data.get('autoplay') as boolean;
+
+            if (autoplayEnabled) {
+                const success = await this.handleAutoplay(player);
+                if (success) {
+                    return;
+                }
+            }
+
             const channel = this.textChannels.get(player.guildId);
             if (channel) {
                 const embed = new EmbedBuilder()
@@ -318,6 +282,7 @@ export class MusicManager {
             : player.loop === LoopMode.TRACK
                 ? 'Cancion'
                 : 'Cola';
+        const autoplayState = player.data.get('autoplay') as boolean || false;
 
         const requester = track.requester as GuildMember | undefined;
 
@@ -357,8 +322,8 @@ export class MusicManager {
                     inline: true
                 },
                 {
-                    name: 'Fuente',
-                    value: track.sourceName || 'Desconocida',
+                    name: 'Autoplay',
+                    value: autoplayState ? 'Activado' : 'Desactivado',
                     inline: true
                 }
             )
@@ -412,6 +377,7 @@ export class MusicManager {
         const isPaused = player.paused;
         const loop = player.loop;
         const hasHistory = this.hasHistory(player.guildId);
+        const autoplay = player.data.get('autoplay') as boolean || false;
 
         const row1 = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
@@ -449,6 +415,12 @@ export class MusicManager {
                 .setStyle(loop !== LoopMode.NONE ? ButtonStyle.Success : ButtonStyle.Secondary),
 
             new ButtonBuilder()
+                .setCustomId('music_autoplay')
+                .setEmoji('♾️')
+                .setLabel(autoplay ? 'On' : 'Off')
+                .setStyle(autoplay ? ButtonStyle.Success : ButtonStyle.Secondary),
+
+            new ButtonBuilder()
                 .setCustomId('music_voldown')
                 .setEmoji('🔉')
                 .setStyle(ButtonStyle.Secondary),
@@ -456,15 +428,17 @@ export class MusicManager {
             new ButtonBuilder()
                 .setCustomId('music_volup')
                 .setEmoji('🔊')
-                .setStyle(ButtonStyle.Secondary),
+                .setStyle(ButtonStyle.Secondary)
+        );
 
+        const row3 = new ActionRowBuilder<ButtonBuilder>().addComponents(
             new ButtonBuilder()
                 .setCustomId('music_queue')
                 .setEmoji('📋')
                 .setStyle(ButtonStyle.Primary)
         );
 
-        return [row1, row2];
+        return [row1, row2, row3];
     }
 
     async deletePlayerMessage(guildId: string): Promise<void> {
@@ -680,6 +654,51 @@ export class MusicManager {
             clearTimeout(timer);
             this.inactivityTimers.delete(guildId);
             logger.info('MusicManager', `Timer de inactividad cancelado para ${guildId}`);
+        }
+    }
+
+    /**
+     * Maneja el autoplay cuando la cola está vacía
+     */
+    private async handleAutoplay(player: KazagumoPlayer): Promise<boolean> {
+        const history = this.trackHistory.get(player.guildId) || [];
+        const lastTrack = history[history.length - 1];
+
+        if (!lastTrack) {
+            logger.warn('MusicManager', 'No hay historial para autoplay');
+            return false;
+        }
+
+        try {
+            logger.info('MusicManager', `Intentando autoplay con: ${lastTrack.title}`);
+
+            const relatedResult = await this.kazagumo.search(
+                `https://www.youtube.com/watch?v=${lastTrack.identifier}&list=RD${lastTrack.identifier}`,
+                { requester: lastTrack.requester }
+            );
+
+            if (relatedResult && relatedResult.tracks.length > 0) {
+                const relatedTrack = relatedResult.tracks[Math.floor(Math.random() * Math.min(5, relatedResult.tracks.length))];
+                player.queue.add(relatedTrack);
+                await player.play();
+
+                const channel = this.textChannels.get(player.guildId);
+                if (channel) {
+                    const embed = new EmbedBuilder()
+                        .setColor(COLORS.INFO)
+                        .setDescription(`${EMOJIS.PLAY} Autoplay: Reproduciendo [${relatedTrack.title}](${relatedTrack.uri})`);
+                    await channel.send({ embeds: [embed] });
+                }
+
+                logger.info('MusicManager', `Autoplay exitoso: ${relatedTrack.title}`);
+                return true;
+            } else {
+                logger.warn('MusicManager', 'No se encontraron canciones relacionadas para autoplay');
+                return false;
+            }
+        } catch (error) {
+            logger.error('MusicManager', 'Error en autoplay', error);
+            return false;
         }
     }
 

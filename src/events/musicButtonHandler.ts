@@ -108,6 +108,11 @@ export default {
                     logger.info('MusicButtonHandler', `Modo de repeticion cambiado a ${nextMode} via boton`);
                     break;
 
+                case 'autoplay':
+                    const newAutoplayState = musicManager.toggleAutoplay(guildId);
+                    logger.info('MusicButtonHandler', `Autoplay ${newAutoplayState ? 'activado' : 'desactivado'} via boton`);
+                    break;
+
                 case 'voldown':
                     const newVolDown = Math.max(0, player.volume - 10);
                     await player.setVolume(newVolDown);
